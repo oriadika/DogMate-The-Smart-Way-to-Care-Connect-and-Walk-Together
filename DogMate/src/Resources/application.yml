@@ -8,6 +8,7 @@ spring:
       ddl-auto: update
     properties:
       hibernate:
+        dialect: org.hibernate.spatial.dialect.postgis.PostgisDialect
         format_sql: true
   jackson:
     serialization:

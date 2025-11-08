@@ -11,6 +11,9 @@ public class RegularUser extends UserAccount{
     private List<DogRelationship> dogRelationships;
     private List<Dog> dogs;
     private List<SniffRequest> sniffRequests;
+    private List<EmergencyContact> emergencyContacts;
+    private List<Notification> notifications;
+
 
     public RegularUser(UUID id, String email, String passwordHash, String first_name
     , String last_name, String profileImageURL) {
@@ -20,6 +23,8 @@ public class RegularUser extends UserAccount{
         this.profileImageURL = profileImageURL;
         this.dogs = new LinkedList<>();
         this.sniffRequests = new LinkedList<>();
+        this.emergencyContacts = new LinkedList<>();
+        this.notifications = new LinkedList<>();
     }
 
     public String getFirst_name() {
@@ -82,4 +87,27 @@ public class RegularUser extends UserAccount{
         this.sniffRequests.remove(sniffRequest);
     }
 
+    public List<EmergencyContact> getEmergencyContacts(){
+        return emergencyContacts;
+    }
+
+    public void addEmergencyContact(EmergencyContact emergencyContact){
+        this.emergencyContacts.add(emergencyContact);
+    }
+
+    public void removeEmergencyContact(EmergencyContact emergencyContact){
+        this.emergencyContacts.remove(emergencyContact);
+    }
+
+    public List<Notification> getNotifications(){
+        return notifications;
+    }
+
+    public void addNotification(Notification notification){
+        this.notifications.add(notification);
+    }
+
+    public void removeNotification(Notification notification){
+        this.notifications.remove(notification);
+    }
 }

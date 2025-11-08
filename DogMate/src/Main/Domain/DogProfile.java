@@ -5,20 +5,26 @@ import java.util.UUID;
 public class DogProfile {
     private UUID ID;
 
-    private String behaviorProfile;
-    private String healthProfile;
+    private BehaviorProfile behaviorProfile;
+    private HealthProfile healthProfile;
     private Dog dog;
 
+    public DogProfile(UUID ID, Dog dog, BehaviorProfile behaviorProfile, HealthProfile healthProfile){
+        this.ID = ID;
+        this.dog = dog;
+        this.behaviorProfile = behaviorProfile;
+        this.healthProfile = healthProfile;
+    }
 
-    // --- Getters and Setters ---
+
     public UUID getId() { return ID; }
-    public void setId(UUID id) { this.ID = ID; }
+    public void setId(UUID ID) { this.ID = ID; }
 
-    public String getBehaviorProfile() { return behaviorProfile; }
-    public void setBehaviorProfile(String behaviorProfile) { this.behaviorProfile = behaviorProfile; }
+    public BehaviorProfile getBehaviorProfile() { return behaviorProfile; }
+    public void setBehaviorProfile(BehaviorProfile behaviorProfile) { this.behaviorProfile = behaviorProfile; }
 
-    public String getHealthProfile() { return healthProfile; }
-    public void setHealthProfile(String healthProfile) { this.healthProfile = healthProfile; }
+    public HealthProfile getHealthProfile() { return healthProfile; }
+    public void setHealthProfile(HealthProfile healthProfile) { this.healthProfile = healthProfile; }
 
     public Dog getDog() { return dog; }
     public void setDog(Dog dog) { this.dog = dog; }
