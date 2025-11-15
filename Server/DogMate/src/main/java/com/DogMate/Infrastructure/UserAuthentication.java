@@ -1,4 +1,6 @@
-package main.Infrastructure;
+package com.DogMate.Infrastructure;
 
-public class UserAuthentication {
+import com.DogMate.Service.IUserAuthentication;
+
+public class UserAuthentication implements IUserAuthentication {
 }

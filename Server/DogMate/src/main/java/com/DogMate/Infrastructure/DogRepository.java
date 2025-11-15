@@ -1,4 +1,6 @@
-package main.Infrastructure;
+package com.DogMate.Infrastructure;
 
-public class DogRepository {
+import com.DogMate.Service.IDogRepository;
+
+public class DogRepository implements IDogRepository {
 }

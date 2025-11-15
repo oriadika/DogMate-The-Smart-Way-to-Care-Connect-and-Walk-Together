@@ -1,4 +1,4 @@
-package main.Service;
+package com.DogMate.Service;
 
 public interface IUserRepository {
 }
