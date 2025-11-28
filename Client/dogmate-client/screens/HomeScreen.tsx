@@ -1,5 +1,3 @@
-// src/screens/HomeScreen.tsx
-
 import React from 'react';
 import {
   SafeAreaView,
@@ -10,25 +8,14 @@ import {
   ScrollView,
   ImageBackground
 } from 'react-native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-
-// Adjust this according to your navigation types
-type RootStackParamList = {
-  Home: undefined;
-  Login: undefined;
-  SignUp: undefined;
-};
-
-type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
-
-const HomeScreen/*: React.FC<Props>*/ = () => {
+const HomeScreen: React.FC = ({ navigation }: any) => {
   const handleLoginPress = () => {
     // navigation.navigate('Login');
   };
 
   const handleSignUpPress = () => {
-    // navigation.navigate('SignUp');
+    navigation.navigate('SignUp');
   };
 
   return (
