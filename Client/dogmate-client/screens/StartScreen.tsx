@@ -9,7 +9,7 @@ import {
   ImageBackground
 } from 'react-native';
 
-const HomeScreen: React.FC = ({ navigation }: any) => {
+const StartScreen: React.FC = ({ navigation }: any) => {
   const handleLoginPress = () => {
     // navigation.navigate('Login');
   };
@@ -93,7 +93,7 @@ const FeatureChip: React.FC<FeatureChipProps> = ({ text }) => (
   </View>
 );
 
-export default HomeScreen;
+export default StartScreen;
 
 const PRIMARY_COLOR = '#2F80ED'; // You can change to your brand blue
 const ACCENT_COLOR = '#F2994A';
