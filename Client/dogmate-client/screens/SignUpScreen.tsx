@@ -47,6 +47,8 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
       'Account created',
       `Welcome to DogMate, ${fullName}! (${role === 'owner' ? 'Dog Owner' : 'Dog Walker'})`
     );
+
+    navigation.navigate('Home')
   };
 
   return (
