@@ -19,6 +19,7 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
 
   const handleSignUp = () => {
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
@@ -33,6 +34,11 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
 
     if (password !== confirmPassword) {
       Alert.alert('Password mismatch', 'Passwords do not match.');
+      return;
+    }
+
+    if (phoneNumber.length != 10){
+      Alert.alert('Phone number is invalid');
       return;
     }
 
@@ -126,6 +132,17 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
               onChangeText={setEmail}
             />
 
+            {/* Phone Number */}
+            <Text style={styles.label}>Phone Number</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="05X-XXXXXXX"
+              placeholderTextColor="#A9B5C7"
+              keyboardType = "phone-pad"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+            />
+
             {/* Password */}
             <Text style={styles.label}>Password</Text>
             <TextInput
@@ -176,6 +193,7 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   safeArea: {
+    top: 40,
     flex: 1,
     backgroundColor: 'transparent',
   },
@@ -254,7 +272,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
   position: 'absolute',
-  top: 20,
+  top: 45,
   left: 20,
   backgroundColor: 'rgba(0,0,0,0.4)',
   paddingVertical: 6,

@@ -31,10 +31,6 @@ const HomeScreen: React.FC = ({ navigation }: any) => {
       >
         {/* Top section: Logo + App Name + Tagline */}
         <View style={styles.header}>
-          {/* Simple logo placeholder (circle). Replace with Image later */}
-          {/* <View style={styles.logoCircle}>
-            <Text style={styles.logoText}>DM</Text>
-          </View> */}
 
           <Text style={styles.appName}>DogMate</Text>
           <Text style={styles.tagline}>
@@ -101,7 +97,6 @@ export default HomeScreen;
 
 const PRIMARY_COLOR = '#2F80ED'; // You can change to your brand blue
 const ACCENT_COLOR = '#F2994A';
-const BACKGROUND_COLOR = '#0B1724';
 
 const styles = StyleSheet.create({
     background: {
