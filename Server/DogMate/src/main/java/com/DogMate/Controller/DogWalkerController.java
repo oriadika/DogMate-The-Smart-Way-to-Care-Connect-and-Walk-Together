@@ -1,4 +1,4 @@
-package main.Controller;
+package com.DogMate.Controller;
 
 public class DogWalkerController {
 }
