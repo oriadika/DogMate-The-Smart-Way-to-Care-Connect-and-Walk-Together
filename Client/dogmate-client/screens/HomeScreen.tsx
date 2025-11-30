@@ -1,5 +1,5 @@
 // screens/HomeScreen.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import {
   SafeAreaView,
   View,
@@ -9,15 +9,41 @@ import {
   TouchableOpacity,
   Image,
 } from 'react-native';
+import { Feather, Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 
 const quickActions = [
-  { label: 'Walks', color: '#FFB74D', emoji: '🐾' },
-  { label: 'Reminders', color: '#FF8A65', emoji: '⏰' },
-  { label: 'Documents', color: '#64B5F6', emoji: '📄' },
-  { label: 'Food', color: '#FF7043', emoji: '🍖' },
-  { label: 'SOS', color: '#EF5350', emoji: '🚨' },
-  { label: 'Dog Matching', color: '#81C784', emoji: '🐶' },
+  {
+    label: 'Walks',
+    color: '#FFB74D',
+    icon: <MaterialCommunityIcons name="walk" size={28} color="#fff" />,
+  },
+  {
+    label: 'Reminders',
+    color: '#FF8A65',
+    icon: <Ionicons name="alarm-outline" size={28} color="#fff" />,
+  },
+  {
+    label: 'Documents',
+    color: '#64B5F6',
+    icon: <Ionicons name="document-text-outline" size={28} color="#fff" />,
+  },
+  {
+    label: 'Food',
+    color: '#FF7043',
+    icon: <MaterialCommunityIcons name="food-drumstick" size={28} color="#fff" />
+  },
+  {
+    label: 'SOS',
+    color: '#EF5350',
+    icon: <Ionicons name="warning-outline" size={28} color="#fff" />,
+  },
+  {
+    label: 'Dog Matching',
+    color: '#81C784',
+    icon: <FontAwesome5 name="dog" size={26} color="#fff" />,
+  },
 ];
+
 
 const dogs = [
   {
@@ -34,7 +60,8 @@ const dogs = [
   },
 ];
 
-const HomeScreen = () => {
+const HomeScreen = ({route}: any ) => {
+  const [activeTab, setActiveTab] = useState<'home' | 'dogs' | 'start-walk' | 'reminder' | 'profile'>('home');
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -43,7 +70,7 @@ const HomeScreen = () => {
           <View style={styles.logoCircle}>
             <Text style={styles.logoText}>DM</Text>
           </View>
-          <Text style={styles.topBarTitle}>DogMate</Text>
+          <Text style={styles.topBarTitle}>The dog {route?.params?.userRole}, {route?.params?.userName}</Text>
           <View style={{ flex: 1 }} />
         </View>
 
@@ -62,7 +89,7 @@ const HomeScreen = () => {
                 style={[styles.quickCard, { backgroundColor: item.color }]}
                 activeOpacity={0.85}
               >
-                <Text style={styles.quickEmoji}>{item.emoji}</Text>
+                <View style={{ marginBottom: 6 }}>{item.icon}</View>
                 <Text style={styles.quickLabel}>{item.label}</Text>
               </TouchableOpacity>
             ))}
@@ -116,17 +143,59 @@ const HomeScreen = () => {
 
         {/* Bottom nav (static mock) */}
         <View style={styles.bottomNav}>
-          <TouchableOpacity style={styles.navItem}>
-            <Text style={styles.navEmoji}>🏠</Text>
+          <TouchableOpacity
+            style={[styles.navItem, activeTab === 'home' && styles.navItemActive]}
+            onPress={() => setActiveTab('home')}
+          >
+            <Ionicons
+              name={activeTab === 'home' ? 'home' : 'home-outline'}
+              size={26}
+              color={activeTab === 'home' ? '#111827' : '#9CA3AF'}
+            />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem}>
-            <Text style={styles.navEmoji}>📅</Text>
+
+          <TouchableOpacity
+            style={[styles.navItem, activeTab === 'dogs' && styles.navItemActive]}
+            onPress={() => setActiveTab('dogs')}
+          >
+            <Ionicons
+              name={activeTab === 'dogs' ? 'paw' : 'paw-outline'}
+              size={26}
+              color={activeTab === 'dogs' ? '#111827' : '#9CA3AF'}
+            />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem}>
-            <Text style={styles.navEmoji}>🔔</Text>
+
+          <TouchableOpacity
+            style={[styles.navItem, activeTab === 'start-walk' && styles.navItemActive]}
+            onPress={() => setActiveTab('start-walk')}
+          >
+            <MaterialCommunityIcons
+              name={activeTab === 'start-walk' ? 'play-circle' : 'play-circle-outline'}
+              size={26}
+              color={activeTab === 'start-walk' ? '#111827' : '#9CA3AF'}
+            />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem}>
-            <Text style={styles.navEmoji}>👤</Text>
+
+          <TouchableOpacity
+            style={[styles.navItem, activeTab === 'reminder' && styles.navItemActive]}
+            onPress={() => setActiveTab('reminder')}
+          >
+            <Ionicons
+              name={activeTab === 'reminder' ? 'alarm' : 'alarm-outline'}
+              size={26}
+              color={activeTab === 'reminder' ? '#111827' : '#9CA3AF'}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.navItem, activeTab === 'profile' && styles.navItemActive]}
+            onPress={() => setActiveTab('profile')}
+          >
+            <Ionicons
+              name={activeTab === 'profile' ? 'person' : 'person-outline'}
+              size={26}
+              color={activeTab === 'profile' ? '#111827' : '#9CA3AF'}
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -193,6 +262,8 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 10,
     justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   quickEmoji: {
     fontSize: 22,
@@ -294,6 +365,10 @@ const styles = StyleSheet.create({
   navItem: {
     flex: 1,
     alignItems: 'center',
+  },
+  navItemActive: {
+    borderTopWidth: 3,
+    borderTopColor: '#111827',   // little bar above active icon
   },
   navEmoji: {
     fontSize: 22,

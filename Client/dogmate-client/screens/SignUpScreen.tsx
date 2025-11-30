@@ -48,7 +48,10 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
       `Welcome to DogMate, ${fullName}! (${role === 'owner' ? 'Dog Owner' : 'Dog Walker'})`
     );
 
-    navigation.navigate('Home')
+    navigation.navigate('Home', {
+        userName: fullName,
+        userRole: role,          // 'owner' or 'walker'
+      })
   };
 
   return (
