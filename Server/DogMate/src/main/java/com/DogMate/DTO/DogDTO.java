@@ -1,4 +1,4 @@
-package main.DTO;
+package com.DogMate.DTO;
 
 public class DogDTO {
 }
