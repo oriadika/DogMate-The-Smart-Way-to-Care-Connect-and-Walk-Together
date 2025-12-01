@@ -115,4 +115,66 @@ public class UserService {
         // Delete user by ID
         deleteUser(userOpt.get().getId());
     }
+
+    /**
+     * Edit user password by email
+     * @param email The email of the user
+     * @param newPassword The new password (will be hashed)
+     * @throws IllegalArgumentException if email is null/empty, user doesn't exist, or password is invalid
+     */
+    public void editPassword(String email, String newPassword) {
+        // Validate email using domain method
+        UserAccount.validateEmail(email);
+        
+        // Validate password using domain method
+        UserAccount.validatePassword(newPassword);
+
+        // Find user by email
+        java.util.Optional<UserAccount> userOpt = userRepository.findByEmail(email);
+        
+        // Validate user exists
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with email: " + email);
+        }
+
+        // Hash the new password
+        String passwordHash = passwordEncoder.encode(newPassword);
+        
+        // Update user password
+        UserAccount user = userOpt.get();
+        user.setPasswordHash(passwordHash);
+        userRepository.save(user);
+    }
+
+    /**
+     * Create an admin user
+     * @param email User's email address
+     * @param password Plain text password (will be hashed)
+     * @param permissionLevel Permission level (e.g., "Admin", "User")
+     * @return The created AdminUser entity
+     * @throws IllegalArgumentException if email already exists or validation fails
+     */
+    public com.DogMate.Domain.AdminUser createAdminUser(String email, String password, String permissionLevel) {
+        // Validate password before hashing (using domain validation)
+        UserAccount.validatePassword(password);
+        
+        // Check if email already exists
+        boolean emailExists = userRepository.existsByEmail(email);
+        
+        // Validate email doesn't exist (using domain validation)
+        UserAccount.validateEmailNotExists(emailExists, email);
+
+        // Hash the password
+        String passwordHash = passwordEncoder.encode(password);
+
+        // Create AdminUser
+        UUID userId = UUID.randomUUID();
+        com.DogMate.Domain.AdminUser newAdmin = new com.DogMate.Domain.AdminUser(userId, email, passwordHash, permissionLevel);
+
+        // Save to repository
+        UserAccount savedUser = userRepository.save(newAdmin);
+        
+        // Return as AdminUser (cast is safe since we just created it)
+        return (com.DogMate.Domain.AdminUser) savedUser;
+    }
 }

@@ -1,14 +1,30 @@
 package com.DogMate.Domain;
 
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@Entity
+@Table(name = "user_accounts")
+@Inheritance(strategy = InheritanceType.JOINED)
 public class UserAccount {
+    @Id
+    @Column(name = "id")
     private UUID ID;
+    
+    @Column(name = "email", unique = true, nullable = false)
     private String email;
+    
+    @Column(name = "password_hash", nullable = false)
     private String passwordHash;
+    
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    // Default constructor required by JPA
+    protected UserAccount() {
+        // JPA requires a no-args constructor
+    }
 
     public UserAccount(UUID ID, String email, String passwordHash) {
         this.ID = ID;

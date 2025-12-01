@@ -1,19 +1,48 @@
 package com.DogMate.Domain;
 
+import jakarta.persistence.*;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 
+@Entity
+@Table(name = "regular_users")
+@PrimaryKeyJoinColumn(name = "id")
 public class RegularUser extends UserAccount{
+    @Column(name = "first_name")
     private String first_name;
+    
+    @Column(name = "last_name")
     private String last_name;
+    
+    @Column(name = "profile_image_url")
     private String profileImageURL;
+    
+    @Transient
     private List<DogRelationship> dogRelationships;
+    
+    @Transient
     private List<Dog> dogs;
+    
+    @Transient
     private List<SniffRequest> sniffRequests;
+    
+    @Transient
     private List<EmergencyContact> emergencyContacts;
+    
+    @Transient
     private List<Notification> notifications;
 
+    // Default constructor required by JPA
+    protected RegularUser() {
+        // JPA requires a no-args constructor
+        // Initialize collections to avoid NullPointerException
+        this.dogRelationships = new LinkedList<>();
+        this.dogs = new LinkedList<>();
+        this.sniffRequests = new LinkedList<>();
+        this.emergencyContacts = new LinkedList<>();
+        this.notifications = new LinkedList<>();
+    }
 
     public RegularUser(UUID id, String email, String passwordHash, String first_name
     , String last_name, String profileImageURL) {
