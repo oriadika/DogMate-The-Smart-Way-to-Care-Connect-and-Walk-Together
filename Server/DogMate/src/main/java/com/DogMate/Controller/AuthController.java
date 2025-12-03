@@ -1,4 +1,93 @@
 package com.DogMate.Controller;
 
+import com.DogMate.Domain.UserAccount;
+import com.DogMate.Service.UserService;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/auth")
 public class AuthController {
+    
+    private final UserService userService;
+
+    @Autowired
+    public AuthController(UserService userService) {
+        this.userService = userService;
+    }
+
+    /**
+     * Login/Authenticate a user
+     * POST /api/auth/login
+     */
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
+        try {
+            // Validate request
+            if (request == null || request.getEmail() == null || request.getPassword() == null) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("Email and password are required"));
+            }
+
+            // Authenticate user
+            UserAccount user = userService.login(request.getEmail(), request.getPassword());
+
+            // Create response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Login successful");
+            response.put("userId", user.getId());
+            response.put("email", user.getEmail());
+            
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(createErrorResponse("Invalid credentials"));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to login: " + e.getMessage()));
+        }
+    }
+
+    private Map<String, Object> createErrorResponse(String message) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("success", false);
+        error.put("error", message);
+        return error;
+    }
+
+    // Inner class for request DTO
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class LoginRequest {
+        private String email;
+        private String password;
+
+        // Default constructor for Jackson
+        public LoginRequest() {
+        }
+
+        // Getters and Setters
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
+    }
 }
