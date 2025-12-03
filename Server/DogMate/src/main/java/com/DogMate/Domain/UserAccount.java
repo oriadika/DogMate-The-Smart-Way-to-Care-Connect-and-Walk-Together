@@ -100,6 +100,20 @@ public class UserAccount {
             throw new IllegalArgumentException("User not found with ID: " + userId);
         }
     }
+    
+    /**
+     * Verify if the provided plain password matches the stored password hash
+     * Business logic for password verification
+     * @param plainPassword The plain text password to verify
+     * @param passwordMatcher Function to match password (from PasswordEncoder.matches)
+     * @return true if password matches, false otherwise
+     */
+    public boolean verifyPassword(String plainPassword, java.util.function.BiPredicate<String, String> passwordMatcher) {
+        if (plainPassword == null || passwordHash == null) {
+            return false;
+        }
+        return passwordMatcher.test(plainPassword, passwordHash);
+    }
 
     public UUID getId() {
         return ID;

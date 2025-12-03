@@ -138,6 +138,49 @@ public class UserController {
         }
     }
 
+    /**
+     * Get all users
+     * GET /api/users
+     */
+    @GetMapping
+    public ResponseEntity<?> getAllUsers() {
+        try {
+            java.util.List<com.DogMate.Domain.UserAccount> users = userService.getAllUsers();
+            
+            java.util.List<Map<String, Object>> usersList = new java.util.ArrayList<>();
+            for (com.DogMate.Domain.UserAccount user : users) {
+                Map<String, Object> userInfo = new HashMap<>();
+                userInfo.put("id", user.getId());
+                userInfo.put("email", user.getEmail());
+                userInfo.put("createdAt", user.getCreatedAt());
+                
+                if (user instanceof com.DogMate.Domain.RegularUser) {
+                    com.DogMate.Domain.RegularUser regularUser = (com.DogMate.Domain.RegularUser) user;
+                    userInfo.put("type", "RegularUser");
+                    userInfo.put("firstName", regularUser.getFirst_name());
+                    userInfo.put("lastName", regularUser.getLast_name());
+                } else if (user instanceof com.DogMate.Domain.AdminUser) {
+                    com.DogMate.Domain.AdminUser adminUser = (com.DogMate.Domain.AdminUser) user;
+                    userInfo.put("type", "AdminUser");
+                    userInfo.put("permissionLevel", adminUser.getPermissionLevel());
+                }
+                
+                usersList.add(userInfo);
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("count", usersList.size());
+            response.put("users", usersList);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to get users: " + e.getMessage()));
+        }
+    }
+
     private Map<String, Object> createErrorResponse(String message) {
         Map<String, Object> error = new HashMap<>();
         error.put("success", false);
