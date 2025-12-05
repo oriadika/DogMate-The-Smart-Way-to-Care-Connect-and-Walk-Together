@@ -11,7 +11,7 @@ import {
 
 const StartScreen: React.FC = ({ navigation }: any) => {
   const handleLoginPress = () => {
-    //  navigation.navigate('Login');
+     navigation.navigate('Login');
   };
 
   const handleSignUpPress = () => {
