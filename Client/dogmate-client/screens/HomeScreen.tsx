@@ -60,7 +60,7 @@ const dogs = [
   },
 ];
 
-const HomeScreen = ({route}: any ) => {
+const HomeScreen = ({navigation, route}: any ) => {
   const [activeTab, setActiveTab] = useState<'home' | 'dogs' | 'start-walk' | 'reminder' | 'profile'>('home');
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -98,7 +98,6 @@ const HomeScreen = ({route}: any ) => {
           {/* My Dogs */}
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>My Dogs</Text>
-            {/* optional "See all" */}
           </View>
 
           <ScrollView
@@ -156,7 +155,7 @@ const HomeScreen = ({route}: any ) => {
 
           <TouchableOpacity
             style={[styles.navItem, activeTab === 'dogs' && styles.navItemActive]}
-            onPress={() => setActiveTab('dogs')}
+            onPress={() => {setActiveTab('dogs')}}
           >
             <Ionicons
               name={activeTab === 'dogs' ? 'paw' : 'paw-outline'}
@@ -189,7 +188,15 @@ const HomeScreen = ({route}: any ) => {
 
           <TouchableOpacity
             style={[styles.navItem, activeTab === 'profile' && styles.navItemActive]}
-            onPress={() => setActiveTab('profile')}
+            onPress={() => {
+              setActiveTab('profile');
+              navigation.navigate('Profile', {
+                fullName: route?.params?.userName,
+                email: "omry@gmail.com",
+                role: `Dog ${route?.params?.userRole}`,
+                phone: "0506234046",
+              });
+            }}
           >
             <Ionicons
               name={activeTab === 'profile' ? 'person' : 'person-outline'}

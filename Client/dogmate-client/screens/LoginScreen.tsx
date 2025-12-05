@@ -27,7 +27,7 @@ const LoginScreen = ({ navigation }: any) => {
     Alert.alert('Logged in', `Welcome back to DogMate!`);
 
     navigation.navigate('Home', {
-      userName: email,
+      userName: email.slice(0, email.indexOf('@') + 1),
       userRole: 'walker',
     });
   };
