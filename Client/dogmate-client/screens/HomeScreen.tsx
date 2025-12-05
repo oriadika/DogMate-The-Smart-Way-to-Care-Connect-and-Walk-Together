@@ -70,7 +70,7 @@ const HomeScreen = ({navigation, route}: any ) => {
           <View style={styles.logoCircle}>
             <Text style={styles.logoText}>DM</Text>
           </View>
-          <Text style={styles.topBarTitle}>The dog {route?.params?.userRole}, {route?.params?.userName}</Text>
+          <Text style={styles.topBarTitle}>The dog {route?.params?.userRole}, {route?.params?.userFirstName} {route?.params?.userLastName}</Text>
           <View style={{ flex: 1 }} />
         </View>
 
@@ -191,10 +191,11 @@ const HomeScreen = ({navigation, route}: any ) => {
             onPress={() => {
               setActiveTab('profile');
               navigation.navigate('Profile', {
-                fullName: route?.params?.userName,
-                email: "omry@gmail.com",
+                userFirstName: route?.params?.userFirstName,
+                userLastName: route?.params?.userLastName,
+                email: route?.params?.email,
                 role: `Dog ${route?.params?.userRole}`,
-                phone: "0506234046",
+                phone: route?.params?.phoneNumber,
               });
             }}
           >

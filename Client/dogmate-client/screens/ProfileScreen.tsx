@@ -18,12 +18,6 @@ const mockUsers = [
 ];
 
 const ProfileScreen = ({ navigation, route }: any) => {
-  const {
-    fullName = 'Unknown User',
-    email = 'unknown@example.com',
-    role = 'Dog owner',
-    phone = 'Not provided',
-  } = route?.params;
 
   const renderContact = ({ item }: any) => (
     <View style={styles.userCard}>
@@ -77,7 +71,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
             {/* PROFILE CARD */}
             <View style={styles.profileCard}>
               <View style={styles.profileAvatar}>
-                {role === 'Dog walker' ? (
+                {route?.params?.role === 'Dog walker' ? (
                   <FontAwesome5 name="walking" size={26} color="#fff" />
                 ) : (
                   <MaterialCommunityIcons name="dog" size={28} color="#fff" />
@@ -85,20 +79,20 @@ const ProfileScreen = ({ navigation, route }: any) => {
               </View>
 
               <View style={styles.profileTextBlock}>
-                <Text style={styles.profileName}>{fullName}</Text>
-                <Text style={styles.profileRole}>{role}</Text>
+                <Text style={styles.profileName}>{route?.params?.userFirstName} {route?.params?.userLastName}</Text>
+                <Text style={styles.profileRole}>{route?.params?.role}</Text>
               </View>
             </View>
 
             {/* Profile details */}
             <View style={styles.infoRow}>
               <Ionicons name="mail-outline" size={18} color="#6B7280" />
-              <Text style={styles.infoText}>{email}</Text>
+              <Text style={styles.infoText}>{route?.params?.email}</Text>
             </View>
 
             <View style={styles.infoRow}>
               <Ionicons name="call-outline" size={18} color="#6B7280" />
-              <Text style={styles.infoText}>{phone}</Text>
+              <Text style={styles.infoText}>{route?.params?.phone}</Text>
             </View>
 
             <Text style={styles.sectionTitle}>Contacts</Text>
