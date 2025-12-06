@@ -60,7 +60,7 @@ const dogs = [
   },
 ];
 
-const HomeScreen = ({route}: any ) => {
+const HomeScreen = ({navigation, route}: any ) => {
   const [activeTab, setActiveTab] = useState<'home' | 'dogs' | 'start-walk' | 'reminder' | 'profile'>('home');
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -70,7 +70,7 @@ const HomeScreen = ({route}: any ) => {
           <View style={styles.logoCircle}>
             <Text style={styles.logoText}>DM</Text>
           </View>
-          <Text style={styles.topBarTitle}>The dog {route?.params?.userRole}, {route?.params?.userName}</Text>
+          <Text style={styles.topBarTitle}>The dog {route?.params?.userRole}, {route?.params?.userFirstName} {route?.params?.userLastName}</Text>
           <View style={{ flex: 1 }} />
         </View>
 
@@ -98,7 +98,6 @@ const HomeScreen = ({route}: any ) => {
           {/* My Dogs */}
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>My Dogs</Text>
-            {/* optional "See all" */}
           </View>
 
           <ScrollView
@@ -156,7 +155,7 @@ const HomeScreen = ({route}: any ) => {
 
           <TouchableOpacity
             style={[styles.navItem, activeTab === 'dogs' && styles.navItemActive]}
-            onPress={() => setActiveTab('dogs')}
+            onPress={() => {setActiveTab('dogs')}}
           >
             <Ionicons
               name={activeTab === 'dogs' ? 'paw' : 'paw-outline'}
@@ -189,7 +188,16 @@ const HomeScreen = ({route}: any ) => {
 
           <TouchableOpacity
             style={[styles.navItem, activeTab === 'profile' && styles.navItemActive]}
-            onPress={() => setActiveTab('profile')}
+            onPress={() => {
+              setActiveTab('profile');
+              navigation.navigate('Profile', {
+                userFirstName: route?.params?.userFirstName,
+                userLastName: route?.params?.userLastName,
+                email: route?.params?.email,
+                role: `Dog ${route?.params?.userRole}`,
+                phone: route?.params?.phoneNumber,
+              });
+            }}
           >
             <Ionicons
               name={activeTab === 'profile' ? 'person' : 'person-outline'}

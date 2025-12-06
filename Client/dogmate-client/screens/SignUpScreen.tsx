@@ -16,7 +16,8 @@ import {
 import { userAPI } from '../services/api';
 
 const SignUpScreen: React.FC = ({ navigation }: any) => {
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [role, setRole] = useState<'owner' | 'walker'>('owner');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,7 +26,7 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignUp = async () => {
-    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
+    if (!firstName.trim() || !lastName.trim() || !email.trim() || !password || !confirmPassword) {
       Alert.alert('Missing fields', 'Please fill in all fields.');
       return;
     }
@@ -47,11 +48,6 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
 
     setIsLoading(true);
     try {
-      // Parse full name into first and last name
-      const nameParts = fullName.trim().split(' ');
-      const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(' ') || '';
-
       // Call the API to register the user
       const response = await userAPI.register({
         email,
@@ -60,15 +56,17 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
         lastName,
       });
 
-      Alert.alert(
-        'Account created',
-        `Welcome to DogMate, ${fullName}! (${role === 'owner' ? 'Dog Owner' : 'Dog Walker'})`
-      );
+    Alert.alert(
+      'Account created',
+      `Welcome to DogMate, ${firstName} ${lastName}! (${role === 'owner' ? 'Dog Owner' : 'Dog Walker'})`
+    );
 
-      navigation.navigate('Home', {
-        userName: fullName,
+    navigation.navigate('Home', {
+        userFirstName: firstName,
+        userLastName: lastName,
+        email: email,
         userRole: role,          // 'owner' or 'walker'
-        userId: response.userId,
+        phoneNumber: phoneNumber
       });
     } catch (error: any) {
       Alert.alert('Registration failed', error.message || 'An error occurred during registration');
@@ -101,15 +99,24 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
               Centralize your dog&apos;s health, routines, and social life in one place.
             </Text>
 
-            {/* Name */}
-            <Text style={styles.label}>Full Name</Text>
+            <Text style={styles.label}>First Name</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. John Doe"
+              placeholder="e.g. John"
               placeholderTextColor="#A9B5C7"
-              value={fullName}
-              onChangeText={setFullName}
+              value={firstName}
+              onChangeText={setFirstName}
             />
+
+            <Text style={styles.label}>Last Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Doe"
+              placeholderTextColor="#A9B5C7"
+              value={lastName}
+              onChangeText={setLastName}
+            />
+
 
             {/* Role selector */}
             <Text style={styles.label}>I am a</Text>
