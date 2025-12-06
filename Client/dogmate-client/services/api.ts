@@ -37,6 +37,10 @@ export interface LoginResponse {
   message: string;
   userId: string;
   email: string;
+  firstName?: string;
+  lastName?: string;
+  userRole?: string;
+  phoneNumber?: string;
   token?: string;
 }
 
@@ -52,7 +56,6 @@ export const userAPI = {
    */
   register: async (payload: RegisterUserPayload): Promise<RegisterUserResponse> => {
     try {
-      console.error(payload); // 👈 הדפסה לקונסול  
       const response = await apiClient.post('/users/register', payload);
       return response.data;
     } catch (error: any) {
@@ -86,6 +89,23 @@ export const userAPI = {
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch users';
       throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Logout user
+   */
+  logout: async (userId: string, email?: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      // Call logout endpoint on backend
+      console.log('Logging out user:', { userId, email });
+      const response = await apiClient.post('/auth/logout', { userId, email });
+      return response.data;
+    } catch (error: any) {
+      // Even if logout fails on backend, we can still clear local data
+      console.warn('Logout request failed:', error.message);
+      // Return success anyway to allow local logout
+      return { success: true, message: 'Local logout completed' };
     }
   },
 };

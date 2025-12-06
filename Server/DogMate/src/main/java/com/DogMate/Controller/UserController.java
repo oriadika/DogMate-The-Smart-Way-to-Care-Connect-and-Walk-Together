@@ -21,8 +21,7 @@ public class UserController {
         this.userService = userService;
     }
 
-    /**
-     * Register a new user
+    /* Register a new user
      * POST /api/users/register
      */
     @PostMapping("/register")

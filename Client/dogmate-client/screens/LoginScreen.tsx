@@ -37,8 +37,12 @@ const LoginScreen = ({ navigation }: any) => {
       Alert.alert('Logged in', 'Welcome back to DogMate!');
 
       navigation.navigate('Home', {
-        userName: email,
-        userRole: 'walker',
+        userId: response.userId,
+        email: response.email,
+        userFirstName: response.firstName || 'User',
+        userLastName: response.lastName || '',
+        userRole: response.userRole || 'owner',
+        phoneNumber: response.phoneNumber || '',
       });
     } catch (error: any) {
       Alert.alert('Login failed', error.message || 'An error occurred during login');

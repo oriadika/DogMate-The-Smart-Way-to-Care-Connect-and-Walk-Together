@@ -56,6 +56,37 @@ public class AuthController {
         }
     }
 
+    /**
+     * Logout a user
+     * POST /api/auth/logout
+     * TODO: Implement logout logic (invalidate session/token)
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(@RequestBody LogoutRequest request) {
+        try {
+            // Validate request
+            if (request == null || (request.getUserId() == null && request.getEmail() == null)) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("User ID or email is required"));
+            }
+
+            // TODO: Invalidate user session/token
+            // TODO: Clear authentication data
+            // TODO: Log logout event for audit trail
+
+            // Create response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Logout successful");
+            
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to logout: " + e.getMessage()));
+        }
+    }
+
     private Map<String, Object> createErrorResponse(String message) {
         Map<String, Object> error = new HashMap<>();
         error.put("success", false);
@@ -88,6 +119,34 @@ public class AuthController {
 
         public void setPassword(String password) {
             this.password = password;
+        }
+    }
+
+    // Inner class for logout request DTO
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class LogoutRequest {
+        private String userId;
+        private String email;
+
+        // Default constructor for Jackson
+        public LogoutRequest() {
+        }
+
+        // Getters and Setters
+        public String getUserId() {
+            return userId;
+        }
+
+        public void setUserId(String userId) {
+            this.userId = userId;
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
         }
     }
 }

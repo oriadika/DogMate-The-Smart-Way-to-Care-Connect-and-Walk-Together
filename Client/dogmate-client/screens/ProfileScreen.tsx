@@ -1,5 +1,5 @@
 // screens/ProfileScreen.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import {
   SafeAreaView,
   View,
@@ -7,8 +7,11 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { userAPI } from '../services/api';
 
 const mockUsers = [
   { id: '1', name: 'Sarah Cohen', role: 'Dog owner' },
@@ -18,6 +21,7 @@ const mockUsers = [
 ];
 
 const ProfileScreen = ({ navigation, route }: any) => {
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const renderContact = ({ item }: any) => (
     <View style={styles.userCard}>
@@ -35,17 +39,46 @@ const ProfileScreen = ({ navigation, route }: any) => {
       </View>
 
       {/* Ping button */}
-      <TouchableOpacity style={styles.pingButton} onPress={() => {}}>
+      <TouchableOpacity style={styles.pingButton} onPress={() => { }}>
         <Text style={styles.pingText}>Ping</Text>
       </TouchableOpacity>
     </View>
   );
 
-  const handleSignOut = () => {
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'Start' }],
-    });
+  const handleSignOut = async () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          onPress: () => { },
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          onPress: async () => {
+            setIsLoggingOut(true);
+            try {
+              // Call logout API with userId and email
+              await userAPI.logout(route?.params?.userId || '', route?.params?.email || '');
+
+              // Clear user data and navigate back to Start
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Start' }],
+              });
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to sign out');
+              console.error('Sign out error:', error);
+            } finally {
+              setIsLoggingOut(false);
+            }
+          },
+          style: 'destructive',
+        },
+      ]
+    );
   };
 
   return (
@@ -101,9 +134,19 @@ const ProfileScreen = ({ navigation, route }: any) => {
       />
 
       {/* Sign Out Button */}
-      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-        <MaterialCommunityIcons name="logout" size={20} color="#fff" />
-        <Text style={styles.signOutText}>Sign Out</Text>
+      <TouchableOpacity
+        style={[styles.signOutButton, isLoggingOut && styles.signOutButtonDisabled]}
+        onPress={handleSignOut}
+        disabled={isLoggingOut}
+      >
+        {isLoggingOut ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <>
+            <MaterialCommunityIcons name="logout" size={20} color="#fff" />
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </>
+        )}
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -136,7 +179,7 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 20,
     paddingVertical: 8,
-    paddingBottom: 100, 
+    paddingBottom: 100,
   },
 
   profileCard: {
@@ -245,6 +288,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+
+  signOutButtonDisabled: {
+    opacity: 0.6,
   },
 
   signOutText: {
