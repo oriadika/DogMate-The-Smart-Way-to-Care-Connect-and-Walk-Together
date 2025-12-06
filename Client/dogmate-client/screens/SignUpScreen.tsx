@@ -11,7 +11,9 @@ import {
   Platform,
   Alert,
   ImageBackground,
+  ActivityIndicator,
 } from 'react-native';
+import { userAPI } from '../services/api';
 
 const SignUpScreen: React.FC = ({ navigation }: any) => {
   const [firstName, setFirstName] = useState('');
@@ -21,8 +23,9 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSignUp = () => {
+  const handleSignUp = async () => {
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !password || !confirmPassword) {
       Alert.alert('Missing fields', 'Please fill in all fields.');
       return;
@@ -38,12 +41,21 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
       return;
     }
 
-    if (phoneNumber.length != 10){
-      Alert.alert('Phone number is invalid');
+    if (phoneNumber.length !== 10){
+      Alert.alert('Invalid phone number', 'Phone number should be 10 digits');
       return;
     }
 
-    // Later you'll call your backend / API here
+    setIsLoading(true);
+    try {
+      // Call the API to register the user
+      const response = await userAPI.register({
+        email,
+        password,
+        firstName,
+        lastName,
+      });
+
     Alert.alert(
       'Account created',
       `Welcome to DogMate, ${firstName} ${lastName}! (${role === 'owner' ? 'Dog Owner' : 'Dog Walker'})`
@@ -55,7 +67,13 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
         email: email,
         userRole: role,          // 'owner' or 'walker'
         phoneNumber: phoneNumber
-      })
+      });
+    } catch (error: any) {
+      Alert.alert('Registration failed', error.message || 'An error occurred during registration');
+      console.error('Sign up error:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -185,11 +203,16 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
 
             {/* Sign Up button */}
             <TouchableOpacity
-              style={styles.primaryButton}
+              style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
               onPress={handleSignUp}
+              disabled={isLoading}
               activeOpacity={0.85}
             >
-              <Text style={styles.primaryButtonText}>Create Account</Text>
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Create Account</Text>
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -282,6 +305,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
   },
   primaryButtonText: {
     color: '#FFFFFF',

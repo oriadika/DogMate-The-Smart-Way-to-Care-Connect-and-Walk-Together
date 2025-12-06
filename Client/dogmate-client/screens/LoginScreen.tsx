@@ -11,25 +11,41 @@ import {
   Platform,
   Alert,
   ImageBackground,
+  ActivityIndicator,
 } from 'react-native';
+import { userAPI } from '../services/api';
 
 const LoginScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email.trim() || !password) {
       Alert.alert('Missing fields', 'Please fill in both email and password.');
       return;
     }
 
-    // Later you'll call your backend / API here
-    Alert.alert('Logged in', `Welcome back to DogMate!`);
+    setIsLoading(true);
+    try {
+      // Call the login API
+      const response = await userAPI.login({
+        email,
+        password,
+      });
 
-    navigation.navigate('Home', {
-      userName: email.slice(0, email.indexOf('@') + 1),
-      userRole: 'walker',
-    });
+      Alert.alert('Logged in', 'Welcome back to DogMate!');
+
+      navigation.navigate('Home', {
+        userName: email,
+        userRole: 'walker',
+      });
+    } catch (error: any) {
+      Alert.alert('Login failed', error.message || 'An error occurred during login');
+      console.error('Login error:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -84,11 +100,16 @@ const LoginScreen = ({ navigation }: any) => {
 
             {/* Login button */}
             <TouchableOpacity
-              style={styles.primaryButton}
+              style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
               onPress={handleLogin}
+              disabled={isLoading}
               activeOpacity={0.85}
             >
-              <Text style={styles.primaryButtonText}>Log In</Text>
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Log In</Text>
+              )}
             </TouchableOpacity>
 
             {/* Optional: link to Sign Up */}
@@ -162,6 +183,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
   },
   primaryButtonText: {
     color: '#FFFFFF',
