@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
-//todo: connect this to ui
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
