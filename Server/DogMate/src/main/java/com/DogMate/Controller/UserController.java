@@ -28,7 +28,9 @@ public class UserController {
      */
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@RequestBody RegisterUserRequest request) {
+        
         try {
+            System.out.println("Received registration request for email: " + request.getEmail());
             // Validate request
             if (request == null || request.getEmail() == null || request.getPassword() == null ||
                 request.getFirstName() == null || request.getLastName() == null) {
