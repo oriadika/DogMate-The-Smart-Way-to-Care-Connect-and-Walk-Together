@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -60,6 +61,81 @@ public class UserController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(createErrorResponse("Failed to register user: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Logout a user by ID (sets isActive to false)
+     * POST /api/users/logout/{userId}
+     */
+    @PostMapping("/logout/{userId}")
+    public ResponseEntity<?> logoutUserById(@PathVariable String userId) {
+        try {
+            // Validate userId parameter
+            if (userId == null || userId.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("User ID is required"));
+            }
+
+            // Parse UUID
+            UUID userUuid;
+            try {
+                userUuid = UUID.fromString(userId);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("Invalid user ID format"));
+            }
+
+            // Logout user
+            userService.updateUserActiveStatus(userUuid, false); // Assuming you have this method in UserService
+
+            // Create success response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "User logged out successfully");
+            response.put("userId", userId);
+
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND) // Use NOT_FOUND for user not found errors
+                .body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to log out user: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Logout a user by email (sets isActive to false)
+     * POST /api/users/logout/email/{email}
+     */
+    @PostMapping("/logout/email/{email}")
+    public ResponseEntity<?> logoutUserByEmail(@PathVariable String email) {
+        try {
+            // Validate email parameter
+            if (email == null || email.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("Email is required"));
+            }
+
+            // Logout user
+            userService.updateUserActiveStatusByEmail(email, false); // Assuming you have this method in UserService
+
+            // Create success response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "User logged out successfully");
+            response.put("email", email);
+
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND) // Use NOT_FOUND for user not found errors
+                .body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to log out user: " + e.getMessage()));
         }
     }
 
