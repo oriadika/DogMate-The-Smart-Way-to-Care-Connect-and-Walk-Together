@@ -39,7 +39,6 @@ const LoginScreen = ({ navigation }: any) => {
       navigation.navigate('Home', {
         userName: email,
         userRole: 'walker',
-        userId: response.userId,
       });
     } catch (error: any) {
       Alert.alert('Login failed', error.message || 'An error occurred during login');
