@@ -33,14 +33,14 @@ public class UserService {
      * @throws IllegalArgumentException if email already exists or validation fails
      */
     public RegularUser registerUser(String email, String password, 
-                                     String firstName, String lastName, 
-                                     String profileImageUrl) {
+                                     String firstName, String lastName 
+                                     ) {
         // Check if email already exists (orchestration - getting data for domain)
         boolean emailExists = userRepository.existsByEmail(email);
         
         // Create RegularUser using domain factory method (all business logic is in domain)
         RegularUser newUser = RegularUser.create(
-            email, password, firstName, lastName, profileImageUrl, 
+            email, password, firstName, lastName, 
             emailExists, passwordEncoder::encode
         );
 

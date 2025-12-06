@@ -14,9 +14,6 @@ public class DogWalkerUser extends UserAccount {
     @Column(name = "last_name")
     private String last_name;
     
-    @Column(name = "profile_image_url")
-    private String profileImageURL;
-    
     @ElementCollection
     @CollectionTable(name = "dog_walker_cities", joinColumns = @JoinColumn(name = "user_id"))
     @Column(name = "city")
@@ -40,7 +37,6 @@ public class DogWalkerUser extends UserAccount {
         super(id, email, passwordHash);
         this.first_name = first_name;
         this.last_name = last_name;
-        this.profileImageURL = profileImageURL;
         this.cities = cities;
         this.availablityHours = availablityHours;
         this.isActive = false;
@@ -60,14 +56,6 @@ public class DogWalkerUser extends UserAccount {
 
     public void setLast_name(String last_name) {
         this.last_name = last_name;
-    }
-
-    public String getProfileImageURL() {
-        return profileImageURL;
-    }
-
-    public void setProfileImageURL(String profileImageURL) {
-        this.profileImageURL = profileImageURL;
     }
 
     public List<String> getCities() {

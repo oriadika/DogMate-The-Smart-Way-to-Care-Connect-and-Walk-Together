@@ -27,7 +27,9 @@ public class UserController {
      */
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@RequestBody RegisterUserRequest request) {
+        
         try {
+            System.out.println("Received registration request for email: " + request.getEmail());
             // Validate request
             if (request == null || request.getEmail() == null || request.getPassword() == null ||
                 request.getFirstName() == null || request.getLastName() == null) {
@@ -40,8 +42,7 @@ public class UserController {
                 request.getEmail(),
                 request.getPassword(),
                 request.getFirstName(),
-                request.getLastName(),
-                request.getProfileImageUrl()
+                request.getLastName()
             );
 
             // Create response
@@ -180,6 +181,53 @@ public class UserController {
         }
     }
 
+        /**
+     * Get all users
+     * GET /api/users
+     */
+    @GetMapping
+    public ResponseEntity<?> getAllLoggedUsers() {
+        try {
+            java.util.List<com.DogMate.Domain.UserAccount> users = userService.getAllUsers();
+            
+            java.util.List<Map<String, Object>> usersList = new java.util.ArrayList<>();
+            for (com.DogMate.Domain.UserAccount user : users) {
+                if (!user.isActive()) {
+                    continue; // Skip inactive users
+                }
+                Map<String, Object> userInfo = new HashMap<>();
+                userInfo.put("id", user.getId());
+                userInfo.put("email", user.getEmail());
+                userInfo.put("createdAt", user.getCreatedAt());
+                
+                if (user instanceof com.DogMate.Domain.RegularUser) {
+                    com.DogMate.Domain.RegularUser regularUser = (com.DogMate.Domain.RegularUser) user;
+                    userInfo.put("type", "RegularUser");
+                    userInfo.put("firstName", regularUser.getFirst_name());
+                    userInfo.put("lastName", regularUser.getLast_name());
+                } else if (user instanceof com.DogMate.Domain.AdminUser) {
+                    com.DogMate.Domain.AdminUser adminUser = (com.DogMate.Domain.AdminUser) user;
+                    userInfo.put("type", "AdminUser");
+                    userInfo.put("permissionLevel", adminUser.getPermissionLevel());
+                }
+                
+                usersList.add(userInfo);
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("count", usersList.size());
+            response.put("users", usersList);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to get users: " + e.getMessage()));
+        }
+    }
+
+
     private Map<String, Object> createErrorResponse(String message) {
         Map<String, Object> error = new HashMap<>();
         error.put("success", false);
@@ -194,7 +242,7 @@ public class UserController {
         private String password;
         private String firstName;
         private String lastName;
-        private String profileImageUrl;
+        private boolean isActive;
 
         // Default constructor for Jackson
         public RegisterUserRequest() {
@@ -233,12 +281,12 @@ public class UserController {
             this.lastName = lastName;
         }
 
-        public String getProfileImageUrl() {
-            return profileImageUrl;
+        public boolean isLogggedIn() {
+            return isActive;
         }
 
-        public void setProfileImageUrl(String profileImageUrl) {
-            this.profileImageUrl = profileImageUrl;
+        public void setisActive(boolean isActive) {
+            this.isActive = isActive;
         }
     }
 }

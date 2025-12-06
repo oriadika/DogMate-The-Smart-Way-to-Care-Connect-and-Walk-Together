@@ -32,7 +32,7 @@ class RegularUserTest {
     void GivenValidData_WhenCreate_ThenReturnRegularUser() {
         // Act
         RegularUser user = RegularUser.create(
-            testEmail, testPlainPassword, testFirstName, testLastName, null, false, passwordEncoder
+            testEmail, testPlainPassword, testFirstName, testLastName, false, passwordEncoder
         );
 
         // Assert
@@ -44,37 +44,15 @@ class RegularUserTest {
         assertNotNull(user.getId());
     }
 
-    @Test
-    void GivenValidDataWithProfileImageUrl_WhenCreate_ThenReturnRegularUserWithProfileImage() {
-        // Arrange
-        String profileImageUrl = "https://example.com/image.jpg";
 
-        // Act
-        RegularUser user = RegularUser.create(
-            testEmail, testPlainPassword, testFirstName, testLastName, profileImageUrl, false, passwordEncoder
-        );
 
-        // Assert
-        assertEquals(profileImageUrl, user.getProfileImageURL());
-    }
-
-    @Test
-    void GivenNullProfileImageUrl_WhenCreate_ThenReturnRegularUserWithEmptyString() {
-        // Act
-        RegularUser user = RegularUser.create(
-            testEmail, testPlainPassword, testFirstName, testLastName, null, false, passwordEncoder
-        );
-
-        // Assert
-        assertEquals("", user.getProfileImageURL());
-    }
 
     @Test
     void GivenNullEmail_WhenCreate_ThenThrowException() {
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> RegularUser.create(null, testPlainPassword, testFirstName, testLastName, null, false, passwordEncoder)
+            () -> RegularUser.create(null, testPlainPassword, testFirstName, testLastName, false, passwordEncoder)
         );
 
         assertEquals("Email cannot be null or empty", exception.getMessage());
@@ -85,7 +63,7 @@ class RegularUserTest {
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> RegularUser.create("   ", testPlainPassword, testFirstName, testLastName, null, false, passwordEncoder)
+            () -> RegularUser.create("   ", testPlainPassword, testFirstName, testLastName, false, passwordEncoder)
         );
 
         assertEquals("Email cannot be null or empty", exception.getMessage());
@@ -96,7 +74,7 @@ class RegularUserTest {
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> RegularUser.create(testEmail, null, testFirstName, testLastName, null, false, passwordEncoder)
+            () -> RegularUser.create(testEmail, null, testFirstName, testLastName, false, passwordEncoder)
         );
 
         assertEquals("Password cannot be null or empty", exception.getMessage());
@@ -107,7 +85,7 @@ class RegularUserTest {
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> RegularUser.create(testEmail, "   ", testFirstName, testLastName, null, false, passwordEncoder)
+            () -> RegularUser.create(testEmail, "   ", testFirstName, testLastName, false, passwordEncoder)
         );
 
         assertEquals("Password cannot be null or empty", exception.getMessage());
@@ -118,7 +96,7 @@ class RegularUserTest {
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> RegularUser.create(testEmail, testPlainPassword, null, testLastName, null, false, passwordEncoder)
+            () -> RegularUser.create(testEmail, testPlainPassword, null, testLastName, false, passwordEncoder)
         );
 
         assertEquals("First name cannot be null or empty", exception.getMessage());
@@ -129,7 +107,7 @@ class RegularUserTest {
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> RegularUser.create(testEmail, testPlainPassword, "   ", testLastName, null, false, passwordEncoder)
+            () -> RegularUser.create(testEmail, testPlainPassword, "   ", testLastName, false, passwordEncoder)
         );
 
         assertEquals("First name cannot be null or empty", exception.getMessage());
@@ -140,7 +118,7 @@ class RegularUserTest {
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> RegularUser.create(testEmail, testPlainPassword, testFirstName, null, null, false, passwordEncoder)
+            () -> RegularUser.create(testEmail, testPlainPassword, testFirstName, null, false, passwordEncoder)
         );
 
         assertEquals("Last name cannot be null or empty", exception.getMessage());
@@ -151,7 +129,7 @@ class RegularUserTest {
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> RegularUser.create(testEmail, testPlainPassword, testFirstName, "   ", null, false, passwordEncoder)
+            () -> RegularUser.create(testEmail, testPlainPassword, testFirstName, "   ", false, passwordEncoder)
         );
 
         assertEquals("Last name cannot be null or empty", exception.getMessage());
@@ -163,7 +141,7 @@ class RegularUserTest {
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
             () -> RegularUser.create(
-                testEmail, testPlainPassword, testFirstName, testLastName, null, true, passwordEncoder
+                testEmail, testPlainPassword, testFirstName, testLastName, true, passwordEncoder
             )
         );
 
@@ -174,7 +152,7 @@ class RegularUserTest {
     void GivenEmailNotExists_WhenCreate_ThenReturnRegularUser() {
         // Act
         RegularUser user = RegularUser.create(
-            testEmail, testPlainPassword, testFirstName, testLastName, null, false, passwordEncoder
+            testEmail, testPlainPassword, testFirstName, testLastName, false, passwordEncoder
         );
 
         // Assert
