@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
@@ -41,8 +42,7 @@ public class UserController {
                 request.getEmail(),
                 request.getPassword(),
                 request.getFirstName(),
-                request.getLastName(),
-                request.getProfileImageUrl()
+                request.getLastName()
             );
 
             // Create response
@@ -60,6 +60,81 @@ public class UserController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(createErrorResponse("Failed to register user: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Logout a user by ID (sets isActive to false)
+     * POST /api/users/logout/{userId}
+     */
+    @PostMapping("/logout/{userId}")
+    public ResponseEntity<?> logoutUserById(@PathVariable String userId) {
+        try {
+            // Validate userId parameter
+            if (userId == null || userId.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("User ID is required"));
+            }
+
+            // Parse UUID
+            UUID userUuid;
+            try {
+                userUuid = UUID.fromString(userId);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("Invalid user ID format"));
+            }
+
+            // Logout user
+            userService.updateUserActiveStatus(userUuid, false); // Assuming you have this method in UserService
+
+            // Create success response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "User logged out successfully");
+            response.put("userId", userId);
+
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND) // Use NOT_FOUND for user not found errors
+                .body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to log out user: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Logout a user by email (sets isActive to false)
+     * POST /api/users/logout/email/{email}
+     */
+    @PostMapping("/logout/email/{email}")
+    public ResponseEntity<?> logoutUserByEmail(@PathVariable String email) {
+        try {
+            // Validate email parameter
+            if (email == null || email.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("Email is required"));
+            }
+
+            // Logout user
+            userService.updateUserActiveStatusByEmail(email, false); // Assuming you have this method in UserService
+
+            // Create success response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "User logged out successfully");
+            response.put("email", email);
+
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND) // Use NOT_FOUND for user not found errors
+                .body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to log out user: " + e.getMessage()));
         }
     }
 
@@ -181,6 +256,53 @@ public class UserController {
         }
     }
 
+        /**
+     * Get all users
+     * GET /api/users
+     */
+    @GetMapping
+    public ResponseEntity<?> getAllLoggedUsers() {
+        try {
+            java.util.List<com.DogMate.Domain.UserAccount> users = userService.getAllUsers();
+            
+            java.util.List<Map<String, Object>> usersList = new java.util.ArrayList<>();
+            for (com.DogMate.Domain.UserAccount user : users) {
+                if (!user.isActive()) {
+                    continue; // Skip inactive users
+                }
+                Map<String, Object> userInfo = new HashMap<>();
+                userInfo.put("id", user.getId());
+                userInfo.put("email", user.getEmail());
+                userInfo.put("createdAt", user.getCreatedAt());
+                
+                if (user instanceof com.DogMate.Domain.RegularUser) {
+                    com.DogMate.Domain.RegularUser regularUser = (com.DogMate.Domain.RegularUser) user;
+                    userInfo.put("type", "RegularUser");
+                    userInfo.put("firstName", regularUser.getFirst_name());
+                    userInfo.put("lastName", regularUser.getLast_name());
+                } else if (user instanceof com.DogMate.Domain.AdminUser) {
+                    com.DogMate.Domain.AdminUser adminUser = (com.DogMate.Domain.AdminUser) user;
+                    userInfo.put("type", "AdminUser");
+                    userInfo.put("permissionLevel", adminUser.getPermissionLevel());
+                }
+                
+                usersList.add(userInfo);
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("count", usersList.size());
+            response.put("users", usersList);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to get users: " + e.getMessage()));
+        }
+    }
+
+
     private Map<String, Object> createErrorResponse(String message) {
         Map<String, Object> error = new HashMap<>();
         error.put("success", false);
@@ -195,7 +317,7 @@ public class UserController {
         private String password;
         private String firstName;
         private String lastName;
-        private String profileImageUrl;
+        private boolean isActive;
 
         // Default constructor for Jackson
         public RegisterUserRequest() {
@@ -234,12 +356,12 @@ public class UserController {
             this.lastName = lastName;
         }
 
-        public String getProfileImageUrl() {
-            return profileImageUrl;
+        public boolean isLogggedIn() {
+            return isActive;
         }
 
-        public void setProfileImageUrl(String profileImageUrl) {
-            this.profileImageUrl = profileImageUrl;
+        public void setisActive(boolean isActive) {
+            this.isActive = isActive;
         }
     }
 }

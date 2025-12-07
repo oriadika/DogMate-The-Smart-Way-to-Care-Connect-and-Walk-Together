@@ -48,7 +48,7 @@ class UserServiceTest {
     void GivenValidUserData_WhenRegisterUser_ThenCallDependenciesAndReturnUser() {
         // Arrange
         RegularUser mockSavedUser = new RegularUser(
-            java.util.UUID.randomUUID(), testEmail, testPasswordHash, testFirstName, testLastName, ""
+            java.util.UUID.randomUUID(), testEmail, testPasswordHash, testFirstName, testLastName
         );
         when(userRepository.existsByEmail(testEmail)).thenReturn(false);
         when(passwordEncoder.encode(testPassword)).thenReturn(testPasswordHash);
@@ -56,7 +56,7 @@ class UserServiceTest {
 
         // Act
         RegularUser result = userService.registerUser(
-            testEmail, testPassword, testFirstName, testLastName, null
+            testEmail, testPassword, testFirstName, testLastName
         );
 
         // Assert - Verify Service calls dependencies correctly
@@ -72,7 +72,7 @@ class UserServiceTest {
         // Arrange
         String profileImageUrl = "https://example.com/image.jpg";
         RegularUser mockSavedUser = new RegularUser(
-            java.util.UUID.randomUUID(), testEmail, testPasswordHash, testFirstName, testLastName, profileImageUrl
+            java.util.UUID.randomUUID(), testEmail, testPasswordHash, testFirstName, testLastName
         );
         when(userRepository.existsByEmail(testEmail)).thenReturn(false);
         when(passwordEncoder.encode(testPassword)).thenReturn(testPasswordHash);
@@ -80,7 +80,7 @@ class UserServiceTest {
 
         // Act
         RegularUser result = userService.registerUser(
-            testEmail, testPassword, testFirstName, testLastName, profileImageUrl
+            testEmail, testPassword, testFirstName, testLastName
         );
 
         // Assert - Verify Service calls dependencies correctly
@@ -98,7 +98,7 @@ class UserServiceTest {
         // Act & Assert
         IllegalArgumentException exception = assertThrows(
             IllegalArgumentException.class,
-            () -> userService.registerUser(testEmail, testPassword, testFirstName, testLastName, null)
+            () -> userService.registerUser(testEmail, testPassword, testFirstName, testLastName)
         );
 
         // Verify Service behavior: checks email, but doesn't hash or save

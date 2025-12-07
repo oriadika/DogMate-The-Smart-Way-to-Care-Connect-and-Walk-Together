@@ -21,6 +21,9 @@ public class UserAccount {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "is_active", nullable = false, updatable = true)
+    private boolean isActive = true;
+
     // Default constructor required by JPA
     protected UserAccount() {
         // JPA requires a no-args constructor
@@ -141,6 +144,14 @@ public class UserAccount {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public boolean isActive() {
+        return isActive;
+    }
+
+    public void setIsActive(boolean isActive) {
+        this.isActive = isActive;
     }
 
 }

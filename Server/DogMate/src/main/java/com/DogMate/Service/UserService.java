@@ -8,7 +8,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
-
+import java.util.Optional;
 @Service
 public class UserService {
     
@@ -33,14 +33,14 @@ public class UserService {
      * @throws IllegalArgumentException if email already exists or validation fails
      */
     public RegularUser registerUser(String email, String password, 
-                                     String firstName, String lastName, 
-                                     String profileImageUrl) {
+                                     String firstName, String lastName 
+                                     ) {
         // Check if email already exists (orchestration - getting data for domain)
         boolean emailExists = userRepository.existsByEmail(email);
         
         // Create RegularUser using domain factory method (all business logic is in domain)
         RegularUser newUser = RegularUser.create(
-            email, password, firstName, lastName, profileImageUrl, 
+            email, password, firstName, lastName, 
             emailExists, passwordEncoder::encode
         );
 
@@ -203,6 +203,9 @@ public class UserService {
             throw new IllegalArgumentException("Invalid credentials");
         }
         
+        user.setIsActive(passwordMatches);
+        userRepository.save(user);
+        
         return user;
     }
     
@@ -218,5 +221,43 @@ public class UserService {
             return ((com.DogMate.Infrastructure.UserRepository) userRepository).findAll();
         }
         throw new IllegalStateException("UserRepository is not properly configured");
+    }
+
+/**
+     * Updates the active status (isActive) of a user by ID.
+     * Used by: UserController.logoutUserById
+     */
+    public void updateUserActiveStatus(UUID userId, boolean isActive) {
+        UserAccount.validateUserId(userId);
+
+        Optional<UserAccount> userOpt = userRepository.findById(userId);
+
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with ID: " + userId);
+        }
+
+        UserAccount user = userOpt.get();
+        user.setIsActive(isActive);
+        
+        userRepository.save(user);
+    }
+
+    /**
+     * Updates the active status (isActive) of a user by email.
+     * Used by: UserController.logoutUserByEmail
+     */
+    public void updateUserActiveStatusByEmail(String email, boolean isActive) {
+        UserAccount.validateEmail(email);
+
+        Optional<UserAccount> userOpt = userRepository.findByEmail(email);
+
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with email: " + email);
+        }
+
+        UserAccount user = userOpt.get();
+        user.setIsActive(isActive);
+        
+        userRepository.save(user);
     }
 }

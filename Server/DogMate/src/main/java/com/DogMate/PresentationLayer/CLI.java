@@ -119,12 +119,9 @@ public class CLI {
                 String lastName = scanner.nextLine();
                 
                 System.out.print("Enter the user's profile image URL (optional, press Enter to skip): ");
-                String profileImageUrl = scanner.nextLine();
-                if (profileImageUrl.trim().isEmpty()) {
-                    profileImageUrl = null;
-                }
+
                 
-                RegularUser user = userService.registerUser(username, password, firstName, lastName, profileImageUrl);
+                RegularUser user = userService.registerUser(username, password, firstName, lastName);
                 System.out.println("\n✓ User created successfully!");
                 System.out.println("  ID: " + user.getId());
                 System.out.println("  Email: " + user.getEmail());
