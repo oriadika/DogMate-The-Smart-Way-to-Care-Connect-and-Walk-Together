@@ -217,7 +217,7 @@ public class UserController {
      * Get all users
      * GET /api/users
      */
-    @GetMapping
+    @GetMapping("/api/users")
     public ResponseEntity<?> getAllUsers() {
         try {
             java.util.List<com.DogMate.Domain.UserAccount> users = userService.getAllUsers();
@@ -260,14 +260,14 @@ public class UserController {
      * Get all users
      * GET /api/users
      */
-    @GetMapping
+    @GetMapping("/api/users/logged")
     public ResponseEntity<?> getAllLoggedUsers() {
         try {
             java.util.List<com.DogMate.Domain.UserAccount> users = userService.getAllUsers();
             
             java.util.List<Map<String, Object>> usersList = new java.util.ArrayList<>();
             for (com.DogMate.Domain.UserAccount user : users) {
-                if (!user.isActive()) {
+                if (!user.isLoggedIn()) {
                     continue; // Skip inactive users
                 }
                 Map<String, Object> userInfo = new HashMap<>();
@@ -317,7 +317,7 @@ public class UserController {
         private String password;
         private String firstName;
         private String lastName;
-        private boolean isActive;
+        private boolean isLoggedIn;
 
         // Default constructor for Jackson
         public RegisterUserRequest() {
@@ -357,11 +357,11 @@ public class UserController {
         }
 
         public boolean isLogggedIn() {
-            return isActive;
+            return isLoggedIn;
         }
 
         public void setisActive(boolean isActive) {
-            this.isActive = isActive;
+            this.isLoggedIn = isActive;
         }
     }
 }

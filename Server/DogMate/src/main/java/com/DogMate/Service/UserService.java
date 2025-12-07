@@ -203,7 +203,7 @@ public class UserService {
             throw new IllegalArgumentException("Invalid credentials");
         }
         
-        user.setIsActive(passwordMatches);
+        user.setLoggedIn(passwordMatches);
         userRepository.save(user);
         
         return user;
@@ -237,7 +237,7 @@ public class UserService {
         }
 
         UserAccount user = userOpt.get();
-        user.setIsActive(isActive);
+        user.setLoggedIn(isActive);
         
         userRepository.save(user);
     }
@@ -256,7 +256,7 @@ public class UserService {
         }
 
         UserAccount user = userOpt.get();
-        user.setIsActive(isActive);
+        user.setLoggedIn(isActive);
         
         userRepository.save(user);
     }
