@@ -23,6 +23,11 @@ const ProfileScreen = ({ navigation, route }: any) => {
   useEffect(() => {
     fetchLoggedUsers();
     
+    // Set up auto-refresh of logged-in users every 7 seconds
+    const refreshInterval = setInterval(() => {
+      fetchLoggedUsers();
+    }, 7000);
+    
     // Connect to WebSocket for real-time ping notifications
     const userId = route?.params?.userId;
     if (userId) {
@@ -32,11 +37,17 @@ const ProfileScreen = ({ navigation, route }: any) => {
         connectWebSocket(userId);
       }, 500);
       
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        clearInterval(refreshInterval);
+        console.log('📱 ProfileScreen unmounting, disconnecting WebSocket');
+        websocketService.disconnect();
+      };
     }
 
     // Cleanup on unmount
     return () => {
+      clearInterval(refreshInterval);
       console.log('📱 ProfileScreen unmounting, disconnecting WebSocket');
       websocketService.disconnect();
     };
