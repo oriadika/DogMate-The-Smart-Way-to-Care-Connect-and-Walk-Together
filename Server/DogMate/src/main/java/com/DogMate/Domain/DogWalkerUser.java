@@ -21,7 +21,7 @@ public class DogWalkerUser extends UserAccount {
     
     @ElementCollection
     @CollectionTable(name = "dog_walker_availability_hours", joinColumns = @JoinColumn(name = "user_id"))
-    @Column(name = "hour")
+    @Column(name = "availability_hour")
     private List<String> availablityHours;
     
     @Column(name = "is_active")
