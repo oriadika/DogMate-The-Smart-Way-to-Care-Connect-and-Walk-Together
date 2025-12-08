@@ -140,7 +140,24 @@ export const userAPI = {
   },
 
   /**
+   * Update user's current location
+   */
+  updateLocation: async (userId: string, latitude: number, longitude: number): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await apiClient.post(`/users/${userId}/location`, { 
+        latitude,
+        longitude
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to update location';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
    * Note: Ping notifications are now received via WebSocket in real-time.
    * No polling or marking as read needed.
    */
 };
+

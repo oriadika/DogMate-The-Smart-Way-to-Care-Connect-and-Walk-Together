@@ -15,6 +15,12 @@ public class RegularUser extends UserAccount{
     @Column(name = "last_name")
     private String last_name;
     
+    @Column(name = "latitude")
+    private Double latitude;
+    
+    @Column(name = "longitude")
+    private Double longitude;
+    
     @Transient
     private List<DogRelationship> dogRelationships;
     
@@ -223,5 +229,21 @@ public class RegularUser extends UserAccount{
 
     public void removeNotification(Notification notification){
         this.notifications.remove(notification);
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
     }
 }

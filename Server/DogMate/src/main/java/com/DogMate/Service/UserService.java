@@ -310,4 +310,44 @@ public class UserService {
         
         userRepository.save(user);
     }
+
+    /**
+     * Update user's current location
+     * Service layer - only orchestration
+     * @param userId The UUID of the user to update
+     * @param latitude The latitude coordinate
+     * @param longitude The longitude coordinate
+     * @throws IllegalArgumentException if user ID is null or user doesn't exist
+     */
+    public void updateUserLocation(UUID userId, Double latitude, Double longitude) {
+        // Validate user ID using domain method (business logic in domain)
+        UserAccount.validateUserId(userId);
+
+        // Validate coordinates
+        if (latitude == null || latitude < -90 || latitude > 90) {
+            throw new IllegalArgumentException("Latitude must be between -90 and 90");
+        }
+        if (longitude == null || longitude < -180 || longitude > 180) {
+            throw new IllegalArgumentException("Longitude must be between -180 and 180");
+        }
+
+        // Find user by ID (orchestration)
+        Optional<UserAccount> userOpt = userRepository.findById(userId);
+
+        // Validate user exists (business logic)
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with ID: " + userId);
+        }
+
+        // Update user location (orchestration)
+        UserAccount user = userOpt.get();
+        if (user instanceof RegularUser) {
+            RegularUser regularUser = (RegularUser) user;
+            regularUser.setLatitude(latitude);
+            regularUser.setLongitude(longitude);
+            userRepository.save(regularUser);
+        } else {
+            throw new IllegalArgumentException("Only RegularUser accounts support location tracking");
+        }
+    }
 }

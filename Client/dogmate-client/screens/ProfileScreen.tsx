@@ -13,12 +13,15 @@ import {
 import { FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
 import websocketService from '../services/websocket';
+import locationService from '../services/location';
 
 const ProfileScreen = ({ navigation, route }: any) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [loggedUsers, setLoggedUsers] = useState<any[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
+  const [locationTracking, setLocationTracking] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
     fetchLoggedUsers();
@@ -27,6 +30,52 @@ const ProfileScreen = ({ navigation, route }: any) => {
     const refreshInterval = setInterval(() => {
       fetchLoggedUsers();
     }, 7000);
+    
+    // Request location permissions and start tracking
+    const initializeLocation = async () => {
+      const userId = route?.params?.userId;
+      const permissionsGranted = await locationService.requestPermissions();
+      
+      if (permissionsGranted) {
+        setLocationTracking(true);
+        
+        // Get initial location
+        const initialLocation = await locationService.getCurrentLocation();
+        if (initialLocation && userId) {
+          setUserLocation(initialLocation);
+          try {
+            await userAPI.updateLocation(userId, initialLocation.latitude, initialLocation.longitude);
+            console.log('📍 Initial location sent to server');
+          } catch (error) {
+            console.error('Failed to send initial location:', error);
+          }
+        }
+
+        // Start watching location for continuous updates
+        const success = locationService.startWatchingLocation(
+          async (location) => {
+            setUserLocation(location);
+            if (userId) {
+              try {
+                await userAPI.updateLocation(userId, location.latitude, location.longitude);
+              } catch (error) {
+                console.error('Failed to update location:', error);
+              }
+            }
+          },
+          (error) => {
+            console.error('Location tracking error:', error);
+          }
+        );
+        
+        if (!success) {
+          console.warn('⚠️ Failed to start location watching');
+          setLocationTracking(false);
+        }
+      }
+    };
+
+    initializeLocation();
     
     // Connect to WebSocket for real-time ping notifications
     const userId = route?.params?.userId;
@@ -40,6 +89,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
       return () => {
         clearTimeout(timer);
         clearInterval(refreshInterval);
+        locationService.stopWatchingLocation();
         console.log('📱 ProfileScreen unmounting, disconnecting WebSocket');
         websocketService.disconnect();
       };
@@ -48,6 +98,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
     // Cleanup on unmount
     return () => {
       clearInterval(refreshInterval);
+      locationService.stopWatchingLocation();
       console.log('📱 ProfileScreen unmounting, disconnecting WebSocket');
       websocketService.disconnect();
     };
@@ -234,6 +285,33 @@ const ProfileScreen = ({ navigation, route }: any) => {
               <Text style={styles.infoText}>{route?.params?.phone}</Text>
             </View>
 
+            {/* Location Display */}
+            {userLocation ? (
+              <View style={styles.locationCard}>
+                <View style={styles.locationHeader}>
+                  <Ionicons name="location" size={18} color="#FF7043" />
+                  <Text style={styles.locationTitle}>Your Location</Text>
+                  {locationTracking && <Text style={styles.trackingBadge}>📍 Live</Text>}
+                </View>
+                <Text style={styles.locationText}>
+                  Latitude: {userLocation.latitude.toFixed(6)}
+                </Text>
+                <Text style={styles.locationText}>
+                  Longitude: {userLocation.longitude.toFixed(6)}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.locationCard}>
+                <View style={styles.locationHeader}>
+                  <Ionicons name="location" size={18} color="#9CA3AF" />
+                  <Text style={styles.locationTitle}>Your Location</Text>
+                </View>
+                <Text style={styles.locationText}>
+                  {locationTracking ? 'Fetching location...' : 'Location tracking disabled'}
+                </Text>
+              </View>
+            )}
+
             <Text style={styles.sectionTitle}>Logged In Users</Text>
             {isLoadingUsers && (
               <View style={styles.loadingContainer}>
@@ -338,6 +416,42 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
     color: '#374151',
+  },
+
+  locationCard: {
+    backgroundColor: '#FFF5F2',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF7043',
+  },
+
+  locationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+
+  locationTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginLeft: 8,
+    flex: 1,
+  },
+
+  trackingBadge: {
+    fontSize: 12,
+    color: '#FF7043',
+    fontWeight: '600',
+  },
+
+  locationText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+    fontFamily: 'Courier New',
   },
 
   sectionTitle: {
