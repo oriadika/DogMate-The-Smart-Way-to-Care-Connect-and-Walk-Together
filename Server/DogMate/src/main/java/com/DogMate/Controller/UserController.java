@@ -292,6 +292,11 @@ public class UserController {
                     userInfo.put("type", "RegularUser");
                     userInfo.put("firstName", regularUser.getFirst_name());
                     userInfo.put("lastName", regularUser.getLast_name());
+                    // Add location if available
+                    if (regularUser.getLatitude() != null && regularUser.getLongitude() != null) {
+                        userInfo.put("latitude", regularUser.getLatitude());
+                        userInfo.put("longitude", regularUser.getLongitude());
+                    }
                 } else if (user instanceof com.DogMate.Domain.AdminUser) {
                     com.DogMate.Domain.AdminUser adminUser = (com.DogMate.Domain.AdminUser) user;
                     userInfo.put("type", "AdminUser");
@@ -456,12 +461,85 @@ public class UserController {
         }
     }
 
+    /**
+     * Update user's current location
+     * POST /api/users/{userId}/location
+     */
+    @PostMapping("/{userId}/location")
+    public ResponseEntity<?> updateUserLocation(
+            @PathVariable String userId,
+            @RequestBody LocationUpdateRequest request) {
+        try {
+            // Validate inputs
+            if (userId == null || userId.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("User ID is required"));
+            }
+
+            if (request == null || request.getLatitude() == null || request.getLongitude() == null) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("Latitude and longitude are required"));
+            }
+
+            // Parse UUID
+            UUID userUuid;
+            try {
+                userUuid = UUID.fromString(userId);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("Invalid user ID format"));
+            }
+
+            // Update user location via service
+            userService.updateUserLocation(userUuid, request.getLatitude(), request.getLongitude());
+
+            // Create response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Location updated successfully");
+            response.put("userId", userId);
+            response.put("latitude", request.getLatitude());
+            response.put("longitude", request.getLongitude());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to update location: " + e.getMessage()));
+        }
+    }
 
     private Map<String, Object> createErrorResponse(String message) {
         Map<String, Object> error = new HashMap<>();
         error.put("success", false);
         error.put("error", message);
         return error;
+    }
+
+    // Inner class for location update request DTO
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class LocationUpdateRequest {
+        private Double latitude;
+        private Double longitude;
+
+        public LocationUpdateRequest() {
+        }
+
+        public Double getLatitude() {
+            return latitude;
+        }
+
+        public void setLatitude(Double latitude) {
+            this.latitude = latitude;
+        }
+
+        public Double getLongitude() {
+            return longitude;
+        }
+
+        public void setLongitude(Double longitude) {
+            this.longitude = longitude;
+        }
     }
 
     // Inner class for request DTO

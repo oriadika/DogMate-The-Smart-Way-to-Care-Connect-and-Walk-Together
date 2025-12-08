@@ -13,15 +13,69 @@ import {
 import { FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
 import websocketService from '../services/websocket';
+import locationService from '../services/location';
 
 const ProfileScreen = ({ navigation, route }: any) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [loggedUsers, setLoggedUsers] = useState<any[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [wsConnected, setWsConnected] = useState(false);
+  const [locationTracking, setLocationTracking] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
     fetchLoggedUsers();
+    
+    // Set up auto-refresh of logged-in users every 7 seconds
+    const refreshInterval = setInterval(() => {
+      fetchLoggedUsers();
+    }, 7000);
+    
+    // Request location permissions and start tracking
+    const initializeLocation = async () => {
+      const userId = route?.params?.userId;
+      const permissionsGranted = await locationService.requestPermissions();
+      
+      if (permissionsGranted) {
+        setLocationTracking(true);
+        
+        // Get initial location
+        const initialLocation = await locationService.getCurrentLocation();
+        if (initialLocation && userId) {
+          setUserLocation(initialLocation);
+          try {
+            await userAPI.updateLocation(userId, initialLocation.latitude, initialLocation.longitude);
+            console.log('📍 Initial location sent to server');
+          } catch (error) {
+            console.error('Failed to send initial location:', error);
+          }
+        }
+
+        // Start watching location for continuous updates
+        const success = locationService.startWatchingLocation(
+          async (location) => {
+            setUserLocation(location);
+            if (userId) {
+              try {
+                await userAPI.updateLocation(userId, location.latitude, location.longitude);
+              } catch (error) {
+                console.error('Failed to update location:', error);
+              }
+            }
+          },
+          (error) => {
+            console.error('Location tracking error:', error);
+          }
+        );
+        
+        if (!success) {
+          console.warn('⚠️ Failed to start location watching');
+          setLocationTracking(false);
+        }
+      }
+    };
+
+    initializeLocation();
     
     // Connect to WebSocket for real-time ping notifications
     const userId = route?.params?.userId;
@@ -32,11 +86,19 @@ const ProfileScreen = ({ navigation, route }: any) => {
         connectWebSocket(userId);
       }, 500);
       
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        clearInterval(refreshInterval);
+        locationService.stopWatchingLocation();
+        console.log('📱 ProfileScreen unmounting, disconnecting WebSocket');
+        websocketService.disconnect();
+      };
     }
 
     // Cleanup on unmount
     return () => {
+      clearInterval(refreshInterval);
+      locationService.stopWatchingLocation();
       console.log('📱 ProfileScreen unmounting, disconnecting WebSocket');
       websocketService.disconnect();
     };
@@ -75,18 +137,42 @@ const ProfileScreen = ({ navigation, route }: any) => {
     try {
       setIsLoadingUsers(true);
       const data = await userAPI.getLoggedUsers();
+      const currentUserId = route?.params?.userId;
       
       if (data.success && data.users) {
-        // Format users for display
-        const formattedUsers = data.users.map((user: any) => ({
-          id: user.id,
-          name: user.type === 'RegularUser' 
-            ? `${user.firstName} ${user.lastName}` 
-            : `Admin: ${user.email}`,
-          role: user.type === 'RegularUser' ? 'Dog owner' : `Admin (Level ${user.permissionLevel})`,
-          email: user.email,
-          type: user.type,
-        }));
+        // Format users for display and filter out current user
+        const formattedUsers = data.users
+          .filter((user: any) => user.id !== currentUserId) // Filter out current user
+          .map((user: any) => {
+          const userObj: any = {
+            id: user.id,
+            name: user.type === 'RegularUser' 
+              ? `${user.firstName} ${user.lastName}` 
+              : `Admin: ${user.email}`,
+            role: user.type === 'RegularUser' ? 'Dog owner' : `Admin (Level ${user.permissionLevel})`,
+            email: user.email,
+            type: user.type,
+          };
+
+          // Add location data if available (only for RegularUser)
+          if (user.type === 'RegularUser' && user.latitude && user.longitude) {
+            userObj.latitude = user.latitude;
+            userObj.longitude = user.longitude;
+            
+            // Calculate distance if current user has location
+            if (userLocation) {
+              const distance = locationService.constructor.calculateDistance(
+                userLocation.latitude,
+                userLocation.longitude,
+                user.latitude,
+                user.longitude
+              );
+              userObj.distance = distance;
+            }
+          }
+
+          return userObj;
+        });
         setLoggedUsers(formattedUsers);
       }
     } catch (error) {
@@ -128,6 +214,12 @@ const ProfileScreen = ({ navigation, route }: any) => {
       <View style={styles.userInfo}>
         <Text style={styles.userName}>{item.name}</Text>
         <Text style={styles.userMeta}>{item.role}</Text>
+        {/* Show distance if user has location */}
+        {item.distance !== undefined && (
+          <Text style={styles.distanceText}>
+            📍 {locationService.constructor.formatDistance(item.distance)} near you
+          </Text>
+        )}
       </View>
 
       {/* Ping button */}
@@ -222,6 +314,33 @@ const ProfileScreen = ({ navigation, route }: any) => {
               <Ionicons name="call-outline" size={18} color="#6B7280" />
               <Text style={styles.infoText}>{route?.params?.phone}</Text>
             </View>
+
+            {/* Location Display */}
+            {userLocation ? (
+              <View style={styles.locationCard}>
+                <View style={styles.locationHeader}>
+                  <Ionicons name="location" size={18} color="#FF7043" />
+                  <Text style={styles.locationTitle}>Your Location</Text>
+                  {locationTracking && <Text style={styles.trackingBadge}>📍 Live</Text>}
+                </View>
+                <Text style={styles.locationText}>
+                  Latitude: {userLocation.latitude.toFixed(6)}
+                </Text>
+                <Text style={styles.locationText}>
+                  Longitude: {userLocation.longitude.toFixed(6)}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.locationCard}>
+                <View style={styles.locationHeader}>
+                  <Ionicons name="location" size={18} color="#9CA3AF" />
+                  <Text style={styles.locationTitle}>Your Location</Text>
+                </View>
+                <Text style={styles.locationText}>
+                  {locationTracking ? 'Fetching location...' : 'Location tracking disabled'}
+                </Text>
+              </View>
+            )}
 
             <Text style={styles.sectionTitle}>Logged In Users</Text>
             {isLoadingUsers && (
@@ -329,6 +448,42 @@ const styles = StyleSheet.create({
     color: '#374151',
   },
 
+  locationCard: {
+    backgroundColor: '#FFF5F2',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF7043',
+  },
+
+  locationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+
+  locationTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginLeft: 8,
+    flex: 1,
+  },
+
+  trackingBadge: {
+    fontSize: 12,
+    color: '#FF7043',
+    fontWeight: '600',
+  },
+
+  locationText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+    fontFamily: 'Courier New',
+  },
+
   sectionTitle: {
     marginTop: 18,
     fontSize: 18,
@@ -369,6 +524,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6B7280',
     marginTop: 2,
+  },
+
+  distanceText: {
+    fontSize: 12,
+    color: '#FF7043',
+    fontWeight: '500',
+    marginTop: 4,
   },
 
   pingButton: {
