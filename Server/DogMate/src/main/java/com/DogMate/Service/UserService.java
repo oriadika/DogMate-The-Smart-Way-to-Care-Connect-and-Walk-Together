@@ -223,7 +223,59 @@ public class UserService {
         throw new IllegalStateException("UserRepository is not properly configured");
     }
 
-/**
+    /**
+     * Logout a user by ID
+     * Service layer - only orchestration
+     * @param userId The UUID of the user to logout
+     * @throws IllegalArgumentException if user ID is null or user doesn't exist
+     */
+    public void logout(UUID userId) {
+        // Validate user ID using domain method (business logic in domain)
+        UserAccount.validateUserId(userId);
+        
+        // Find user by ID (orchestration)
+        Optional<UserAccount> userOpt = userRepository.findById(userId);
+        
+        // Validate user exists (business logic)
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with ID: " + userId);
+        }
+        
+        // Update user's logged-in status (orchestration)
+        UserAccount user = userOpt.get();
+        user.setLoggedIn(false);
+        
+        // Save to repository (orchestration)
+        userRepository.save(user);
+    }
+    
+    /**
+     * Logout a user by email
+     * Service layer - only orchestration
+     * @param email The email of the user to logout
+     * @throws IllegalArgumentException if email is null/empty or user doesn't exist
+     */
+    public void logoutByEmail(String email) {
+        // Validate email using domain method (business logic in domain)
+        UserAccount.validateEmail(email);
+        
+        // Find user by email (orchestration)
+        Optional<UserAccount> userOpt = userRepository.findByEmail(email);
+        
+        // Validate user exists (business logic)
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with email: " + email);
+        }
+        
+        // Update user's logged-in status (orchestration)
+        UserAccount user = userOpt.get();
+        user.setLoggedIn(false);
+        
+        // Save to repository (orchestration)
+        userRepository.save(user);
+    }
+
+    /**
      * Updates the active status (isActive) of a user by ID.
      * Used by: UserController.logoutUserById
      */
@@ -240,9 +292,7 @@ public class UserService {
         user.setLoggedIn(isActive);
         
         userRepository.save(user);
-    }
-
-    /**
+    }    /**
      * Updates the active status (isActive) of a user by email.
      * Used by: UserController.logoutUserByEmail
      */

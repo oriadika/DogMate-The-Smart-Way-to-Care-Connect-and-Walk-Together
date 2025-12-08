@@ -75,7 +75,7 @@ public class AuthController {
     /**
      * Logout a user
      * POST /api/auth/logout
-     * TODO: Implement logout logic (invalidate session/token)
+     * Supports logout by userId or email
      */
     @PostMapping("/logout")
     public ResponseEntity<?> logout(@RequestBody LogoutRequest request) {
@@ -86,9 +86,13 @@ public class AuthController {
                     .body(createErrorResponse("User ID or email is required"));
             }
 
-            // TODO: Invalidate user session/token
-            // TODO: Clear authentication data
-            // TODO: Log logout event for audit trail
+            // Logout by ID or email
+            if (request.getUserId() != null && !request.getUserId().isEmpty()) {
+                java.util.UUID userId = java.util.UUID.fromString(request.getUserId());
+                userService.logout(userId);
+            } else if (request.getEmail() != null && !request.getEmail().isEmpty()) {
+                userService.logoutByEmail(request.getEmail());
+            }
 
             // Create response
             Map<String, Object> response = new HashMap<>();
@@ -97,6 +101,9 @@ public class AuthController {
             
             return ResponseEntity.ok(response);
 
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(createErrorResponse("User not found: " + e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(createErrorResponse("Failed to logout: " + e.getMessage()));
