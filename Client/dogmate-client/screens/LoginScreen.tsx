@@ -39,7 +39,7 @@ const LoginScreen = ({ navigation }: any) => {
       navigation.navigate('Home', {
         userId: response.userId,
         email: response.email,
-        userFirstName: response.firstName || 'User',
+        userFirstName: response.firstName || response.email,
         userLastName: response.lastName || '',
         userRole: response.userRole || 'owner',
         phoneNumber: response.phoneNumber || '',

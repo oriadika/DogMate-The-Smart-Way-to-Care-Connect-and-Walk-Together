@@ -15,8 +15,8 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable()) // Disable CSRF for API (can enable later if needed)
             .authorizeHttpRequests(auth -> auth
-                // Allow public access to root, registration, login endpoints, and H2 console
-                .requestMatchers("/", "/api/auth/**", "/api/users/register", "/h2-console/**").permitAll()
+                // Allow public access to root, registration, login endpoints, H2 console, WebSocket, and get logged users
+                .requestMatchers("/", "/api/auth/**", "/api/users/**", "/h2-console/**", "/ws-ping", "/ws-ping/**").permitAll()
                 // Require authentication for all other endpoints
                 .anyRequest().authenticated()
             )

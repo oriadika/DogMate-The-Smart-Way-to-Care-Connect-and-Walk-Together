@@ -1,5 +1,5 @@
 // screens/ProfileScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   SafeAreaView,
   View,
@@ -12,16 +12,108 @@ import {
 } from 'react-native';
 import { FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
-
-const mockUsers = [
-  { id: '1', name: 'Sarah Cohen', role: 'Dog owner' },
-  { id: '2', name: 'Adam Levi', role: 'Dog walker' },
-  { id: '3', name: 'Maya Ben-David', role: 'Dog owner' },
-  { id: '4', name: 'Omar Haddad', role: 'Dog walker' },
-];
+import websocketService from '../services/websocket';
 
 const ProfileScreen = ({ navigation, route }: any) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [loggedUsers, setLoggedUsers] = useState<any[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [wsConnected, setWsConnected] = useState(false);
+
+  useEffect(() => {
+    fetchLoggedUsers();
+    
+    // Connect to WebSocket for real-time ping notifications
+    const userId = route?.params?.userId;
+    if (userId) {
+      console.log('📱 ProfileScreen mounted, connecting WebSocket for user:', userId);
+      // Small delay to ensure everything is ready
+      const timer = setTimeout(() => {
+        connectWebSocket(userId);
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+
+    // Cleanup on unmount
+    return () => {
+      console.log('📱 ProfileScreen unmounting, disconnecting WebSocket');
+      websocketService.disconnect();
+    };
+  }, [route?.params?.userId]);
+
+  const connectWebSocket = (userId: string) => {
+    websocketService.connect(userId, {
+      onConnected: () => {
+        console.log('WebSocket connected');
+        setWsConnected(true);
+      },
+      onDisconnected: () => {
+        console.log('WebSocket disconnected');
+        setWsConnected(false);
+      },
+      onPingReceived: (ping: any) => {
+        console.log('Ping received:', ping);
+        // Show instant notification when ping is received
+        Alert.alert(
+          'New Ping! 🐕',
+          `${ping.fromUserName} pinged you!`,
+          [
+            {
+              text: 'OK',
+            },
+          ]
+        );
+      },
+      onError: (error: any) => {
+        console.error('WebSocket error:', error);
+      },
+    });
+  };
+
+  const fetchLoggedUsers = async () => {
+    try {
+      setIsLoadingUsers(true);
+      const data = await userAPI.getLoggedUsers();
+      
+      if (data.success && data.users) {
+        // Format users for display
+        const formattedUsers = data.users.map((user: any) => ({
+          id: user.id,
+          name: user.type === 'RegularUser' 
+            ? `${user.firstName} ${user.lastName}` 
+            : `Admin: ${user.email}`,
+          role: user.type === 'RegularUser' ? 'Dog owner' : `Admin (Level ${user.permissionLevel})`,
+          email: user.email,
+          type: user.type,
+        }));
+        setLoggedUsers(formattedUsers);
+      }
+    } catch (error) {
+      console.error('Failed to fetch logged users:', error);
+      Alert.alert('Error', 'Failed to load users');
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  const handlePing = async (toUserId: string, toUserName: string) => {
+    try {
+      const fromUserId = route?.params?.userId;
+      const fromUserName = `${route?.params?.userFirstName} ${route?.params?.userLastName}`;
+      
+      if (!fromUserId) {
+        Alert.alert('Error', 'User ID not found');
+        return;
+      }
+
+      await userAPI.sendPing(fromUserId, toUserId, fromUserName);
+      Alert.alert('Success', `Ping sent to ${toUserName}!`);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to send ping');
+      console.error('Ping error:', error);
+    }
+  };
 
   const renderContact = ({ item }: any) => (
     <View style={styles.userCard}>
@@ -39,7 +131,10 @@ const ProfileScreen = ({ navigation, route }: any) => {
       </View>
 
       {/* Ping button */}
-      <TouchableOpacity style={styles.pingButton} onPress={() => { }}>
+      <TouchableOpacity 
+        style={styles.pingButton} 
+        onPress={() => handlePing(item.id, item.name)}
+      >
         <Text style={styles.pingText}>Ping</Text>
       </TouchableOpacity>
     </View>
@@ -95,7 +190,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
       </View>
 
       <FlatList
-        data={mockUsers}
+        data={loggedUsers}
         keyExtractor={(item) => item.id}
         renderItem={renderContact}
         contentContainerStyle={styles.listContent}
@@ -128,8 +223,20 @@ const ProfileScreen = ({ navigation, route }: any) => {
               <Text style={styles.infoText}>{route?.params?.phone}</Text>
             </View>
 
-            <Text style={styles.sectionTitle}>Contacts</Text>
+            <Text style={styles.sectionTitle}>Logged In Users</Text>
+            {isLoadingUsers && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator color="#FF7043" size="large" />
+              </View>
+            )}
           </>
+        }
+        ListEmptyComponent={
+          !isLoadingUsers ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No logged-in users found</Text>
+            </View>
+          ) : null
         }
       />
 
@@ -299,5 +406,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
+  },
+
+  loadingContainer: {
+    paddingVertical: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  emptyContainer: {
+    paddingVertical: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  emptyText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
   },
 });

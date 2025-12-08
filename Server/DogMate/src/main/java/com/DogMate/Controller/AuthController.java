@@ -45,6 +45,22 @@ public class AuthController {
             response.put("userId", user.getId());
             response.put("email", user.getEmail());
             
+            // Add user type and specific details
+            if (user instanceof com.DogMate.Domain.RegularUser) {
+                com.DogMate.Domain.RegularUser regularUser = (com.DogMate.Domain.RegularUser) user;
+                response.put("userRole", "owner");
+                response.put("firstName", regularUser.getFirst_name());
+                response.put("lastName", regularUser.getLast_name());
+            } else if (user instanceof com.DogMate.Domain.DogWalkerUser) {
+                com.DogMate.Domain.DogWalkerUser walkerUser = (com.DogMate.Domain.DogWalkerUser) user;
+                response.put("userRole", "walker");
+                response.put("firstName", walkerUser.getFirst_name());
+                response.put("lastName", walkerUser.getLast_name());
+            } else if (user instanceof com.DogMate.Domain.AdminUser) {
+                com.DogMate.Domain.AdminUser adminUser = (com.DogMate.Domain.AdminUser) user;
+                response.put("userRole", "admin");
+            }
+            
             return ResponseEntity.ok(response);
 
         } catch (IllegalArgumentException e) {

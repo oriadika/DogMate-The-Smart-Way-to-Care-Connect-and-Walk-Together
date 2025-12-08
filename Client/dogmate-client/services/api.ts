@@ -93,6 +93,19 @@ export const userAPI = {
   },
 
   /**
+   * Get all logged-in users
+   */
+  getLoggedUsers: async () => {
+    try {
+      const response = await apiClient.get('users/logged');
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch logged users';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
    * Logout user
    */
   logout: async (userId: string, email?: string): Promise<{ success: boolean; message: string }> => {
@@ -108,6 +121,26 @@ export const userAPI = {
       return { success: true, message: 'Local logout completed' };
     }
   },
-};
 
-export default apiClient;
+  /**
+   * Send a ping to another user
+   */
+  sendPing: async (fromUserId: string, toUserId: string, fromUserName?: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await apiClient.post('/users/ping', { 
+        fromUserId, 
+        toUserId,
+        fromUserName: fromUserName || 'Unknown User'
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to send ping';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Note: Ping notifications are now received via WebSocket in real-time.
+   * No polling or marking as read needed.
+   */
+};
