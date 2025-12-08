@@ -137,18 +137,42 @@ const ProfileScreen = ({ navigation, route }: any) => {
     try {
       setIsLoadingUsers(true);
       const data = await userAPI.getLoggedUsers();
+      const currentUserId = route?.params?.userId;
       
       if (data.success && data.users) {
-        // Format users for display
-        const formattedUsers = data.users.map((user: any) => ({
-          id: user.id,
-          name: user.type === 'RegularUser' 
-            ? `${user.firstName} ${user.lastName}` 
-            : `Admin: ${user.email}`,
-          role: user.type === 'RegularUser' ? 'Dog owner' : `Admin (Level ${user.permissionLevel})`,
-          email: user.email,
-          type: user.type,
-        }));
+        // Format users for display and filter out current user
+        const formattedUsers = data.users
+          .filter((user: any) => user.id !== currentUserId) // Filter out current user
+          .map((user: any) => {
+          const userObj: any = {
+            id: user.id,
+            name: user.type === 'RegularUser' 
+              ? `${user.firstName} ${user.lastName}` 
+              : `Admin: ${user.email}`,
+            role: user.type === 'RegularUser' ? 'Dog owner' : `Admin (Level ${user.permissionLevel})`,
+            email: user.email,
+            type: user.type,
+          };
+
+          // Add location data if available (only for RegularUser)
+          if (user.type === 'RegularUser' && user.latitude && user.longitude) {
+            userObj.latitude = user.latitude;
+            userObj.longitude = user.longitude;
+            
+            // Calculate distance if current user has location
+            if (userLocation) {
+              const distance = locationService.constructor.calculateDistance(
+                userLocation.latitude,
+                userLocation.longitude,
+                user.latitude,
+                user.longitude
+              );
+              userObj.distance = distance;
+            }
+          }
+
+          return userObj;
+        });
         setLoggedUsers(formattedUsers);
       }
     } catch (error) {
@@ -190,6 +214,12 @@ const ProfileScreen = ({ navigation, route }: any) => {
       <View style={styles.userInfo}>
         <Text style={styles.userName}>{item.name}</Text>
         <Text style={styles.userMeta}>{item.role}</Text>
+        {/* Show distance if user has location */}
+        {item.distance !== undefined && (
+          <Text style={styles.distanceText}>
+            📍 {locationService.constructor.formatDistance(item.distance)} near you
+          </Text>
+        )}
       </View>
 
       {/* Ping button */}
@@ -494,6 +524,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6B7280',
     marginTop: 2,
+  },
+
+  distanceText: {
+    fontSize: 12,
+    color: '#FF7043',
+    fontWeight: '500',
+    marginTop: 4,
   },
 
   pingButton: {

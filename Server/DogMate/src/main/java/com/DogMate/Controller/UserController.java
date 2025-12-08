@@ -292,6 +292,11 @@ public class UserController {
                     userInfo.put("type", "RegularUser");
                     userInfo.put("firstName", regularUser.getFirst_name());
                     userInfo.put("lastName", regularUser.getLast_name());
+                    // Add location if available
+                    if (regularUser.getLatitude() != null && regularUser.getLongitude() != null) {
+                        userInfo.put("latitude", regularUser.getLatitude());
+                        userInfo.put("longitude", regularUser.getLongitude());
+                    }
                 } else if (user instanceof com.DogMate.Domain.AdminUser) {
                     com.DogMate.Domain.AdminUser adminUser = (com.DogMate.Domain.AdminUser) user;
                     userInfo.put("type", "AdminUser");
