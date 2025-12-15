@@ -78,7 +78,7 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
 
   return (
     <ImageBackground
-      source={require('../assets/images/dogs_image.jpeg')} // same background as Home
+      source={require('../assets/images/LandingPageDogMate.jpg')} // same background as Home
       style={styles.background}
       imageStyle={{ opacity: 0.7 }}
     >
