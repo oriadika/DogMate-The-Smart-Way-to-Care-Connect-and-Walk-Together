@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ImageBackground,
   ActivityIndicator,
 } from 'react-native';
 import { userAPI } from '../services/api';
@@ -77,257 +76,295 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
   };
 
   return (
-    <ImageBackground
-      source={require('../assets/images/LandingPageDogMate.jpg')} // same background as Home
-      style={styles.background}
-      imageStyle={{ opacity: 0.7 }}
-    >
-        <TouchableOpacity
+    <View style={styles.background}>
+      {/* Back button - top right */}
+      <TouchableOpacity
         style={styles.backButton}
-        onPress={() => navigation.goBack()}
-        >
+        onPress={() => navigation.navigate('Start')}
+      >
         <Text style={styles.backIcon}>←</Text>
-        </TouchableOpacity>
+      </TouchableOpacity>
+
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           style={styles.safeArea}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={styles.container}>
-            <Text style={styles.title}>Create your DogMate account</Text>
-            <Text style={styles.subtitle}>
-              Centralize your dog&apos;s health, routines, and social life in one place.
-            </Text>
+              {/* Title */}
+              <View style={styles.titleContainer}>
+                <Text style={styles.title}>יצירת חשבון חדש</Text>
+              </View>
 
-            <Text style={styles.label}>First Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. John"
-              placeholderTextColor="#A9B5C7"
-              value={firstName}
-              onChangeText={setFirstName}
-            />
+              {/* First Name */}
+              <TextInput
+                style={styles.input}
+                placeholder="שם פרטי"
+                placeholderTextColor="#A9B5C7"
+                value={firstName}
+                onChangeText={setFirstName}
+                textAlign="right"
+              />
 
-            <Text style={styles.label}>Last Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Doe"
-              placeholderTextColor="#A9B5C7"
-              value={lastName}
-              onChangeText={setLastName}
-            />
+              {/* Last Name */}
+              <TextInput
+                style={styles.input}
+                placeholder="שם משפחה"
+                placeholderTextColor="#A9B5C7"
+                value={lastName}
+                onChangeText={setLastName}
+                textAlign="right"
+              />
 
-
-            {/* Role selector */}
-            <Text style={styles.label}>I am a</Text>
-            <View style={styles.roleRow}>
-              <TouchableOpacity
-                style={[
-                  styles.roleButton,
-                  role === 'owner' && styles.roleButtonActive,
-                ]}
-                onPress={() => setRole('owner')}
-              >
-                <Text
+              {/* Role selector */}
+              <Text style={styles.roleLabel}>אני נרשם בתור:</Text>
+              <View style={styles.roleRow}>
+                <TouchableOpacity
                   style={[
-                    styles.roleText,
-                    role === 'owner' && styles.roleTextActive,
+                    styles.roleButton,
+                    role === 'walker' ? styles.roleButtonActive : styles.roleButtonInactive,
                   ]}
+                  onPress={() => setRole('walker')}
                 >
-                  Dog Owner
-                </Text>
-              </TouchableOpacity>
+                  <Text style={styles.roleIcon}>🐕</Text>
+                  <Text style={[
+                    styles.roleText,
+                    role === 'walker' ? styles.roleTextActive : styles.roleTextInactive,
+                  ]}>
+                    דוגווקר
+                  </Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.roleButton,
-                  role === 'walker' && styles.roleButtonActive,
-                ]}
-                onPress={() => setRole('walker')}
-              >
-                <Text
+                <TouchableOpacity
                   style={[
-                    styles.roleText,
-                    role === 'walker' && styles.roleTextActive,
+                    styles.roleButton,
+                    role === 'owner' ? styles.roleButtonActive : styles.roleButtonInactive,
                   ]}
+                  onPress={() => setRole('owner')}
                 >
-                  Dog Walker
-                </Text>
+                  <Text style={styles.roleIcon}>👤🐕</Text>
+                  <Text style={[
+                    styles.roleText,
+                    role === 'owner' ? styles.roleTextActive : styles.roleTextInactive,
+                  ]}>
+                    בעל כלב
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Phone Number */}
+              <TextInput
+                style={styles.input}
+                placeholder="מספר פלאפון"
+                placeholderTextColor="#A9B5C7"
+                keyboardType="phone-pad"
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                textAlign="right"
+              />
+
+              {/* Email */}
+              <TextInput
+                style={styles.input}
+                placeholder="אימייל"
+                placeholderTextColor="#A9B5C7"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+                textAlign="right"
+              />
+
+              {/* Password */}
+              <TextInput
+                style={styles.input}
+                placeholder="סיסמה"
+                placeholderTextColor="#A9B5C7"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+                textAlign="right"
+              />
+
+              {/* Confirm Password */}
+              <TextInput
+                style={styles.input}
+                placeholder="אימות סיסמה"
+                placeholderTextColor="#A9B5C7"
+                secureTextEntry
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                textAlign="right"
+              />
+
+              {/* Sign Up button */}
+              <TouchableOpacity
+                style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
+                onPress={handleSignUp}
+                disabled={isLoading}
+                activeOpacity={0.85}
+              >
+                {isLoading ? (
+                  <ActivityIndicator color="#000000" size="small" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>הרשמה</Text>
+                )}
               </TouchableOpacity>
-            </View>
+          </View>
 
-            {/* Email */}
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="name@example.com"
-              placeholderTextColor="#A9B5C7"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-            />
-
-            {/* Phone Number */}
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="05X-XXXXXXX"
-              placeholderTextColor="#A9B5C7"
-              keyboardType = "phone-pad"
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-            />
-
-            {/* Password */}
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter password"
-              placeholderTextColor="#A9B5C7"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
-
-            {/* Confirm Password */}
-            <Text style={styles.label}>Confirm Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Re-enter password"
-              placeholderTextColor="#A9B5C7"
-              secureTextEntry
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-            />
-
-            {/* Sign Up button */}
+          {/* Footer link - fixed below button */}
+          <View style={styles.footerContainer}>
             <TouchableOpacity
-              style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
-              onPress={handleSignUp}
-              disabled={isLoading}
-              activeOpacity={0.85}
+              style={styles.footerLink}
+              onPress={() => navigation.navigate('Login')}
             >
-              {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Text style={styles.primaryButtonText}>Create Account</Text>
-              )}
+              <Text style={styles.footerLinkText}>
+                כבר יש לך חשבון? <Text style={styles.footerLinkTextBold}>התחבר כאן</Text>
+              </Text>
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      
-
-    </ImageBackground>
+    </View>
   );
 };
 
 export default SignUpScreen;
 
-const PRIMARY_COLOR = '#2F80ED';
-const DARK_BLUE = '#0B1724';
+const PRIMARY_COLOR = '#7FB069'; // Sage green
 
 const styles = StyleSheet.create({
   background: {
     flex: 1,
-    resizeMode: 'cover',
+    backgroundColor: '#f5e6d3', // Soft cream/beige
   },
   safeArea: {
-    top: 40,
     flex: 1,
     backgroundColor: 'transparent',
   },
   container: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 24,
+    paddingTop: 20,
     paddingBottom: 32,
   },
+  titleContainer: {
+    alignItems: 'center',
+    marginBottom: 35,
+  },
   title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#5C4033', // Dark brown
     textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#D0DEEF',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  label: {
-    marginTop: 8,
-    marginBottom: 4,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#E4ECFA',
   },
   input: {
-    backgroundColor: 'rgba(11, 23, 36, 0.9)',
+    backgroundColor: '#faf0e6', // Light beige
     borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#FFFFFF',
-    marginBottom: 6,
+    paddingVertical: 16,
+    fontSize: 16,
+    color: '#000000',
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#e0d5c7', // Subtle border
+    minHeight: 50,
+  },
+  roleLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#5C4033',
+    textAlign: 'right',
+    marginBottom: 12,
+    marginTop: 8,
   },
   roleRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
+    gap: 12,
+    marginBottom: 20,
   },
   roleButton: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
+    paddingVertical: 14,
+    borderRadius: 18,
     alignItems: 'center',
-    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    backgroundColor: '#faf0e6', // Light beige for inactive
+    borderWidth: 2,
+    borderColor: '#e0d5c7',
+    minHeight: 75,
   },
   roleButtonActive: {
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: '#E8F5E9', // Lighter sage green tint
     borderColor: PRIMARY_COLOR,
   },
+  roleButtonInactive: {
+    backgroundColor: '#faf0e6',
+    borderColor: '#e0d5c7',
+  },
+  roleIcon: {
+    fontSize: 26,
+    marginBottom: 6,
+  },
   roleText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#5C4033', // Dark brown
   },
   roleTextActive: {
-    color: '#FFFFFF',
+    color: '#5C4033',
+  },
+  roleTextInactive: {
+    color: '#5C4033',
   },
   primaryButton: {
-    marginTop: 18,
+    marginTop: 10,
     backgroundColor: PRIMARY_COLOR,
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: 25,
+    paddingVertical: 18,
     alignItems: 'center',
+    width: '100%',
   },
   primaryButtonDisabled: {
     opacity: 0.6,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    color: '#000000',
+    fontSize: 20,
     fontWeight: '700',
+    fontFamily: 'Rubik',
   },
   backButton: {
-  position: 'absolute',
-  top: 45,
-  left: 20,
-  backgroundColor: 'rgba(0,0,0,0.4)',
-  paddingVertical: 6,
-  paddingHorizontal: 14,
-  borderRadius: 10,
-  zIndex: 10,
-},
-backIcon: {
-  color: 'white',
-  fontSize: 20,
-  fontWeight: 'bold',
-},
-
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    backgroundColor: 'transparent',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    zIndex: 10,
+  },
+  backIcon: {
+    color: '#5C4033', // Dark brown
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  footerContainer: {
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+    paddingTop: 10,
+    alignItems: 'center',
+    backgroundColor: '#f5e6d3',
+  },
+  footerLink: {
+    alignItems: 'center',
+  },
+  footerLinkText: {
+    color: '#5C4033',
+    fontSize: 16,
+  },
+  footerLinkTextBold: {
+    fontWeight: '700',
+    color: '#5C4033',
+  },
 });

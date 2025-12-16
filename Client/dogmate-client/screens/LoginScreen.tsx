@@ -10,7 +10,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ImageBackground,
   ActivityIndicator,
 } from 'react-native';
 import { userAPI } from '../services/api';
@@ -49,15 +48,11 @@ const LoginScreen = ({ navigation }: any) => {
   };
 
   return (
-    <ImageBackground
-      source={require('../assets/images/LandingPageDogMate.jpg')}
-      style={styles.background}
-      imageStyle={{ opacity: 0.7 }}
-    >
+    <View style={styles.background}>
       {/* Back button */}
       <TouchableOpacity
         style={styles.backButton}
-        onPress={() => navigation.goBack()}
+        onPress={() => navigation.navigate('Start')}
       >
         <Text style={styles.backIcon}>←</Text>
       </TouchableOpacity>
@@ -68,35 +63,44 @@ const LoginScreen = ({ navigation }: any) => {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={styles.container}>
-            {/* Title & subtitle */}
-            <Text style={styles.title}>Log in to DogMate</Text>
-            <Text style={styles.subtitle}>
-              Enter your email and password to access your dogs&apos; walks,
-              reminders, and more.
-            </Text>
+            {/* Title - centered at top */}
+            <View style={styles.titleContainer}>
+              <Text style={styles.title}>התחברות</Text>
+            </View>
 
             {/* Email */}
-            <Text style={styles.label}>Email</Text>
             <TextInput
               style={styles.input}
-              placeholder="name@example.com"
+              placeholder="אימייל"
               placeholderTextColor="#A9B5C7"
               keyboardType="email-address"
               autoCapitalize="none"
               value={email}
               onChangeText={setEmail}
+              textAlign="right"
             />
 
             {/* Password */}
-            <Text style={styles.label}>Password</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter password"
+              placeholder="סיסמה"
               placeholderTextColor="#A9B5C7"
               secureTextEntry
               value={password}
               onChangeText={setPassword}
+              textAlign="right"
             />
+
+            {/* Forgot password link */}
+            <TouchableOpacity
+              style={styles.forgotPasswordLink}
+              onPress={() => {
+                // TODO: Navigate to forgot password screen
+                Alert.alert('שכחת סיסמה', 'פונקציונליות זו תתווסף בקרוב');
+              }}
+            >
+              <Text style={styles.forgotPasswordText}>שכחת סיסמה?</Text>
+            </TouchableOpacity>
 
             {/* Login button */}
             <TouchableOpacity
@@ -108,34 +112,34 @@ const LoginScreen = ({ navigation }: any) => {
               {isLoading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.primaryButtonText}>Log In</Text>
+                <Text style={styles.primaryButtonText}>התחברות</Text>
               )}
             </TouchableOpacity>
-
-            {/* Optional: link to Sign Up */}
-            <TouchableOpacity
-              style={styles.footerLink}
-              onPress={() => navigation.navigate('SignUp')}
-            >
-              <Text style={styles.footerLinkText}>
-                Don&apos;t have an account? <Text style={styles.footerLinkTextBold}>Sign up</Text>
-              </Text>
-            </TouchableOpacity>
           </View>
+
+          {/* Optional: link to Sign Up */}
+          <TouchableOpacity
+            style={styles.footerLink}
+            onPress={() => navigation.navigate('SignUp')}
+          >
+            <Text style={styles.footerLinkText}>
+              עדיין אין לך חשבון? <Text style={styles.footerLinkTextBold}>הרשמה</Text>
+            </Text>
+          </TouchableOpacity>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </ImageBackground>
+    </View>
   );
 };
 
 export default LoginScreen;
 
-const PRIMARY_COLOR = '#2F80ED';
+const PRIMARY_COLOR = '#7FB069'; // More vibrant sage green
 
 const styles = StyleSheet.create({
   background: {
     flex: 1,
-    resizeMode: 'cover',
+    backgroundColor: '#f5e6d3', // Soft cream/beige
   },
   safeArea: {
     flex: 1,
@@ -144,79 +148,101 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 24,
-    paddingTop: 40,
+    paddingTop: 60,
     paddingBottom: 32,
-    justifyContent: 'center',
+  },
+  titleContainer: {
+    alignItems: 'center',
+    marginBottom: 70,
+    marginTop: 20,
   },
   title: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#5C4033', // Dark brown
     textAlign: 'center',
-    marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
-    color: '#D0DEEF',
+    color: '#333333',
     textAlign: 'center',
     marginBottom: 24,
   },
   label: {
     marginTop: 8,
     marginBottom: 4,
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#E4ECFA',
+    color: '#000000',
+    textAlign: 'right',
   },
   input: {
-    backgroundColor: 'rgba(11, 23, 36, 0.9)',
+    backgroundColor: '#faf0e6', // Light beige
     borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#FFFFFF',
-    marginBottom: 6,
+    paddingVertical: 16,
+    fontSize: 16,
+    color: '#000000',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#e0d5c7', // Subtle border
+    minHeight: 50,
+  },
+  forgotPasswordLink: {
+    marginTop: 8,
+    alignSelf: 'flex-end',
+  },
+  forgotPasswordText: {
+    color: '#5C4033', // Dark brown
+    fontSize: 16,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   primaryButton: {
-    marginTop: 18,
+    marginTop: 30,
     backgroundColor: PRIMARY_COLOR,
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: 25,
+    paddingVertical: 18,
     alignItems: 'center',
+    width: '100%',
   },
   primaryButtonDisabled: {
     opacity: 0.6,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    color: '#000000',
+    fontSize: 20,
     fontWeight: '700',
+    fontFamily: 'Rubik',
   },
   backButton: {
     position: 'absolute',
-    top: 45,
+    top: 50,
     left: 20,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
+    backgroundColor: 'transparent',
+    paddingVertical: 8,
+    paddingHorizontal: 8,
     borderRadius: 10,
     zIndex: 10,
   },
   backIcon: {
-    color: 'white',
-    fontSize: 20,
+    color: '#5C4033', // Dark brown
+    fontSize: 24,
     fontWeight: 'bold',
   },
   footerLink: {
-    marginTop: 16,
+    position: 'absolute',
+    bottom: 40,
+    left: 24,
+    right: 24,
     alignItems: 'center',
   },
   footerLinkText: {
-    color: '#E4ECFA',
-    fontSize: 13,
+    color: '#5C4033', // Dark brown
+    fontSize: 16,
   },
   footerLinkTextBold: {
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#5C4033', // Dark brown
   },
 });

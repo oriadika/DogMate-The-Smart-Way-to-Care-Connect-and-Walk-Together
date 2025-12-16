@@ -48,7 +48,7 @@ const StartScreen: React.FC = ({ navigation }: any) => {
 
 export default StartScreen;
 
-const PRIMARY_COLOR = '#4CAF50'; // Green color for login button
+const PRIMARY_COLOR = '#7FB069'; // More vibrant sage green color for login button
 
 const styles = StyleSheet.create({
   container: {
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: PRIMARY_COLOR,
     paddingVertical: 18,
-    borderRadius: 14,
+    borderRadius: 25,
     alignItems: 'center',
     marginBottom: 10,
   },
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: '#e4bc8e',
     paddingVertical: 18,
-    borderRadius: 14,
+    borderRadius: 25,
     alignItems: 'center',
   },
   secondaryButtonText: {
