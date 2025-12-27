@@ -1,6 +1,7 @@
 package com.DogMate.Service;
 
 import com.DogMate.Domain.Dog;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,4 +32,10 @@ public interface IDogRepository {
      * @return true if dog exists, false otherwise
      */
     boolean existsById(UUID id);
+
+    /**
+     * Find all dogs
+     * @return List of all dogs
+     */
+    List<Dog> findAll();
 }

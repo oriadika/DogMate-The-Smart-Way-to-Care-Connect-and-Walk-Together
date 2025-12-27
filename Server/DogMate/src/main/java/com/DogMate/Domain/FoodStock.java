@@ -1,24 +1,47 @@
 package com.DogMate.Domain;
 
+import jakarta.persistence.*;
 import java.util.UUID;
 
+@Entity
+@Table(name = "food_stocks")
 public class FoodStock {
+    @Id
+    @Column(name = "id")
     private UUID id;
+    
+    @Column(name = "brand_name")
     private String brandName;
+    
+    @Column(name = "bag_size_in_kg")
     private double bagSizeInKg;
+    
+    @Column(name = "current_level_in_kg")
     private double currentLevelInKg;
+    
+    @Column(name = "daily_consumption_in_gram")
     private double dailyConsumptionInGram;
+    
+    @ManyToOne
+    @JoinColumn(name = "dog_id")
     private Dog dog;
+
+    // Default constructor required by JPA
+    protected FoodStock() {
+    }
 
     public FoodStock(String brandName, double bagSizeInKg, double currentLevelInKg,
                      double dailyConsumptionInGram) {
+        this.id = UUID.randomUUID();
         this.brandName = brandName;
         this.bagSizeInKg = bagSizeInKg;
         this.currentLevelInKg = currentLevelInKg;
         this.dailyConsumptionInGram = dailyConsumptionInGram;
     }
+    
     public FoodStock(String brandName, double bagSizeInKg, double currentLevelInKg,
                      double dailyConsumptionInGram, Dog dog) {
+        this.id = UUID.randomUUID();
         this.brandName = brandName;
         this.bagSizeInKg = bagSizeInKg;
         this.currentLevelInKg = currentLevelInKg;

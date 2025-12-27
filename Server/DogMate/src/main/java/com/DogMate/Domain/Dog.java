@@ -28,16 +28,16 @@ public class Dog {
     @Column(name = "profile_image_url")
     private String profileImageURL;
     
-    @Transient
+    @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogEvent> dogEvents;
     
-    @Transient
+    @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FoodStock> foodStocks;
     
-    @Transient
+    @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogMoodLog> dogMoodLogs;
     
-    @Transient
+    @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogDocument> dogDocuments;
 
     // Default constructor required by JPA

@@ -1,16 +1,15 @@
 package com.DogMate.Service;
 
-import com.DogMate.Domain.Dog;
-import com.DogMate.Domain.DogRelationship;
-import com.DogMate.Domain.RegularUser;
-import com.DogMate.Domain.UserAccount;
-import com.DogMate.Domain.RelationshipType;
+import com.DogMate.Domain.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class DogService {
@@ -18,13 +17,15 @@ public class DogService {
     private final IDogRepository dogRepository;
     private final IDogRelationshipRepository dogRelationshipRepository;
     private final IUserRepository userRepository;
+    private final IFoodStockRepository foodStockRepository;
 
     @Autowired
     public DogService(IDogRepository dogRepository, IDogRelationshipRepository dogRelationshipRepository, 
-                      IUserRepository userRepository) {
+                      IUserRepository userRepository, IFoodStockRepository foodStockRepository) {
         this.dogRepository = dogRepository;
         this.dogRelationshipRepository = dogRelationshipRepository;
         this.userRepository = userRepository;
+        this.foodStockRepository = foodStockRepository;
     }
 
     /**
