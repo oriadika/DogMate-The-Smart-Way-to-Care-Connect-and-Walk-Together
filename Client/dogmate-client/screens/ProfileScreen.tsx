@@ -103,7 +103,24 @@ const ProfileScreen = ({ navigation, route }: any) => {
       websocketService.disconnect();
     };
   }, [route?.params?.userId]);
-
+  // Recalculate distances when userLocation changes
+  useEffect(() => {
+    if (userLocation && loggedUsers.length > 0) {
+      const updatedUsers = loggedUsers.map((user: any) => {
+        if (user.latitude && user.longitude) {
+          const distance = locationService.constructor.calculateDistance(
+              userLocation.latitude,
+              userLocation.longitude,
+              user.latitude,
+              user.longitude
+          );
+          return { ...user, distance };
+        }
+        return user;
+      });
+      setLoggedUsers(updatedUsers);
+    }
+  }, [userLocation]);
   const connectWebSocket = (userId: string) => {
     websocketService.connect(userId, {
       onConnected: () => {
@@ -174,7 +191,23 @@ const ProfileScreen = ({ navigation, route }: any) => {
           return userObj;
         });
         setLoggedUsers(formattedUsers);
-      }
+
+        // Recalculate distances with current location when list is updated
+        if (userLocation && formattedUsers.length > 0) {
+          const updatedUsersWithDistance = formattedUsers.map((user: any) => {
+            if (user.latitude && user.longitude) {
+              const distance = locationService.constructor.calculateDistance(
+                  userLocation.latitude,
+                  userLocation.longitude,
+                  user.latitude,
+                  user.longitude
+              );
+              return { ...user, distance };
+            }
+            return user;
+          });
+          setLoggedUsers(updatedUsersWithDistance);
+        }      }
     } catch (error) {
       console.error('Failed to fetch logged users:', error);
       Alert.alert('Error', 'Failed to load users');

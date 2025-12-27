@@ -1,32 +1,58 @@
 package com.DogMate.Domain;
 
+import jakarta.persistence.*;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 
+@Entity
+@Table(name = "dogs")
 public class Dog {
+    @Id
+    @Column(name = "id")
     private UUID ID;
+    
+    @Column(name = "name")
     private String name;
+    
+    @Column(name = "breed")
     private String breed;
+    
+    @Column(name = "birthdate")
     private Date birthdate;
+    
+    @Column(name = "gender")
     private char gender; // M for male, F for Female
+    
+    @Column(name = "profile_image_url")
     private String profileImageURL;
+    
+    @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogEvent> dogEvents;
+    
     private List<FoodStock> foodStocks;
+    
     private List<DogMoodLog> dogMoodLogs;
+    
     private List<DogDocument> dogDocuments;
-    private RegularUser regularUser;
+
+    // Default constructor required by JPA
+    protected Dog() {
+        this.dogEvents = new LinkedList<>();
+        this.foodStocks = new LinkedList<>();
+        this.dogMoodLogs = new LinkedList<>();
+        this.dogDocuments = new LinkedList<>();
+    }
 
     public Dog(UUID ID, String name, String breed, Date birthdate, char gender,
-               String profileImageURL, RegularUser regularUser){
+               String profileImageURL){
         this.ID = ID;
         this.name = name;
         this.breed = breed;
         this.birthdate = birthdate;
         this.gender = gender;
         this.profileImageURL = profileImageURL;
-        this.regularUser = regularUser;
         this.dogEvents = new LinkedList<>();
         this.foodStocks = new LinkedList<>();
         this.dogMoodLogs = new LinkedList<>();
@@ -103,14 +129,6 @@ public class Dog {
 
     public void removeFoodStock(FoodStock foodStock){
         this.foodStocks.remove(foodStock);
-    }
-
-    public RegularUser getRegularUser(){
-        return regularUser;
-    }
-
-    public void setRegularUser(RegularUser regularUser){
-        this.regularUser = regularUser;
     }
 
     public List<DogMoodLog> getDogMoodLogs(){

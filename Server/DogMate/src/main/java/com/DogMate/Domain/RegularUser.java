@@ -21,11 +21,8 @@ public class RegularUser extends UserAccount{
     @Column(name = "longitude")
     private Double longitude;
     
-    @Transient
+    @OneToMany(mappedBy = "regularUser", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogRelationship> dogRelationships;
-    
-    @Transient
-    private List<Dog> dogs;
     
     @Transient
     private List<SniffRequest> sniffRequests;
@@ -41,7 +38,6 @@ public class RegularUser extends UserAccount{
         // JPA requires a no-args constructor
         // Initialize collections to avoid NullPointerException
         this.dogRelationships = new LinkedList<>();
-        this.dogs = new LinkedList<>();
         this.sniffRequests = new LinkedList<>();
         this.emergencyContacts = new LinkedList<>();
         this.notifications = new LinkedList<>();
@@ -53,7 +49,6 @@ public class RegularUser extends UserAccount{
         this.first_name = first_name;
         this.last_name = last_name;
         this.dogRelationships = new LinkedList<>();
-        this.dogs = new LinkedList<>();
         this.sniffRequests = new LinkedList<>();
         this.emergencyContacts = new LinkedList<>();
         this.notifications = new LinkedList<>();
@@ -181,18 +176,6 @@ public class RegularUser extends UserAccount{
 
     public void removeDogRelationship(DogRelationship dogRelationship){
         this.dogRelationships.remove(dogRelationship);
-    }
-
-    public List<Dog> getDogs(){
-        return dogs;
-    }
-
-    public void addDog(Dog dog){
-        this.dogs.add(dog);
-    }
-
-    public void removeDog(Dog dog){
-        this.dogs.remove(dog);
     }
 
     public List<SniffRequest> getSniffRequests(){
