@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.145:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.116:8080/api';
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -37,6 +37,10 @@ export interface LoginResponse {
   message: string;
   userId: string;
   email: string;
+  firstName?: string;
+  lastName?: string;
+  userRole?: string;
+  phoneNumber?: string;
   token?: string;
 }
 
@@ -52,7 +56,6 @@ export const userAPI = {
    */
   register: async (payload: RegisterUserPayload): Promise<RegisterUserResponse> => {
     try {
-      console.error(payload); // 👈 הדפסה לקונסול  
       const response = await apiClient.post('/users/register', payload);
       return response.data;
     } catch (error: any) {
@@ -88,6 +91,73 @@ export const userAPI = {
       throw new Error(errorMessage);
     }
   },
+
+  /**
+   * Get all logged-in users
+   */
+  getLoggedUsers: async () => {
+    try {
+      const response = await apiClient.get('users/logged');
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch logged users';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Logout user
+   */
+  logout: async (userId: string, email?: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      // Call logout endpoint on backend
+      console.log('Logging out user:', { userId, email });
+      const response = await apiClient.post('/auth/logout', { userId, email });
+      return response.data;
+    } catch (error: any) {
+      // Even if logout fails on backend, we can still clear local data
+      console.warn('Logout request failed:', error.message);
+      // Return success anyway to allow local logout
+      return { success: true, message: 'Local logout completed' };
+    }
+  },
+
+  /**
+   * Send a ping to another user
+   */
+  sendPing: async (fromUserId: string, toUserId: string, fromUserName?: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await apiClient.post('/users/ping', { 
+        fromUserId, 
+        toUserId,
+        fromUserName: fromUserName || 'Unknown User'
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to send ping';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Update user's current location
+   */
+  updateLocation: async (userId: string, latitude: number, longitude: number): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await apiClient.post(`/users/${userId}/location`, { 
+        latitude,
+        longitude
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to update location';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Note: Ping notifications are now received via WebSocket in real-time.
+   * No polling or marking as read needed.
+   */
 };
 
-export default apiClient;

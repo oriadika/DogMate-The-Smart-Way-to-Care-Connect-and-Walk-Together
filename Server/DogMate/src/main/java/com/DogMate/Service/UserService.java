@@ -8,7 +8,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
-
+import java.util.Optional;
 @Service
 public class UserService {
     
@@ -33,14 +33,14 @@ public class UserService {
      * @throws IllegalArgumentException if email already exists or validation fails
      */
     public RegularUser registerUser(String email, String password, 
-                                     String firstName, String lastName, 
-                                     String profileImageUrl) {
+                                     String firstName, String lastName 
+                                     ) {
         // Check if email already exists (orchestration - getting data for domain)
         boolean emailExists = userRepository.existsByEmail(email);
         
         // Create RegularUser using domain factory method (all business logic is in domain)
         RegularUser newUser = RegularUser.create(
-            email, password, firstName, lastName, profileImageUrl, 
+            email, password, firstName, lastName, 
             emailExists, passwordEncoder::encode
         );
 
@@ -203,6 +203,9 @@ public class UserService {
             throw new IllegalArgumentException("Invalid credentials");
         }
         
+        user.setLoggedIn(passwordMatches);
+        userRepository.save(user);
+        
         return user;
     }
     
@@ -218,5 +221,133 @@ public class UserService {
             return ((com.DogMate.Infrastructure.UserRepository) userRepository).findAll();
         }
         throw new IllegalStateException("UserRepository is not properly configured");
+    }
+
+    /**
+     * Logout a user by ID
+     * Service layer - only orchestration
+     * @param userId The UUID of the user to logout
+     * @throws IllegalArgumentException if user ID is null or user doesn't exist
+     */
+    public void logout(UUID userId) {
+        // Validate user ID using domain method (business logic in domain)
+        UserAccount.validateUserId(userId);
+        
+        // Find user by ID (orchestration)
+        Optional<UserAccount> userOpt = userRepository.findById(userId);
+        
+        // Validate user exists (business logic)
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with ID: " + userId);
+        }
+        
+        // Update user's logged-in status (orchestration)
+        UserAccount user = userOpt.get();
+        user.setLoggedIn(false);
+        
+        // Save to repository (orchestration)
+        userRepository.save(user);
+    }
+    
+    /**
+     * Logout a user by email
+     * Service layer - only orchestration
+     * @param email The email of the user to logout
+     * @throws IllegalArgumentException if email is null/empty or user doesn't exist
+     */
+    public void logoutByEmail(String email) {
+        // Validate email using domain method (business logic in domain)
+        UserAccount.validateEmail(email);
+        
+        // Find user by email (orchestration)
+        Optional<UserAccount> userOpt = userRepository.findByEmail(email);
+        
+        // Validate user exists (business logic)
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with email: " + email);
+        }
+        
+        // Update user's logged-in status (orchestration)
+        UserAccount user = userOpt.get();
+        user.setLoggedIn(false);
+        
+        // Save to repository (orchestration)
+        userRepository.save(user);
+    }
+
+    /**
+     * Updates the active status (isActive) of a user by ID.
+     * Used by: UserController.logoutUserById
+     */
+    public void updateUserActiveStatus(UUID userId, boolean isActive) {
+        UserAccount.validateUserId(userId);
+
+        Optional<UserAccount> userOpt = userRepository.findById(userId);
+
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with ID: " + userId);
+        }
+
+        UserAccount user = userOpt.get();
+        user.setLoggedIn(isActive);
+        
+        userRepository.save(user);
+    }    /**
+     * Updates the active status (isActive) of a user by email.
+     * Used by: UserController.logoutUserByEmail
+     */
+    public void updateUserActiveStatusByEmail(String email, boolean isActive) {
+        UserAccount.validateEmail(email);
+
+        Optional<UserAccount> userOpt = userRepository.findByEmail(email);
+
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with email: " + email);
+        }
+
+        UserAccount user = userOpt.get();
+        user.setLoggedIn(isActive);
+        
+        userRepository.save(user);
+    }
+
+    /**
+     * Update user's current location
+     * Service layer - only orchestration
+     * @param userId The UUID of the user to update
+     * @param latitude The latitude coordinate
+     * @param longitude The longitude coordinate
+     * @throws IllegalArgumentException if user ID is null or user doesn't exist
+     */
+    public void updateUserLocation(UUID userId, Double latitude, Double longitude) {
+        // Validate user ID using domain method (business logic in domain)
+        UserAccount.validateUserId(userId);
+
+        // Validate coordinates
+        if (latitude == null || latitude < -90 || latitude > 90) {
+            throw new IllegalArgumentException("Latitude must be between -90 and 90");
+        }
+        if (longitude == null || longitude < -180 || longitude > 180) {
+            throw new IllegalArgumentException("Longitude must be between -180 and 180");
+        }
+
+        // Find user by ID (orchestration)
+        Optional<UserAccount> userOpt = userRepository.findById(userId);
+
+        // Validate user exists (business logic)
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with ID: " + userId);
+        }
+
+        // Update user location (orchestration)
+        UserAccount user = userOpt.get();
+        if (user instanceof RegularUser) {
+            RegularUser regularUser = (RegularUser) user;
+            regularUser.setLatitude(latitude);
+            regularUser.setLongitude(longitude);
+            userRepository.save(regularUser);
+        } else {
+            throw new IllegalArgumentException("Only RegularUser accounts support location tracking");
+        }
     }
 }

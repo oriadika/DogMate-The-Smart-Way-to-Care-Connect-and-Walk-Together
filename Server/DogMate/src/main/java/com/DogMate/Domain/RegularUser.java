@@ -15,8 +15,11 @@ public class RegularUser extends UserAccount{
     @Column(name = "last_name")
     private String last_name;
     
-    @Column(name = "profile_image_url")
-    private String profileImageURL;
+    @Column(name = "latitude")
+    private Double latitude;
+    
+    @Column(name = "longitude")
+    private Double longitude;
     
     @Transient
     private List<DogRelationship> dogRelationships;
@@ -45,11 +48,10 @@ public class RegularUser extends UserAccount{
     }
 
     public RegularUser(UUID id, String email, String passwordHash, String first_name
-    , String last_name, String profileImageURL) {
+    , String last_name) {
         super(id, email, passwordHash);
         this.first_name = first_name;
         this.last_name = last_name;
-        this.profileImageURL = profileImageURL;
         this.dogRelationships = new LinkedList<>();
         this.dogs = new LinkedList<>();
         this.sniffRequests = new LinkedList<>();
@@ -98,7 +100,6 @@ public class RegularUser extends UserAccount{
      * @param plainPassword Plain text password (will be validated and hashed)
      * @param firstName User's first name
      * @param lastName User's last name
-     * @param profileImageUrl Optional profile image URL
      * @param emailExists true if email already exists, false otherwise
      * @param passwordEncoder Password encoder for hashing (infrastructure dependency)
      * @return A new RegularUser instance
@@ -106,7 +107,6 @@ public class RegularUser extends UserAccount{
      */
     public static RegularUser create(String email, String plainPassword, 
                                      String firstName, String lastName, 
-                                     String profileImageUrl, 
                                      boolean emailExists,
                                      java.util.function.Function<String, String> passwordEncoder) {
         // Validate all fields (business logic)
@@ -124,11 +124,8 @@ public class RegularUser extends UserAccount{
         // Generate UUID for new user
         UUID userId = UUID.randomUUID();
 
-        // Use empty string if profileImageUrl is null
-        String profileUrl = profileImageUrl != null ? profileImageUrl : "";
-
         // Create and return new RegularUser
-        return new RegularUser(userId, email, passwordHash, firstName, lastName, profileUrl);
+        return new RegularUser(userId, email, passwordHash, firstName, lastName);
     }
     
     /**
@@ -153,11 +150,9 @@ public class RegularUser extends UserAccount{
         // Generate UUID for new user
         UUID userId = UUID.randomUUID();
 
-        // Use empty string if profileImageUrl is null
-        String profileUrl = profileImageUrl != null ? profileImageUrl : "";
 
         // Create and return new RegularUser
-        return new RegularUser(userId, email, passwordHash, firstName, lastName, profileUrl);
+        return new RegularUser(userId, email, passwordHash, firstName, lastName);
     }
 
     public String getFirst_name() {
@@ -174,14 +169,6 @@ public class RegularUser extends UserAccount{
 
     public void setLast_name(String last_name) {
         this.last_name = last_name;
-    }
-
-    public String getProfileImageURL() {
-        return profileImageURL;
-    }
-
-    public void setProfileImageURL(String profileImageURL) {
-        this.profileImageURL = profileImageURL;
     }
 
     public List<DogRelationship> getDogRelationships(){
@@ -242,5 +229,21 @@ public class RegularUser extends UserAccount{
 
     public void removeNotification(Notification notification){
         this.notifications.remove(notification);
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
     }
 }
