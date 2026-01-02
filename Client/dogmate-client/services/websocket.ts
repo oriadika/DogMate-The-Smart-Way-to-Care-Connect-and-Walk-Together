@@ -2,9 +2,9 @@ import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
 // Use ws:// protocol for WebSocket instead of http://
-const WEBSOCKET_URL = 'ws://192.168.1.105:8080/ws-ping';
+const WEBSOCKET_URL = 'ws://192.168.1.116:8080/ws-ping';
 // Fallback SockJS endpoint
-const SOCKJS_URL = 'http://192.168.1.105:8080/ws-ping';
+const SOCKJS_URL = 'http://192.168.1.116:8080/ws-ping';
 
 interface PingNotification {
   fromUserId: string;
