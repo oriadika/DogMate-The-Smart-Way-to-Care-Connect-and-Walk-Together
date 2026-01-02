@@ -53,10 +53,10 @@ class UserControllerTest {
     void GivenValidUserData_WhenRegisterUser_ThenReturnCreated() throws Exception {
         // Arrange
         RegularUser mockUser = new RegularUser(
-            testUserId, testEmail, "hashedPassword", testFirstName, testLastName, ""
+            testUserId, testEmail, "hashedPassword", testFirstName, testLastName
         );
         when(userService.registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), nullable(String.class)
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         )).thenReturn(mockUser);
 
         UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
@@ -76,7 +76,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.email").value(testEmail));
 
         verify(userService, times(1)).registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), nullable(String.class)
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         );
     }
 
@@ -85,10 +85,10 @@ class UserControllerTest {
         // Arrange
         String profileImageUrl = "https://example.com/image.jpg";
         RegularUser mockUser = new RegularUser(
-            testUserId, testEmail, "hashedPassword", testFirstName, testLastName, profileImageUrl
+            testUserId, testEmail, "hashedPassword", testFirstName, testLastName
         );
         when(userService.registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(profileImageUrl)
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         )).thenReturn(mockUser);
 
         UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
@@ -96,7 +96,6 @@ class UserControllerTest {
         request.setPassword(testPassword);
         request.setFirstName(testFirstName);
         request.setLastName(testLastName);
-        request.setProfileImageUrl(profileImageUrl);
 
         // Act & Assert
         mockMvc.perform(post("/api/users/register")
@@ -109,7 +108,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.email").value(testEmail));
 
         verify(userService, times(1)).registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(profileImageUrl)
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         );
     }
 
@@ -129,7 +128,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error").value("Missing required fields"));
 
-        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString(), nullable(String.class));
+        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -148,7 +147,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error").value("Missing required fields"));
 
-        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString(), nullable(String.class));
+        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -167,7 +166,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error").value("Missing required fields"));
 
-        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString(), nullable(String.class));
+        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -186,14 +185,14 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error").value("Missing required fields"));
 
-        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString(), nullable(String.class));
+        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
     void GivenEmailAlreadyExists_WhenRegisterUser_ThenReturnBadRequest() throws Exception {
         // Arrange
         when(userService.registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), nullable(String.class)
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         )).thenThrow(new IllegalArgumentException("Email already exists: " + testEmail));
 
         UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
@@ -211,7 +210,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.error").value("Email already exists: " + testEmail));
 
         verify(userService, times(1)).registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), nullable(String.class)
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         );
     }
 
@@ -219,7 +218,7 @@ class UserControllerTest {
     void GivenInvalidEmail_WhenRegisterUser_ThenReturnBadRequest() throws Exception {
         // Arrange
         when(userService.registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), nullable(String.class)
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         )).thenThrow(new IllegalArgumentException("Email cannot be null or empty"));
 
         UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
@@ -237,7 +236,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.error").value("Email cannot be null or empty"));
 
         verify(userService, times(1)).registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), nullable(String.class)
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         );
     }
 
@@ -245,7 +244,7 @@ class UserControllerTest {
     void GivenDatabaseConnectionFailure_WhenRegisterUser_ThenReturnInternalServerError() throws Exception {
         // Arrange
         when(userService.registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), nullable(String.class)
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         )).thenThrow(new RuntimeException("Database connection failed"));
 
         UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
@@ -263,7 +262,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.error", containsString("Failed to register user")));
 
         verify(userService, times(1)).registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), nullable(String.class)
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         );
     }
 

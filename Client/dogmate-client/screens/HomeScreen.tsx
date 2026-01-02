@@ -196,6 +196,7 @@ const HomeScreen = ({navigation, route}: any ) => {
                 email: route?.params?.email,
                 role: `Dog ${route?.params?.userRole}`,
                 phone: route?.params?.phoneNumber,
+                userId: route?.params?.userId,
               });
             }}
           >

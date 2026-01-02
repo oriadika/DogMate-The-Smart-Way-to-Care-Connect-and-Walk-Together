@@ -45,6 +45,22 @@ public class AuthController {
             response.put("userId", user.getId());
             response.put("email", user.getEmail());
             
+            // Add user type and specific details
+            if (user instanceof com.DogMate.Domain.RegularUser) {
+                com.DogMate.Domain.RegularUser regularUser = (com.DogMate.Domain.RegularUser) user;
+                response.put("userRole", "owner");
+                response.put("firstName", regularUser.getFirst_name());
+                response.put("lastName", regularUser.getLast_name());
+            } else if (user instanceof com.DogMate.Domain.DogWalkerUser) {
+                com.DogMate.Domain.DogWalkerUser walkerUser = (com.DogMate.Domain.DogWalkerUser) user;
+                response.put("userRole", "walker");
+                response.put("firstName", walkerUser.getFirst_name());
+                response.put("lastName", walkerUser.getLast_name());
+            } else if (user instanceof com.DogMate.Domain.AdminUser) {
+                com.DogMate.Domain.AdminUser adminUser = (com.DogMate.Domain.AdminUser) user;
+                response.put("userRole", "admin");
+            }
+            
             return ResponseEntity.ok(response);
 
         } catch (IllegalArgumentException e) {
@@ -53,6 +69,44 @@ public class AuthController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(createErrorResponse("Failed to login: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Logout a user
+     * POST /api/auth/logout
+     * Supports logout by userId or email
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(@RequestBody LogoutRequest request) {
+        try {
+            // Validate request
+            if (request == null || (request.getUserId() == null && request.getEmail() == null)) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("User ID or email is required"));
+            }
+
+            // Logout by ID or email
+            if (request.getUserId() != null && !request.getUserId().isEmpty()) {
+                java.util.UUID userId = java.util.UUID.fromString(request.getUserId());
+                userService.logout(userId);
+            } else if (request.getEmail() != null && !request.getEmail().isEmpty()) {
+                userService.logoutByEmail(request.getEmail());
+            }
+
+            // Create response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Logout successful");
+            
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(createErrorResponse("User not found: " + e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to logout: " + e.getMessage()));
         }
     }
 
@@ -88,6 +142,34 @@ public class AuthController {
 
         public void setPassword(String password) {
             this.password = password;
+        }
+    }
+
+    // Inner class for logout request DTO
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class LogoutRequest {
+        private String userId;
+        private String email;
+
+        // Default constructor for Jackson
+        public LogoutRequest() {
+        }
+
+        // Getters and Setters
+        public String getUserId() {
+            return userId;
+        }
+
+        public void setUserId(String userId) {
+            this.userId = userId;
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
         }
     }
 }
