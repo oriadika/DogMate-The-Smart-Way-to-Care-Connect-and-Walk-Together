@@ -40,12 +40,16 @@ public class Dog {
     @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogDocument> dogDocuments;
 
+    @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<DogRelationship> dogRelationships;
+
     // Default constructor required by JPA
     protected Dog() {
         this.dogEvents = new LinkedList<>();
         this.foodStocks = new LinkedList<>();
         this.dogMoodLogs = new LinkedList<>();
         this.dogDocuments = new LinkedList<>();
+        this.dogRelationships = new LinkedList<>();
     }
 
     public Dog(UUID ID, String name, String breed, Date birthdate, char gender,
@@ -60,6 +64,7 @@ public class Dog {
         this.foodStocks = new LinkedList<>();
         this.dogMoodLogs = new LinkedList<>();
         this.dogDocuments = new LinkedList<>();
+        this.dogRelationships = new LinkedList<>();
     }
 
     public UUID getID() {

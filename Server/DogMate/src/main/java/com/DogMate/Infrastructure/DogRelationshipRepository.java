@@ -7,12 +7,19 @@ import org.springframework.stereotype.Repository;
 
 import java.util.UUID;
 
+//@Repository
+//public interface DogRelationshipRepository extends JpaRepository<DogRelationship, UUID>, IDogRelationshipRepository {
+//
+//    // IDogRelationshipRepository interface methods are automatically implemented by JpaRepository:
+//    // - save() -> JpaRepository.save()
+//    // - findById() -> JpaRepository.findById()
+//    // - deleteById() -> JpaRepository.deleteById()
+//    // - existsById() -> JpaRepository.existsById()
+//}
+
 @Repository
-public interface DogRelationshipRepository extends JpaRepository<DogRelationship, UUID>, IDogRelationshipRepository {
-    
-    // IDogRelationshipRepository interface methods are automatically implemented by JpaRepository:
-    // - save() -> JpaRepository.save()
-    // - findById() -> JpaRepository.findById()
-    // - deleteById() -> JpaRepository.deleteById()
-    // - existsById() -> JpaRepository.existsById()
+public interface DogRelationshipRepository
+        extends JpaRepository<DogRelationship, UUID>, IDogRelationshipRepository {
 }
+
+
