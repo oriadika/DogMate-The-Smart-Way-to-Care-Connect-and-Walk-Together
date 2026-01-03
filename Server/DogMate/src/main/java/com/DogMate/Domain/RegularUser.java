@@ -23,6 +23,9 @@ public class RegularUser extends UserAccount{
     
     @OneToMany(mappedBy = "regularUser", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogRelationship> dogRelationships;
+
+    @OneToMany(mappedBy = "regularUser", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Reminder> reminders;
     
     @Transient
     private List<SniffRequest> sniffRequests;

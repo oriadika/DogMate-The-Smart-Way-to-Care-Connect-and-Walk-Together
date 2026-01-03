@@ -31,7 +31,7 @@ public class Dog {
     @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogEvent> dogEvents;
     
-    @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "dog", orphanRemoval = true)
     private List<FoodStock> foodStocks;
     
     @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)

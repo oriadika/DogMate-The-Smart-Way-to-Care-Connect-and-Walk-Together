@@ -2,11 +2,13 @@ package com.DogMate.Service;
 
 import com.DogMate.Domain.AdminUser;
 import com.DogMate.Domain.RegularUser;
+import com.DogMate.Domain.Reminder;
 import com.DogMate.Domain.UserAccount;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.Optional;
 @Service
@@ -14,11 +16,14 @@ public class UserService {
     
     private final IUserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final IReminderRepository reminderRepository;
 
     @Autowired
-    public UserService(IUserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(IUserRepository userRepository, PasswordEncoder passwordEncoder,
+                       IReminderRepository reminderRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.reminderRepository = reminderRepository;
     }
 
     /**
@@ -28,7 +33,7 @@ public class UserService {
      * @param password Plain text password (will be hashed by domain)
      * @param firstName User's first name
      * @param lastName User's last name
-     * @param profileImageUrl Optional profile image URL
+//     * @param profileImageUrl Optional profile image URL
      * @return The created RegularUser entity
      * @throws IllegalArgumentException if email already exists or validation fails
      */
@@ -350,4 +355,6 @@ public class UserService {
             throw new IllegalArgumentException("Only RegularUser accounts support location tracking");
         }
     }
+
+
 }

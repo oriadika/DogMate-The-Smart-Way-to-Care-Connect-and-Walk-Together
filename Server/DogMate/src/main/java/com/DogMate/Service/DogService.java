@@ -4,6 +4,7 @@ import com.DogMate.Domain.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Date;
 import java.util.List;
@@ -55,14 +56,23 @@ public class DogService {
             throw new IllegalArgumentException("User must be a RegularUser");
         }
         RegularUser user = (RegularUser) userAccount;
-        
+
+        if (!(gender == 'M' || gender == 'F')){
+            throw new IllegalArgumentException("gender is not valid");
+        }
+        if (birthdate.after(new Date())){
+            throw new IllegalArgumentException("Date is not before current time");
+        }
         // Create new dog (domain logic)
         UUID dogId = UUID.randomUUID();
         Dog newDog = new Dog(dogId, name, breed, birthdate, gender, profileImageURL);
         
         // Save dog to repository (orchestration)
         Dog savedDog = dogRepository.save(newDog);
-        
+
+        if (relationshipType == null) {
+            throw new IllegalArgumentException("Relationship type is null");
+        }
         // Create relationship between user and dog
         DogRelationship relationship = new DogRelationship(user, savedDog, relationshipType);
         
@@ -162,5 +172,43 @@ public class DogService {
      */
     public void deleteDog(UUID dogId) {
         dogRepository.deleteById(dogId);
+    }
+
+    public FoodStock addFoodStockToDog(
+            UUID dogId,
+            String brandName,
+            double bagSizeInKg,
+            double currentLevelInKg,
+            double dailyConsumptionInGram
+    ) {
+        Dog dog = dogRepository.findById(dogId)
+                .orElseThrow(() -> new IllegalArgumentException("Dog with ID " + dogId + " not found"));
+        if(brandName == null || brandName.isEmpty()){
+            throw new IllegalArgumentException("Name is invalid");
+        }
+        if (bagSizeInKg <= 0){
+            throw new IllegalArgumentException("Bag size is invalid");
+        }
+        if (currentLevelInKg <= 0){
+            throw new IllegalArgumentException("Current level is invalid");
+        }
+        if (dailyConsumptionInGram <= 0){
+            throw new IllegalArgumentException("Daily consumption is invalid");
+        }
+        FoodStock foodStock = new FoodStock(
+                brandName,
+                bagSizeInKg,
+                currentLevelInKg,
+                dailyConsumptionInGram
+        );
+
+        // connect (owning side)
+        foodStock.setDog(dog);
+
+        // optional but good for consistency on both sides
+        dog.getFoodStocks().add(foodStock);
+
+        // persist
+        return foodStockRepository.save(foodStock);
     }
 }

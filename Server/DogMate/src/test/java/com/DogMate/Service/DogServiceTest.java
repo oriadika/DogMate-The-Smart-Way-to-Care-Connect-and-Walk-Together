@@ -17,7 +17,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @Transactional
-@Rollback(false)
 class DogServiceTest {
 
     @Autowired private DogService dogService;
@@ -65,5 +64,67 @@ class DogServiceTest {
         );
 
         assertTrue(relExists);
+    }
+
+    @Test
+    void addDogToUser_whenUserNotFound_shouldThrow() {
+        UUID notExistingUserId = UUID.randomUUID();
+
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> dogService.addDogToUser(
+                        notExistingUserId,
+                        "Rex",
+                        "Husky",
+                        new Date(),
+                        'M',
+                        "img_url",
+                        RelationshipType.OWNERSHIP
+                )
+        );
+
+        assertEquals("User with ID " + notExistingUserId + " not found", ex.getMessage());
+    }
+
+    @Test
+    void addDogToUser_whenRelationshipTypeNull_shouldThrow() {
+        RegularUser user = userService.registerUser(
+                "neg1@test.com", "password123", "A", "B"
+        );
+
+        // Your DogRelationship has @Enumerated(EnumType.STRING) but no explicit null check.
+        // Passing null will typically fail at flush/commit (constraint / persistence error).
+        assertThrows(
+                Exception.class,
+                () -> dogService.addDogToUser(
+                        user.getId(),
+                        "Rex",
+                        "Husky",
+                        new Date(),
+                        'M',
+                        "img_url",
+                        null
+                )
+        );
+    }
+
+    @Test
+    void addDogToUser_whenGenderInvalid_shouldFail() {
+        RegularUser user = userService.registerUser(
+                "neg2@test.com", "password123", "C", "D"
+        );
+
+        assertThrows(
+                Exception.class,
+                () -> dogService.addDogToUser(
+                        user.getId(),
+                        "Rex",
+                        "Husky",
+                        new Date(),
+                        'X',
+                        "img_url",
+                        RelationshipType.OWNERSHIP
+                )
+        );
     }
 }
