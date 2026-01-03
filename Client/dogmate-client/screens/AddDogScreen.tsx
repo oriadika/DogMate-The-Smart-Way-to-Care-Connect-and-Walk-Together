@@ -11,19 +11,87 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Modal,
 } from 'react-native';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 
 const AddDogScreen = ({ navigation }: any) => {
   const [name, setName] = useState('');
   const [breed, setBreed] = useState('');
-  const [age, setAge] = useState('');
+  const [birthDate, setBirthDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [weight, setWeight] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | null>(null);
 
+  // Format date to DD/MM/YYYY
+  const formatDate = (date: Date): string => {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  // Calculate age from birth date
+  const calculateAge = (date: Date): string => {
+    const today = new Date();
+    const birth = new Date(date);
+    
+    let years = today.getFullYear() - birth.getFullYear();
+    let months = today.getMonth() - birth.getMonth();
+    
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+    
+    if (today.getDate() < birth.getDate()) {
+      months--;
+      if (months < 0) {
+        years--;
+        months += 11;
+      }
+    }
+    
+    // Check if it's a very young puppy (less than 1 month)
+    const daysDiff = Math.floor((today.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysDiff < 30) {
+      return 'גור חדש';
+    }
+    
+    if (years === 0 && months === 0) {
+      return 'חודש אחד';
+    }
+    
+    if (years === 0) {
+      return `${months} חודשים`;
+    }
+    
+    if (months === 0) {
+      return `${years} ${years === 1 ? 'שנה' : 'שנים'}`;
+    }
+    
+    return `${years} ${years === 1 ? 'שנה' : 'שנים'} ו-${months} חודשים`;
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+      if (event.type !== 'dismissed' && selectedDate) {
+        setBirthDate(selectedDate);
+      }
+    } else {
+      // iOS: keep picker open, update date immediately
+      if (selectedDate) {
+        setBirthDate(selectedDate);
+      }
+    }
+  };
+
   const handleSave = () => {
     // כאן תהיה הלוגיקה לשמירת הכלב בשרת
-    console.log({ name, breed, age, weight, gender });
+    const ageText = calculateAge(birthDate);
+    console.log({ name, breed, birthDate, age: ageText, weight, gender });
     navigation.goBack(); // סגירת החלונית לאחר שמירה
   };
 
@@ -82,15 +150,56 @@ const AddDogScreen = ({ navigation }: any) => {
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 0.48 }]}>
-                  <Text style={styles.label}>גיל (שנים):</Text>
-                  <TextInput
+                  <Text style={styles.label}>תאריך לידה:</Text>
+                  <TouchableOpacity
                     style={styles.input}
-                    placeholderTextColor="#A9B5C7"
-                    keyboardType="numeric"
-                    textAlign="right"
-                    value={age}
-                    onChangeText={setAge}
-                  />
+                    onPress={() => setShowDatePicker(true)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.datePickerContent}>
+                      <Text style={styles.dateText}>{formatDate(birthDate)}</Text>
+                      <Feather name="calendar" size={20} color="#8B7355" />
+                    </View>
+                  </TouchableOpacity>
+                  {Platform.OS === 'ios' && (
+                    <Modal
+                      visible={showDatePicker}
+                      transparent={true}
+                      animationType="slide"
+                      onRequestClose={() => setShowDatePicker(false)}
+                    >
+                      <View style={styles.modalContainer}>
+                        <View style={styles.modalContent}>
+                          <View style={styles.modalHeader}>
+                            <TouchableOpacity
+                              onPress={() => setShowDatePicker(false)}
+                            >
+                              <Text style={styles.modalDoneText}>סיום</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <DateTimePicker
+                            value={birthDate}
+                            mode="date"
+                            display="spinner"
+                            onChange={onDateChange}
+                            maximumDate={new Date()}
+                            textColor="#5C4033"
+                            style={styles.datePicker}
+                          />
+                        </View>
+                      </View>
+                    </Modal>
+                  )}
+                  {Platform.OS === 'android' && showDatePicker && (
+                    <DateTimePicker
+                      value={birthDate}
+                      mode="date"
+                      display="default"
+                      onChange={onDateChange}
+                      maximumDate={new Date()}
+                    />
+                  )}
+                  <Text style={styles.ageText}>{calculateAge(birthDate)}</Text>
                 </View>
               </View>
 
@@ -270,5 +379,55 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
+  },
+  datePickerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  dateText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'right',
+    flex: 1,
+  },
+  ageText: {
+    fontSize: 14,
+    color: '#7FB069',
+    fontWeight: '600',
+    marginTop: 6,
+    textAlign: 'right',
+    paddingRight: 8,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: '#faf0e6',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    alignItems: 'center',
+  },
+  modalHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0D5C7',
+  },
+  modalDoneText: {
+    color: PRIMARY_COLOR,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  datePicker: {
+    width: '100%',
+    height: 200,
   },
 });

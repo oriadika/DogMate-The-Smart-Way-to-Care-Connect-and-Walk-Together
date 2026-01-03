@@ -13,7 +13,7 @@ import {
 import { FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
 import websocketService from '../services/websocket';
-import locationService from '../services/location';
+import locationService, { LocationService } from '../services/location';
 
 const ProfileScreen = ({ navigation, route }: any) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -161,7 +161,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
             
             // Calculate distance if current user has location
             if (userLocation) {
-              const distance = locationService.constructor.calculateDistance(
+              const distance = LocationService.calculateDistance(
                 userLocation.latitude,
                 userLocation.longitude,
                 user.latitude,
@@ -217,7 +217,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
         {/* Show distance if user has location */}
         {item.distance !== undefined && (
           <Text style={styles.distanceText}>
-            📍 {locationService.constructor.formatDistance(item.distance)} near you
+            📍 {LocationService.formatDistance(item.distance)} near you
           </Text>
         )}
       </View>
