@@ -21,7 +21,7 @@ const LoginScreen = ({ navigation }: any) => {
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
-      Alert.alert('Missing fields', 'Please fill in both email and password.');
+      Alert.alert('שדות חסרים', 'אנא מלא את האימייל והסיסמה.');
       return;
     }
 
@@ -98,10 +98,7 @@ const LoginScreen = ({ navigation }: any) => {
             {/* Forgot password link */}
             <TouchableOpacity
               style={styles.forgotPasswordLink}
-              onPress={() => {
-                // TODO: Navigate to forgot password screen
-                Alert.alert('שכחת סיסמה', 'פונקציונליות זו תתווסף בקרוב');
-              }}
+              onPress={() => navigation.navigate('ForgotPassword')}
             >
               <Text style={styles.forgotPasswordText}>שכחת סיסמה?</Text>
             </TouchableOpacity>

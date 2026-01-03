@@ -27,22 +27,22 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
 
   const handleSignUp = async () => {
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !password || !confirmPassword) {
-      Alert.alert('Missing fields', 'Please fill in all fields.');
+      Alert.alert('שדות חסרים', 'אנא מלא את כל השדות.');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Weak password', 'Password should be at least 6 characters long.');
+      Alert.alert('סיסמה חלשה', 'הסיסמה חייבת להכיל לפחות 6 תווים.');
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Password mismatch', 'Passwords do not match.');
+      Alert.alert('הסיסמאות לא תואמות', 'הסיסמאות אינן תואמות.');
       return;
     }
 
     if (phoneNumber.length !== 10){
-      Alert.alert('Invalid phone number', 'Phone number should be 10 digits');
+      Alert.alert('מספר טלפון לא תקין', 'מספר הטלפון חייב להכיל 10 ספרות');
       return;
     }
 
@@ -57,8 +57,8 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
       });
 
     Alert.alert(
-      'Account created',
-      `Welcome to DogMate, ${firstName} ${lastName}! (${role === 'owner' ? 'Dog Owner' : 'Dog Walker'})`
+      'החשבון נוצר בהצלחה',
+      `ברוך הבא ל-DogMate, ${firstName} ${lastName}! (${role === 'owner' ? 'בעל כלב' : 'דוגווקר'})`
     );
 
     navigation.navigate('Home', {
@@ -69,7 +69,7 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
         phoneNumber: phoneNumber
       });
     } catch (error: any) {
-      Alert.alert('Registration failed', error.message || 'An error occurred during registration');
+      Alert.alert('הרשמה נכשלה', error.message || 'אירעה שגיאה בעת ההרשמה');
       console.error('Sign up error:', error);
     } finally {
       setIsLoading(false);
