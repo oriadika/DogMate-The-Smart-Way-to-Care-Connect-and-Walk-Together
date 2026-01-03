@@ -1,2 +1,5 @@
 node_modules/
 **/node_modules/
+Server/DogMate/data/*.mv.db
+Server/DogMate/data/*.trace.db
+Server/DogMate/data/*.db
