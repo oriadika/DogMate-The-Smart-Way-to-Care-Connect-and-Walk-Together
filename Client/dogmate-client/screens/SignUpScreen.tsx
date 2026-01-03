@@ -11,6 +11,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { userAPI } from '../services/api';
 
@@ -88,141 +89,149 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
           style={styles.safeArea}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
-          <View style={styles.container}>
-              {/* Title */}
-              <View style={styles.titleContainer}>
-                <Text style={styles.title}>יצירת חשבון חדש</Text>
-              </View>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.container}>
+                {/* Title */}
+                <View style={styles.titleContainer}>
+                  <Text style={styles.title}>יצירת חשבון חדש</Text>
+                </View>
 
-              {/* First Name */}
-              <TextInput
-                style={styles.input}
-                placeholder="שם פרטי"
-                placeholderTextColor="#A9B5C7"
-                value={firstName}
-                onChangeText={setFirstName}
-                textAlign="right"
-              />
+                {/* First Name */}
+                <TextInput
+                  style={styles.input}
+                  placeholder="שם פרטי"
+                  placeholderTextColor="#A9B5C7"
+                  value={firstName}
+                  onChangeText={setFirstName}
+                  textAlign="right"
+                />
 
-              {/* Last Name */}
-              <TextInput
-                style={styles.input}
-                placeholder="שם משפחה"
-                placeholderTextColor="#A9B5C7"
-                value={lastName}
-                onChangeText={setLastName}
-                textAlign="right"
-              />
+                {/* Last Name */}
+                <TextInput
+                  style={styles.input}
+                  placeholder="שם משפחה"
+                  placeholderTextColor="#A9B5C7"
+                  value={lastName}
+                  onChangeText={setLastName}
+                  textAlign="right"
+                />
 
-              {/* Role selector */}
-              <Text style={styles.roleLabel}>אני נרשם בתור:</Text>
-              <View style={styles.roleRow}>
+                {/* Role selector */}
+                <Text style={styles.roleLabel}>אני נרשם בתור:</Text>
+                <View style={styles.roleRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      role === 'walker' ? styles.roleButtonActive : styles.roleButtonInactive,
+                    ]}
+                    onPress={() => setRole('walker')}
+                  >
+                    <Text style={styles.roleIcon}>🐕</Text>
+                    <Text style={[
+                      styles.roleText,
+                      role === 'walker' ? styles.roleTextActive : styles.roleTextInactive,
+                    ]}>
+                      דוגווקר
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.roleButton,
+                      role === 'owner' ? styles.roleButtonActive : styles.roleButtonInactive,
+                    ]}
+                    onPress={() => setRole('owner')}
+                  >
+                    <Text style={styles.roleIcon}>👤🐕</Text>
+                    <Text style={[
+                      styles.roleText,
+                      role === 'owner' ? styles.roleTextActive : styles.roleTextInactive,
+                    ]}>
+                      בעל כלב
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Phone Number */}
+                <TextInput
+                  style={styles.input}
+                  placeholder="מספר פלאפון"
+                  placeholderTextColor="#A9B5C7"
+                  keyboardType="phone-pad"
+                  value={phoneNumber}
+                  onChangeText={setPhoneNumber}
+                  textAlign="right"
+                />
+
+                {/* Email */}
+                <TextInput
+                  style={styles.input}
+                  placeholder="אימייל"
+                  placeholderTextColor="#A9B5C7"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={setEmail}
+                  textAlign="right"
+                />
+
+                {/* Password */}
+                <TextInput
+                  style={styles.input}
+                  placeholder="סיסמה"
+                  placeholderTextColor="#A9B5C7"
+                  secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
+                  textAlign="right"
+                />
+
+                {/* Confirm Password */}
+                <TextInput
+                  style={styles.input}
+                  placeholder="אימות סיסמה"
+                  placeholderTextColor="#A9B5C7"
+                  secureTextEntry
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  textAlign="right"
+                />
+
+                {/* Sign Up button */}
                 <TouchableOpacity
-                  style={[
-                    styles.roleButton,
-                    role === 'walker' ? styles.roleButtonActive : styles.roleButtonInactive,
-                  ]}
-                  onPress={() => setRole('walker')}
+                  style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
+                  onPress={handleSignUp}
+                  disabled={isLoading}
+                  activeOpacity={0.85}
                 >
-                  <Text style={styles.roleIcon}>🐕</Text>
-                  <Text style={[
-                    styles.roleText,
-                    role === 'walker' ? styles.roleTextActive : styles.roleTextInactive,
-                  ]}>
-                    דוגווקר
-                  </Text>
+                  {isLoading ? (
+                    <ActivityIndicator color="#000000" size="small" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>הרשמה</Text>
+                  )}
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[
-                    styles.roleButton,
-                    role === 'owner' ? styles.roleButtonActive : styles.roleButtonInactive,
-                  ]}
-                  onPress={() => setRole('owner')}
-                >
-                  <Text style={styles.roleIcon}>👤🐕</Text>
-                  <Text style={[
-                    styles.roleText,
-                    role === 'owner' ? styles.roleTextActive : styles.roleTextInactive,
-                  ]}>
-                    בעל כלב
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Phone Number */}
-              <TextInput
-                style={styles.input}
-                placeholder="מספר פלאפון"
-                placeholderTextColor="#A9B5C7"
-                keyboardType="phone-pad"
-                value={phoneNumber}
-                onChangeText={setPhoneNumber}
-                textAlign="right"
-              />
-
-              {/* Email */}
-              <TextInput
-                style={styles.input}
-                placeholder="אימייל"
-                placeholderTextColor="#A9B5C7"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-                textAlign="right"
-              />
-
-              {/* Password */}
-              <TextInput
-                style={styles.input}
-                placeholder="סיסמה"
-                placeholderTextColor="#A9B5C7"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-                textAlign="right"
-              />
-
-              {/* Confirm Password */}
-              <TextInput
-                style={styles.input}
-                placeholder="אימות סיסמה"
-                placeholderTextColor="#A9B5C7"
-                secureTextEntry
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                textAlign="right"
-              />
-
-              {/* Sign Up button */}
-              <TouchableOpacity
-                style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
-                onPress={handleSignUp}
-                disabled={isLoading}
-                activeOpacity={0.85}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="#000000" size="small" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>הרשמה</Text>
-                )}
-              </TouchableOpacity>
-          </View>
-
-          {/* Footer link - fixed below button */}
-          <View style={styles.footerContainer}>
-            <TouchableOpacity
-              style={styles.footerLink}
-              onPress={() => navigation.navigate('Login')}
-            >
-              <Text style={styles.footerLinkText}>
-                כבר יש לך חשבון? <Text style={styles.footerLinkTextBold}>התחבר כאן</Text>
-              </Text>
-            </TouchableOpacity>
-          </View>
+                {/* Footer link */}
+                <View style={styles.footerContainer}>
+                  <TouchableOpacity
+                    style={styles.footerLink}
+                    onPress={() => navigation.navigate('Login')}
+                  >
+                    <Text style={styles.footerLinkText}>
+                      כבר יש לך חשבון? <Text style={styles.footerLinkTextBold}>התחבר כאן</Text>
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+            </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
@@ -241,6 +250,12 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: 'transparent',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   container: {
     flex: 1,
@@ -350,11 +365,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   footerContainer: {
-    paddingHorizontal: 24,
+    paddingTop: 20,
     paddingBottom: 20,
-    paddingTop: 10,
     alignItems: 'center',
-    backgroundColor: '#f5e6d3',
   },
   footerLink: {
     alignItems: 'center',

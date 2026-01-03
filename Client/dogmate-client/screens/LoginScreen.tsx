@@ -33,7 +33,7 @@ const LoginScreen = ({ navigation }: any) => {
         password,
       });
 
-      Alert.alert('Logged in', 'Welcome back to DogMate!');
+      Alert.alert('התחברת בהצלחה', 'ברוך שובך ל-DogMate!');
 
       navigation.navigate('Home', {
         userId: response.userId,
@@ -44,7 +44,7 @@ const LoginScreen = ({ navigation }: any) => {
         phoneNumber: response.phoneNumber || '',
       });
     } catch (error: any) {
-      Alert.alert('Login failed', error.message || 'An error occurred during login');
+      Alert.alert('התחברות נכשלה', error.message || 'אירעה שגיאה בעת ההתחברות');
       console.error('Login error:', error);
     } finally {
       setIsLoading(false);
