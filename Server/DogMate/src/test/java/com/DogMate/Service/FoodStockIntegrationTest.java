@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.Rollback;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.UUID;
 
@@ -34,7 +35,7 @@ class FoodStockIntegrationTest {
                 user.getId(),
                 "Rex",
                 "Husky",
-                new Date(),
+                LocalDate.now(),
                 'M',
                 "img_url",
                 RelationshipType.OWNERSHIP
@@ -85,7 +86,7 @@ class FoodStockIntegrationTest {
         // Currently you don't validate bag size in domain/service,
         // so this might PASS. If you want it to FAIL, add validation and keep this test.
         RegularUser user = userService.registerUser("fs2@test.com", "password123", "G", "H");
-        Dog dog = dogService.addDogToUser(user.getId(), "Max", "Pug", new Date(), 'M', "img_url", RelationshipType.OWNERSHIP);
+        Dog dog = dogService.addDogToUser(user.getId(), "Max", "Pug", LocalDate.now(), 'M', "img_url", RelationshipType.OWNERSHIP);
 
         assertThrows(Exception.class, () -> dogService.addFoodStockToDog(
                 dog.getID(),

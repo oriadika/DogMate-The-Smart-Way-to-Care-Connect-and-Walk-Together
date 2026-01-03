@@ -9,6 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.Rollback;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,7 +44,7 @@ class DogServiceTest {
                 userId,
                 "Rex",
                 "Husky",
-                new Date(),
+                LocalDate.now(),
                 'M',
                 "img_url",
                 RelationshipType.OWNERSHIP
@@ -76,7 +77,7 @@ class DogServiceTest {
                         notExistingUserId,
                         "Rex",
                         "Husky",
-                        new Date(),
+                        LocalDate.now(),
                         'M',
                         "img_url",
                         RelationshipType.OWNERSHIP
@@ -100,7 +101,7 @@ class DogServiceTest {
                         user.getId(),
                         "Rex",
                         "Husky",
-                        new Date(),
+                        LocalDate.now(),
                         'M',
                         "img_url",
                         null
@@ -120,7 +121,7 @@ class DogServiceTest {
                         user.getId(),
                         "Rex",
                         "Husky",
-                        new Date(),
+                        LocalDate.now(),
                         'X',
                         "img_url",
                         RelationshipType.OWNERSHIP

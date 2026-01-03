@@ -6,6 +6,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -42,7 +43,7 @@ public class DogService {
      * @return The created Dog entity
      * @throws IllegalArgumentException if user not found or validation fails
      */
-    public Dog addDogToUser(UUID userId, String name, String breed, Date birthdate, 
+    public Dog addDogToUser(UUID userId, String name, String breed, LocalDate birthdate,
                             char gender, String profileImageURL, RelationshipType relationshipType) {
         
         // Find the user (orchestration)
@@ -60,7 +61,7 @@ public class DogService {
         if (!(gender == 'M' || gender == 'F')){
             throw new IllegalArgumentException("gender is not valid");
         }
-        if (birthdate.after(new Date())){
+        if (birthdate.isAfter(LocalDate.now())){
             throw new IllegalArgumentException("Date is not before current time");
         }
         // Create new dog (domain logic)

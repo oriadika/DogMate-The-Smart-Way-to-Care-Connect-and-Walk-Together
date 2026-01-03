@@ -1,6 +1,8 @@
 package com.DogMate.Domain;
 
 import jakarta.persistence.*;
+
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
@@ -20,7 +22,7 @@ public class Dog {
     private String breed;
     
     @Column(name = "birthdate")
-    private Date birthdate;
+    private LocalDate birthdate;
     
     @Column(name = "gender")
     private char gender; // M for male, F for Female
@@ -52,7 +54,7 @@ public class Dog {
         this.dogRelationships = new LinkedList<>();
     }
 
-    public Dog(UUID ID, String name, String breed, Date birthdate, char gender,
+    public Dog(UUID ID, String name, String breed, LocalDate  birthdate, char gender,
                String profileImageURL){
         this.ID = ID;
         this.name = name;
@@ -91,11 +93,11 @@ public class Dog {
         this.breed = breed;
     }
 
-    public Date getBirthdate() {
+    public LocalDate getBirthdate() {
         return birthdate;
     }
 
-    public void setBirthdate(Date birthdate) {
+    public void setBirthdate(LocalDate birthdate) {
         this.birthdate = birthdate;
     }
 
