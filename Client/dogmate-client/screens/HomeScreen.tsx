@@ -9,183 +9,77 @@ import {
   TouchableOpacity,
   Image,
 } from 'react-native';
-import { Feather, Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 
-const quickActions = [
-  {
-    label: 'Walks',
-    color: '#FFB74D',
-    icon: <MaterialCommunityIcons name="walk" size={28} color="#fff" />,
-  },
-  {
-    label: 'Reminders',
-    color: '#FF8A65',
-    icon: <Ionicons name="alarm-outline" size={28} color="#fff" />,
-  },
-  {
-    label: 'Documents',
-    color: '#64B5F6',
-    icon: <Ionicons name="document-text-outline" size={28} color="#fff" />,
-  },
-  {
-    label: 'Food',
-    color: '#FF7043',
-    icon: <MaterialCommunityIcons name="food-drumstick" size={28} color="#fff" />
-  },
-  {
-    label: 'SOS',
-    color: '#EF5350',
-    icon: <Ionicons name="warning-outline" size={28} color="#fff" />,
-  },
-  {
-    label: 'Dog Matching',
-    color: '#81C784',
-    icon: <FontAwesome5 name="dog" size={26} color="#fff" />,
-  },
-];
+const PRIMARY_COLOR = '#7FB069'; // Sage green
 
+const HomeScreen = ({ navigation, route }: any) => {
+  const [activeTab, setActiveTab] = useState<'home' | 'community' | 'walks' | 'profile'>('home');
+  const userName = route?.params?.userFirstName;
 
-const dogs = [
-  {
-    id: '1',
-    name: 'Bella',
-    image:
-      'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80',
-  },
-  {
-    id: '2',
-    name: 'Max',
-    image:
-      'https://images.unsplash.com/photo-1507146426996-ef05306b995a?auto=format&fit=crop&w=400&q=80',
-  },
-];
-
-const HomeScreen = ({navigation, route}: any ) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'dogs' | 'start-walk' | 'reminder' | 'profile'>('home');
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Top bar */}
-        <View style={styles.topBar}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoText}>DM</Text>
-          </View>
-          <Text style={styles.topBarTitle}>The dog {route?.params?.userRole}, {route?.params?.userFirstName} {route?.params?.userLastName}</Text>
-          <View style={{ flex: 1 }} />
-        </View>
-
         <ScrollView
+          style={styles.scrollView}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* Greeting */}
-          <Text style={styles.greeting}>Good afternoon</Text>
-
-          {/* Quick actions grid */}
-          <View style={styles.quickGrid}>
-            {quickActions.map((item) => (
-              <TouchableOpacity
-                key={item.label}
-                style={[styles.quickCard, { backgroundColor: item.color }]}
-                activeOpacity={0.85}
-              >
-                <View style={{ marginBottom: 6 }}>{item.icon}</View>
-                <Text style={styles.quickLabel}>{item.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* My Dogs */}
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>My Dogs</Text>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.dogsRow}
-          >
-            {dogs.map((dog) => (
-              <View key={dog.id} style={styles.dogCard}>
-                <Image source={{ uri: dog.image }} style={styles.dogImage} />
-                <Text style={styles.dogName}>{dog.name}</Text>
-
-                <View style={styles.dogButtonsRow}>
-                  <TouchableOpacity style={styles.dogButton}>
-                    <Text style={styles.dogButtonText}>Start Walk</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.dogButton}>
-                    <Text style={styles.dogButtonText}>Add Reminder</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <TouchableOpacity style={[styles.dogButton, { marginTop: 6 }]}>
-                  <Text style={styles.dogButtonText}>Upload Document</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </ScrollView>
-
-          {/* Notifications */}
-          <View style={styles.notificationsCard}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sectionTitle}>Notifications</Text>
-              <Text style={styles.notificationText}>
-                Time for a walk! Burn off some energy with a fun outing.
-              </Text>
-            </View>
-            <TouchableOpacity style={styles.viewButton}>
-              <Text style={styles.viewButtonText}>View</Text>
+          {/* Header with logo and settings */}
+          <View style={styles.header}>
+            <View style={{ width: 40 }} />
+            <Image
+              source={require('../assets/images/DogMate.jpg')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+            <TouchableOpacity 
+              style={styles.settingsButton}
+              onPress={() => navigation.navigate('Settings')}
+            >
+              <Ionicons name="settings-outline" size={28} color="#5C4033" />
             </TouchableOpacity>
+          </View>
+
+          {/* Main Card */}
+          <View style={styles.mainCard}>
+            {/* Photo placeholder and content row */}
+            <View style={styles.cardContentRow}>
+              {/* Photo placeholder */}
+              <View style={styles.photoPlaceholder}>
+                <FontAwesome5 name="dog" size={40} color="#A9B5C7" />
+                <Text style={styles.plusSign}>+</Text>
+              </View>
+
+              {/* Greeting and text */}
+              <View style={styles.greetingContainer}>
+                <Text style={styles.greetingText}>שלום, {userName}!</Text>
+                <Text style={styles.ctaText}>בואו נוסיף את החבר הראשון שלכם!</Text>
+                
+              </View>
+            </View>
+
+            {/* Add Dog Button */}
+            <TouchableOpacity
+              style={styles.addDogButton}
+              activeOpacity={0.85}
+              onPress={() => navigation.navigate('AddDog')}
+            >
+              <Text style={styles.addDogButtonText}>הוסף כלב</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Reminders Section */}
+          <View style={styles.remindersSection}>
+            <Text style={styles.remindersTitle}>תזכורות להיום</Text>
+            <Text style={styles.remindersPlaceholder}>
+              כאן יופיעו התזכורות שלכם לאחר הוספת כלב.
+            </Text>
           </View>
         </ScrollView>
 
-        {/* Bottom nav (static mock) */}
+        {/* Bottom Navigation Bar */}
         <View style={styles.bottomNav}>
-          <TouchableOpacity
-            style={[styles.navItem, activeTab === 'home' && styles.navItemActive]}
-            onPress={() => setActiveTab('home')}
-          >
-            <Ionicons
-              name={activeTab === 'home' ? 'home' : 'home-outline'}
-              size={26}
-              color={activeTab === 'home' ? '#111827' : '#9CA3AF'}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.navItem, activeTab === 'dogs' && styles.navItemActive]}
-            onPress={() => {setActiveTab('dogs')}}
-          >
-            <Ionicons
-              name={activeTab === 'dogs' ? 'paw' : 'paw-outline'}
-              size={26}
-              color={activeTab === 'dogs' ? '#111827' : '#9CA3AF'}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.navItem, activeTab === 'start-walk' && styles.navItemActive]}
-            onPress={() => setActiveTab('start-walk')}
-          >
-            <MaterialCommunityIcons
-              name={activeTab === 'start-walk' ? 'play-circle' : 'play-circle-outline'}
-              size={26}
-              color={activeTab === 'start-walk' ? '#111827' : '#9CA3AF'}
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.navItem, activeTab === 'reminder' && styles.navItemActive]}
-            onPress={() => setActiveTab('reminder')}
-          >
-            <Ionicons
-              name={activeTab === 'reminder' ? 'alarm' : 'alarm-outline'}
-              size={26}
-              color={activeTab === 'reminder' ? '#111827' : '#9CA3AF'}
-            />
-          </TouchableOpacity>
-
           <TouchableOpacity
             style={[styles.navItem, activeTab === 'profile' && styles.navItemActive]}
             onPress={() => {
@@ -200,11 +94,56 @@ const HomeScreen = ({navigation, route}: any ) => {
               });
             }}
           >
-            <Ionicons
-              name={activeTab === 'profile' ? 'person' : 'person-outline'}
-              size={26}
-              color={activeTab === 'profile' ? '#111827' : '#9CA3AF'}
+            <FontAwesome5
+              name="dog"
+              size={24}
+              color={activeTab === 'profile' ? PRIMARY_COLOR : '#9CA3AF'}
             />
+            <Text style={[styles.navLabel, activeTab === 'profile' && styles.navLabelActive]}>
+              פרופיל
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.navItem, activeTab === 'community' && styles.navItemActive]}
+            onPress={() => setActiveTab('community')}
+          >
+            <Ionicons
+              name={activeTab === 'community' ? 'people' : 'people-outline'}
+              size={24}
+              color={activeTab === 'community' ? PRIMARY_COLOR : '#9CA3AF'}
+            />
+            <Text style={[styles.navLabel, activeTab === 'community' && styles.navLabelActive]}>
+              קהילה
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.navItem, activeTab === 'walks' && styles.navItemActive]}
+            onPress={() => setActiveTab('walks')}
+          >
+            <MaterialCommunityIcons
+              name={activeTab === 'walks' ? 'walk' : 'walk'}
+              size={24}
+              color={activeTab === 'walks' ? PRIMARY_COLOR : '#9CA3AF'}
+            />
+            <Text style={[styles.navLabel, activeTab === 'walks' && styles.navLabelActive]}>
+              טיולים
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.navItem, activeTab === 'home' && styles.navItemActive]}
+            onPress={() => setActiveTab('home')}
+          >
+            <Ionicons
+              name={activeTab === 'home' ? 'home' : 'home-outline'}
+              size={24}
+              color={activeTab === 'home' ? PRIMARY_COLOR : '#9CA3AF'}
+            />
+            <Text style={[styles.navLabel, activeTab === 'home' && styles.navLabelActive]}>
+              בית
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -217,169 +156,195 @@ export default HomeScreen;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F5F5F7',
+    backgroundColor: '#FAEFDD',
   },
   container: {
     flex: 1,
+    justifyContent: 'space-between',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  backgroundPattern: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.15,
+  },
+  pawPatternContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 20,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  pawPrint: {
+    fontSize: 20,
+    margin: 15,
+    opacity: 0.3,
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingTop: 20,
+    paddingBottom: 20,
   },
-  topBar: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 4,
+    marginTop: 10,
+    marginBottom: 30,
   },
-  logoCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FF7043',
+  settingsButton: {
+    padding: 5,
+    width: 40,
+    alignItems: 'flex-end',
+    marginTop: -70,
+    marginRight: -5,
+  },
+  dogsIconContainer: {
+    marginBottom: 8,
+  },
+  dogsEmoji: {
+    fontSize: 32,
+  },
+  logoImage: {
+    width: 120,
+    height: 120,
+    marginTop: -10,
+  },
+  mainCard: {
+    backgroundColor: '#F6D9B7', 
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 30,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  cardContentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+  },
+  photoPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 2,
+    borderColor: '#A9B5C7',
+    borderStyle: 'dashed',
+    backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: 16,
+    position: 'relative',
   },
-  logoText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
+  plusSign: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: PRIMARY_COLOR,
+    backgroundColor: '#fff',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    textAlign: 'center',
+    lineHeight: 24,
   },
-  topBarTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  greeting: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#111827',
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  quickGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  quickCard: {
-    width: '31%',
-    aspectRatio: 1,
-    borderRadius: 18,
-    padding: 10,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  quickEmoji: {
-    fontSize: 22,
-  },
-  quickLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  dogsRow: {
-    paddingVertical: 4,
-  },
-  dogCard: {
-    width: 190,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    marginRight: 12,
-    padding: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  dogImage: {
-    width: '100%',
-    height: 90,
-    borderRadius: 14,
-    marginBottom: 8,
-  },
-  dogName: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 6,
-    color: '#111827',
-  },
-  dogButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  dogButton: {
+  greetingContainer: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
-  dogButtonText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#111827',
+  greetingText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#5C4033',
+    marginBottom: 8,
+    textAlign: 'right',
   },
-  notificationsCard: {
-    marginTop: 20,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 14,
+  ctaText: {
+    fontSize: 16,
+    color: '#5C4033',
+    marginBottom: 12,
+    textAlign: 'right',
+    lineHeight: 22,
+  },
+  weatherContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  notificationText: {
     marginTop: 4,
-    fontSize: 13,
-    color: '#4B5563',
   },
-  viewButton: {
-    marginLeft: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    backgroundColor: '#111827',
+  weatherText: {
+    fontSize: 14,
+    color: '#5C4033',
+    marginLeft: 6,
+    textAlign: 'right',
   },
-  viewButtonText: {
+  addDogButton: {
+    backgroundColor: PRIMARY_COLOR, // Muted sage green
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: 'center',
+    width: '100%',
+  },
+  addDogButtonText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  remindersSection: {
+    marginTop: 10,
+  },
+  remindersTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#5C4033',
+    marginBottom: 12,
+    textAlign: 'right',
+  },
+  remindersPlaceholder: {
+    fontSize: 16,
+    color: '#8B7355',
+    textAlign: 'right',
+    lineHeight: 24,
+    backgroundColor: '#F6D9B7',
+    padding: 16,
+    borderRadius: 12,
   },
   bottomNav: {
     flexDirection: 'row',
-    paddingHorizontal: 40,
-    paddingVertical: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
+    justifyContent: 'space-around',
   },
   navItem: {
     flex: 1,
     alignItems: 'center',
+    paddingVertical: 4,
   },
   navItemActive: {
-    borderTopWidth: 3,
-    borderTopColor: '#111827',   // little bar above active icon
+    // Active state styling
   },
-  navEmoji: {
-    fontSize: 22,
+  navLabel: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  navLabelActive: {
+    color: PRIMARY_COLOR,
+    fontWeight: '600',
   },
 });
+

@@ -21,7 +21,7 @@ const LoginScreen = ({ navigation }: any) => {
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
-      Alert.alert('Missing fields', 'Please fill in both email and password.');
+      Alert.alert('שדות חסרים', 'אנא מלא את האימייל והסיסמה.');
       return;
     }
 
@@ -33,7 +33,7 @@ const LoginScreen = ({ navigation }: any) => {
         password,
       });
 
-      Alert.alert('Logged in', 'Welcome back to DogMate!');
+      Alert.alert('התחברת בהצלחה', 'ברוך שובך ל-DogMate!');
 
       navigation.navigate('Home', {
         userId: response.userId,
@@ -44,7 +44,7 @@ const LoginScreen = ({ navigation }: any) => {
         phoneNumber: response.phoneNumber || '',
       });
     } catch (error: any) {
-      Alert.alert('Login failed', error.message || 'An error occurred during login');
+      Alert.alert('התחברות נכשלה', error.message || 'אירעה שגיאה בעת ההתחברות');
       console.error('Login error:', error);
     } finally {
       setIsLoading(false);
@@ -98,10 +98,7 @@ const LoginScreen = ({ navigation }: any) => {
             {/* Forgot password link */}
             <TouchableOpacity
               style={styles.forgotPasswordLink}
-              onPress={() => {
-                // TODO: Navigate to forgot password screen
-                Alert.alert('שכחת סיסמה', 'פונקציונליות זו תתווסף בקרוב');
-              }}
+              onPress={() => navigation.navigate('ForgotPassword')}
             >
               <Text style={styles.forgotPasswordText}>שכחת סיסמה?</Text>
             </TouchableOpacity>
