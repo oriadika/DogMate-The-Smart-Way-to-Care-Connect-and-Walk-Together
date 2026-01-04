@@ -375,7 +375,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
               </View>
             )}
 
-            <Text style={styles.sectionTitle}>Logged In Users</Text>
+            <Text style={styles.sectionTitle}>משתמשים מחוברים</Text>
             {isLoadingUsers && (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator color="#FF7043" size="large" />
