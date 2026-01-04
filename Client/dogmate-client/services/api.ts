@@ -49,6 +49,31 @@ export interface ErrorResponse {
   error: string;
 }
 
+// Dog-related interfaces
+export interface AddDogPayload {
+  userId: string;
+  name: string;
+  breed: string;
+  birthdate: string; // ISO date format (YYYY-MM-DD)
+  gender?: string; // 'M' for male, 'F' for female
+  profileImageUrl?: string;
+}
+
+export interface DogData {
+  id: string;
+  name: string;
+  breed: string;
+  birthdate: string;
+  gender: string;
+  profileImageUrl: string;
+}
+
+export interface AddDogResponse {
+  success: boolean;
+  message: string;
+  dog: DogData;
+}
+
 // API Methods
 export const userAPI = {
   /**
@@ -159,5 +184,21 @@ export const userAPI = {
    * Note: Ping notifications are now received via WebSocket in real-time.
    * No polling or marking as read needed.
    */
+};
+
+export const dogAPI = {
+  /**
+   * Add a new dog to a user
+   */
+  addDog: async (payload: AddDogPayload): Promise<AddDogResponse> => {
+    try {
+      const response = await apiClient.post('/dogs/add', payload);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to add dog';
+      console.error("Add dog failed:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
 };
 
