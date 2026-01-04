@@ -212,4 +212,29 @@ public class DogService {
         // persist
         return foodStockRepository.save(foodStock);
     }
+
+    /**
+     * Get all dogs for a specific user
+     * Service layer - orchestration only
+     * @param userId The ID of the user
+     * @return List of dogs owned/associated with the user
+     */
+    public List<Dog> getDogsForUser(UUID userId) {
+        // Get all dogs from repository and filter by user relationships
+        List<Dog> allDogs = dogRepository.findAll();
+        List<Dog> userDogs = new java.util.ArrayList<>();
+
+        for (Dog dog : allDogs) {
+            // Check if this dog has any relationships with the user
+            // Since we don't have a direct query method, we check through the dog's relationships
+            for (DogRelationship relationship : dog.getDogRelationships()) {
+                if (relationship.getRegularUser().getId().equals(userId)) {
+                    userDogs.add(dog);
+                    break; // No need to check other relationships for same dog
+                }
+            }
+        }
+
+        return userDogs;
+    }
 }

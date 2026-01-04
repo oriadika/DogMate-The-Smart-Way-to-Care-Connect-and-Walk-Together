@@ -200,5 +200,33 @@ export const dogAPI = {
       throw new Error(errorMessage);
     }
   },
+
+  /**
+   * Get all dogs for a user
+   */
+  getDogsForUser: async (userId: string) => {
+    try {
+      const response = await apiClient.get(`/dogs/user/${userId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch dogs';
+      console.error("Failed to get dogs:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Delete a dog for a user
+   */
+  deleteDog: async (userId: string, dogId: string) => {
+    try {
+      const response = await apiClient.delete(`/dogs/${userId}/${dogId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete dog';
+      console.error("Failed to delete dog:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
 };
 
