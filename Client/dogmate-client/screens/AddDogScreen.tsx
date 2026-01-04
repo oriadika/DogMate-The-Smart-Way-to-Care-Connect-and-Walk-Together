@@ -1,5 +1,5 @@
 // screens/AddDogScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,17 +12,50 @@ import {
   Platform,
   Alert,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
+import { dogAPI, userAPI } from '../services/api';
 
 const AddDogScreen = ({ navigation }: any) => {
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
   const [name, setName] = useState('');
   const [breed, setBreed] = useState('');
   const [birthDate, setBirthDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [weight, setWeight] = useState('');
-  const [gender, setGender] = useState<'male' | 'female' | null>(null);
+  const [gender, setGender] = useState<'M' | 'F' | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch current user on screen mount
+  useEffect(() => {
+    fetchCurrentUser();
+  }, []);
+
+  const fetchCurrentUser = async () => {
+    try {
+      setLoadingUser(true);
+      // Try to get logged-in users list (this gives us the current user)
+      const response = await userAPI.getLoggedUsers();
+      
+      if (response.success && response.users && response.users.length > 0) {
+        // Get the first logged-in user (or you can filter by current user)
+        const currentUser = response.users[0];
+        setUserId(currentUser.id);
+      } else {
+        Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
+        navigation.goBack();
+      }
+    } catch (error: any) {
+      console.error('Error fetching current user:', error);
+      Alert.alert('שגיאה', 'שגיאה בטעינת נתוני המשתמש');
+      navigation.goBack();
+    } finally {
+      setLoadingUser(false);
+    }
+  };
 
   // Format date to DD/MM/YYYY
   const formatDate = (date: Date): string => {
@@ -88,12 +121,74 @@ const AddDogScreen = ({ navigation }: any) => {
     }
   };
 
-  const handleSave = () => {
-    // כאן תהיה הלוגיקה לשמירת הכלב בשרת
-    const ageText = calculateAge(birthDate);
-    console.log({ name, breed, birthDate, age: ageText, weight, gender });
-    navigation.goBack(); // סגירת החלונית לאחר שמירה
+  const handleSave = async () => {
+    // Validation
+    if (!name.trim()) {
+      Alert.alert('שגיאה', 'אנא הזן את שם הכלב');
+      return;
+    }
+    if (!breed.trim()) {
+      Alert.alert('שגיאה', 'אנא הזן את גזע הכלב');
+      return;
+    }
+    if (!gender) {
+      Alert.alert('שגיאה', 'אנא בחר את מין הכלב');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Use the userId that was fetched on mount
+      if (!userId) {
+        Alert.alert('שגיאה', 'לא נמצא משתמש. אנא התחבר מחדש');
+        setLoading(false);
+        return;
+      }
+
+      // Format birthdate from selected date to YYYY-MM-DD
+      const year = birthDate.getFullYear();
+      const month = (birthDate.getMonth() + 1).toString().padStart(2, '0');
+      const day = birthDate.getDate().toString().padStart(2, '0');
+      const birthdate = `${year}-${month}-${day}`;
+
+      // Call API to add dog
+      const response = await dogAPI.addDog({
+        userId,
+        name: name.trim(),
+        breed: breed.trim(),
+        birthdate,
+        gender,
+        profileImageUrl: undefined, // Image upload can be added later
+      });
+
+      if (response.success) {
+        Alert.alert('הצלחה', `${name} נוסף בהצלחה! 🐕`, [
+          {
+            text: 'בסדר',
+            onPress: () => {
+              navigation.goBack();
+            },
+          },
+        ]);
+      }
+    } catch (error: any) {
+      console.error('Error adding dog:', error);
+      Alert.alert('שגיאה', error.message || 'שגיאה בהוספת הכלב');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // Show loading while fetching user
+  if (loadingUser) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#7FB069" />
+        <Text style={{ marginTop: 10, color: '#5C4033' }}>טוען נתונים...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -135,6 +230,7 @@ const AddDogScreen = ({ navigation }: any) => {
                   textAlign="right"
                   value={name}
                   onChangeText={setName}
+                  editable={!loading}
                 />
               </View>
 
@@ -147,6 +243,7 @@ const AddDogScreen = ({ navigation }: any) => {
                     textAlign="right"
                     value={breed}
                     onChangeText={setBreed}
+                    editable={!loading}
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 0.48 }]}>
@@ -155,6 +252,7 @@ const AddDogScreen = ({ navigation }: any) => {
                     style={styles.input}
                     onPress={() => setShowDatePicker(true)}
                     activeOpacity={0.7}
+                    disabled={loading}
                   >
                     <View style={styles.datePickerContent}>
                       <Text style={styles.dateText}>{formatDate(birthDate)}</Text>
@@ -212,6 +310,7 @@ const AddDogScreen = ({ navigation }: any) => {
                   textAlign="right"
                   value={weight}
                   onChangeText={setWeight}
+                  editable={!loading}
                 />
               </View>
 
@@ -219,35 +318,45 @@ const AddDogScreen = ({ navigation }: any) => {
               <Text style={styles.label}>מין:</Text>
               <View style={styles.genderContainer}>
                 <TouchableOpacity
-                  style={[styles.genderButton, gender === 'male' && styles.genderActive]}
-                  onPress={() => setGender('male')}
+                  style={[styles.genderButton, gender === 'M' && styles.genderActive]}
+                  onPress={() => setGender('M')}
+                  disabled={loading}
                 >
                   <MaterialCommunityIcons 
                     name="gender-male" 
                     size={24} 
-                    color={gender === 'male' ? '#fff' : '#8B7355'} 
+                    color={gender === 'M' ? '#fff' : '#8B7355'} 
                   />
-                  <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>זכר</Text>
+                  <Text style={[styles.genderText, gender === 'M' && styles.genderTextActive]}>זכר</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.genderButton, gender === 'female' && styles.genderActive]}
-                  onPress={() => setGender('female')}
+                  style={[styles.genderButton, gender === 'F' && styles.genderActive]}
+                  onPress={() => setGender('F')}
+                  disabled={loading}
                 >
                   <MaterialCommunityIcons 
                     name="gender-female" 
                     size={24} 
-                    color={gender === 'female' ? '#fff' : '#8B7355'} 
+                    color={gender === 'F' ? '#fff' : '#8B7355'} 
                   />
-                  <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>נקבה</Text>
+                  <Text style={[styles.genderText, gender === 'F' && styles.genderTextActive]}>נקבה</Text>
                 </TouchableOpacity>
               </View>
 
             </View>
 
             {/* Save Button */}
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>שמור וצא לדרך!</Text>
+            <TouchableOpacity 
+              style={[styles.saveButton, loading && styles.saveButtonDisabled]} 
+              onPress={handleSave}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.saveButtonText}>שמור וצא לדרך!</Text>
+              )}
             </TouchableOpacity>
 
           </ScrollView>
@@ -379,6 +488,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
   },
   datePickerContent: {
     flexDirection: 'row',
