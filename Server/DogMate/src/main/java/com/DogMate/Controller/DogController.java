@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -93,6 +94,101 @@ public class DogController {
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(createErrorResponse("Failed to add dog: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Get all dogs for a user
+     * GET /api/dogs/user/{userId}
+     */
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<?> getDogsForUser(@PathVariable String userId) {
+        try {
+            if (userId == null || userId.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("User ID is required"));
+            }
+
+            // Parse UUID
+            UUID userUuid;
+            try {
+                userUuid = UUID.fromString(userId);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("Invalid user ID format"));
+            }
+
+            System.out.println("Fetching dogs for user: " + userId);
+
+            // Get dogs for this user using DogService
+            List<Dog> userDogs = dogService.getDogsForUser(userUuid);
+            
+            java.util.List<Map<String, Object>> dogsResponse = new java.util.ArrayList<>();
+            for (Dog dog : userDogs) {
+                dogsResponse.add(createDogResponse(dog));
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("count", dogsResponse.size());
+            response.put("dogs", dogsResponse);
+
+            System.out.println("Found " + dogsResponse.size() + " dogs for user: " + userId);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            System.err.println("Failed to get dogs: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to fetch dogs: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Delete a dog for a user
+     * DELETE /api/dogs/{userId}/{dogId}
+     */
+    @DeleteMapping("/{userId}/{dogId}")
+    public ResponseEntity<?> deleteDog(@PathVariable String userId, @PathVariable String dogId) {
+        try {
+            if (userId == null || userId.trim().isEmpty() || dogId == null || dogId.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("User ID and Dog ID are required"));
+            }
+
+            // Parse UUIDs
+            UUID userUuid;
+            UUID dogUuid;
+            try {
+                userUuid = UUID.fromString(userId);
+                dogUuid = UUID.fromString(dogId);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("Invalid user ID or dog ID format"));
+            }
+
+            System.out.println("Deleting dog: " + dogId + " for user: " + userId);
+
+            // Remove dog from user
+            dogService.removeDogFromUser(userUuid, dogUuid);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Dog deleted successfully");
+            response.put("dogId", dogId);
+
+            System.out.println("Dog deleted successfully");
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            System.err.println("Validation error: " + e.getMessage());
+            return ResponseEntity.badRequest()
+                .body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            System.err.println("Failed to delete dog: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to delete dog: " + e.getMessage()));
         }
     }
 

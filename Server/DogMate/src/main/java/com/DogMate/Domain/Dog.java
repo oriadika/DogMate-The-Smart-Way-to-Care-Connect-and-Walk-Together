@@ -27,7 +27,7 @@ public class Dog {
     @Column(name = "gender")
     private char gender; // M for male, F for Female
     
-    @Column(name = "profile_image_url")
+    @Column(name = "profile_image_url", length = 1000000) // Increased size to handle base64 images
     private String profileImageURL;
     
     @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -163,6 +163,18 @@ public class Dog {
 
     public void removeDogDocuments(DogDocument dogDocument){
         this.dogDocuments.remove(dogDocument);
+    }
+
+    public List<DogRelationship> getDogRelationships(){
+        return this.dogRelationships;
+    }
+
+    public void addDogRelationship(DogRelationship relationship){
+        this.dogRelationships.add(relationship);
+    }
+
+    public void removeDogRelationship(DogRelationship relationship){
+        this.dogRelationships.remove(relationship);
     }
 
 }

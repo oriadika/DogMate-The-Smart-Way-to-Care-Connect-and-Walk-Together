@@ -13,9 +13,11 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { dogAPI, userAPI } from '../services/api';
 
 const AddDogScreen = ({ navigation }: any) => {
@@ -28,11 +30,19 @@ const AddDogScreen = ({ navigation }: any) => {
   const [weight, setWeight] = useState('');
   const [gender, setGender] = useState<'M' | 'F' | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [permissionGranted, setPermissionGranted] = useState(true);
 
   // Fetch current user on screen mount
   useEffect(() => {
     fetchCurrentUser();
+    requestPhotoPermission();
   }, []);
+
+  const requestPhotoPermission = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    setPermissionGranted(status === 'granted');
+  };
 
   const fetchCurrentUser = async () => {
     try {
@@ -121,6 +131,47 @@ const AddDogScreen = ({ navigation }: any) => {
     }
   };
 
+  const pickImage = async () => {
+    try {
+      if (!permissionGranted) {
+        Alert.alert('הרשאה נדרשת', 'אנא הענק הרשאה לגישה לתמונות');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.3, // Very low quality to reduce size
+      });
+
+      if (!result.cancelled && result.assets && result.assets[0]) {
+        // Convert image to base64 with compression
+        const imageUri = result.assets[0].uri;
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          let base64 = reader.result as string;
+          
+          // Check size - if still too large, show warning
+          if (base64.length > 250000) {
+            Alert.alert('תמונה גדולה מדי', 'התמונה גדולה מדי. אנא בחר תמונה קטנה יותר או נמוכת רזולוציה.');
+            return;
+          }
+          
+          setSelectedImage(base64);
+          Alert.alert('הצלחה', 'התמונה נבחרה בהצלחה');
+        };
+        reader.readAsDataURL(blob);
+      }
+    } catch (error: any) {
+      console.error('Error picking image:', error);
+      Alert.alert('שגיאה', 'שגיאה בבחירת תמונה');
+    }
+  };
+
   const handleSave = async () => {
     // Validation
     if (!name.trim()) {
@@ -159,7 +210,7 @@ const AddDogScreen = ({ navigation }: any) => {
         breed: breed.trim(),
         birthdate,
         gender,
-        profileImageUrl: undefined, // Image upload can be added later
+        profileImageUrl: selectedImage || undefined, // Include base64 image if selected
       });
 
       if (response.success) {
@@ -211,12 +262,24 @@ const AddDogScreen = ({ navigation }: any) => {
             {/* Image Picker Placeholder */}
             <TouchableOpacity 
               style={styles.imagePicker}
-              onPress={() => Alert.alert('הוסף תמונה', 'פונקציונליות זו תתווסף בקרוב')}
+              onPress={pickImage}
             >
               <View style={styles.imageCircle}>
-                <MaterialCommunityIcons name="camera-plus" size={40} color="#8B7355" />
+                {selectedImage ? (
+                  <Image
+                    source={{ uri: selectedImage }}
+                    style={styles.selectedImage}
+                  />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="camera-plus" size={40} color="#8B7355" />
+                    <Text style={styles.cameraLabel}>הוסף תמונה</Text>
+                  </>
+                )}
               </View>
-              <Text style={styles.imageLabel}>הוסף תמונה</Text>
+              <Text style={styles.imageLabel}>
+                {selectedImage ? 'בחר תמונה אחרת' : 'הוסף תמונה'}
+              </Text>
             </TouchableOpacity>
 
             {/* Form Fields */}
@@ -411,6 +474,17 @@ const styles = StyleSheet.create({
     borderColor: '#D4C4A8',
     borderStyle: 'dashed',
     marginBottom: 10,
+    overflow: 'hidden',
+  },
+  selectedImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  cameraLabel: {
+    fontSize: 12,
+    color: '#8B7355',
+    marginTop: 4,
   },
   imageLabel: {
     color: '#8B7355',
