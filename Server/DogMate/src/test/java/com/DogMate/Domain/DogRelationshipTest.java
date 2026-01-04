@@ -3,7 +3,7 @@ package com.DogMate.Domain;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Date;
+import java.time.LocalDate;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -32,7 +32,7 @@ class DogRelationshipTest {
                 UUID.randomUUID(),
                 "Rex",
                 "German Shepherd",
-                new Date(),
+                LocalDate.now(),
                 'M',
                 "http://img.url/rex.png"
         );
