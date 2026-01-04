@@ -1,12 +1,12 @@
 package com.DogMate.Service;
 
-import com.DogMate.Domain.AdminUser;
-import com.DogMate.Domain.RegularUser;
-import com.DogMate.Domain.UserAccount;
+import com.DogMate.Domain.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.Optional;
 @Service
@@ -14,11 +14,14 @@ public class UserService {
     
     private final IUserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final IReminderRepository reminderRepository;
 
     @Autowired
-    public UserService(IUserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(IUserRepository userRepository, PasswordEncoder passwordEncoder,
+                       IReminderRepository reminderRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.reminderRepository = reminderRepository;
     }
 
     /**
@@ -28,7 +31,7 @@ public class UserService {
      * @param password Plain text password (will be hashed by domain)
      * @param firstName User's first name
      * @param lastName User's last name
-     * @param profileImageUrl Optional profile image URL
+//     * @param profileImageUrl Optional profile image URL
      * @return The created RegularUser entity
      * @throws IllegalArgumentException if email already exists or validation fails
      */
@@ -349,5 +352,45 @@ public class UserService {
         } else {
             throw new IllegalArgumentException("Only RegularUser accounts support location tracking");
         }
+    }
+
+    public boolean hasAtLeastOneDog(String email){
+        if(!userRepository.existsByEmail(email)){
+            throw new IllegalArgumentException("user not found with the given email");
+        }
+        Optional<UserAccount> optUser = userRepository.findByEmail(email);
+        if (optUser.isEmpty()) {
+            throw new IllegalArgumentException("User not found with email: " + email);
+        }
+        UserAccount user = optUser.get();
+        if (user instanceof RegularUser) {
+            RegularUser regularUser = (RegularUser) user;
+            if(regularUser.getDogRelationships().isEmpty()){
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    public List<Dog> getDogs(String email){
+        if(!userRepository.existsByEmail(email)){
+            throw new IllegalArgumentException("user not found with the given email");
+        }
+        Optional<UserAccount> optUser = userRepository.findByEmail(email);
+        if (optUser.isEmpty()) {
+            throw new IllegalArgumentException("User not found with email: " + email);
+        }
+        UserAccount user = optUser.get();
+        if (user instanceof RegularUser) {
+            RegularUser regularUser = (RegularUser) user;
+            if(regularUser.getDogRelationships().isEmpty()){
+                return null;
+            }
+            return regularUser.getDogRelationships().stream().filter(dogRelationship ->
+                    dogRelationship.getRegularUser().getEmail().equals(email))
+                    .map(dogRelationship -> dogRelationship.getDog()).toList();
+        }
+        return null;
     }
 }

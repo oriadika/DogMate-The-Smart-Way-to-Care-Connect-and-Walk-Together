@@ -1,22 +1,40 @@
 package com.DogMate.Domain;
+
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@Entity
+@Table(name = "dog_documents")
 public class DogDocument {
+    @Id
+    @Column(name = "id")
     private UUID ID;
+    
     // Example: VACCINATION, VET, INSURANCE, VISIT
+    @Column(name = "document_type")
+    @Enumerated(EnumType.STRING)
     private DocumentType documentType;
 
+    @Column(name = "file_name")
     private String fileName;
 
+    @Column(name = "file_url")
     private String fileUrl;
 
+    @Column(name = "uploaded_at")
     private LocalDateTime uploadedAt;
 
+    @ManyToOne
+    @JoinColumn(name = "dog_id")
     private Dog dog;
 
+    // Default constructor required by JPA
+    protected DogDocument() {
+    }
 
     public DogDocument(DocumentType documentType, String fileName, String fileUrl) {
+        this.ID = UUID.randomUUID();
         this.documentType = documentType;
         this.fileName = fileName;
         this.fileUrl = fileUrl;
@@ -24,6 +42,7 @@ public class DogDocument {
     }
 
     public DogDocument(DocumentType documentType, String fileName, String fileUrl, Dog dog) {
+        this.ID = UUID.randomUUID();
         this.documentType = documentType;
         this.fileName = fileName;
         this.fileUrl = fileUrl;
