@@ -1,5 +1,5 @@
 // screens/AddDogScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,21 +11,237 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Modal,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { dogAPI, userAPI } from '../services/api';
 
 const AddDogScreen = ({ navigation }: any) => {
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
   const [name, setName] = useState('');
   const [breed, setBreed] = useState('');
-  const [age, setAge] = useState('');
+  const [birthDate, setBirthDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [weight, setWeight] = useState('');
-  const [gender, setGender] = useState<'male' | 'female' | null>(null);
+  const [gender, setGender] = useState<'M' | 'F' | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [permissionGranted, setPermissionGranted] = useState(true);
 
-  const handleSave = () => {
-    // כאן תהיה הלוגיקה לשמירת הכלב בשרת
-    console.log({ name, breed, age, weight, gender });
-    navigation.goBack(); // סגירת החלונית לאחר שמירה
+  const requestPhotoPermission = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    setPermissionGranted(status === 'granted');
   };
+
+  const fetchCurrentUser = async () => {
+    try {
+      setLoadingUser(true);
+      // Try to get logged-in users list (this gives us the current user)
+      const response = await userAPI.getLoggedUsers();
+      
+      if (response.success && response.users && response.users.length > 0) {
+        // Get the first logged-in user (or you can filter by current user)
+        const currentUser = response.users[0];
+        setUserId(currentUser.id);
+      } else {
+        Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
+        navigation.goBack();
+      }
+    } catch (error: any) {
+      console.error('Error fetching current user:', error);
+      Alert.alert('שגיאה', 'שגיאה בטעינת נתוני המשתמש');
+      navigation.goBack();
+    } finally {
+      setLoadingUser(false);
+    }
+  };
+
+  // Fetch current user on screen mount
+  useEffect(() => {
+    fetchCurrentUser();
+    requestPhotoPermission();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Format date to DD/MM/YYYY
+  const formatDate = (date: Date): string => {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  // Calculate age from birth date
+  const calculateAge = (date: Date): string => {
+    const today = new Date();
+    const birth = new Date(date);
+    
+    let years = today.getFullYear() - birth.getFullYear();
+    let months = today.getMonth() - birth.getMonth();
+    
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+    
+    if (today.getDate() < birth.getDate()) {
+      months--;
+      if (months < 0) {
+        years--;
+        months += 11;
+      }
+    }
+    
+    // Check if it's a very young puppy (less than 1 month)
+    const daysDiff = Math.floor((today.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysDiff < 30) {
+      return 'גור חדש';
+    }
+    
+    if (years === 0 && months === 0) {
+      return 'חודש אחד';
+    }
+    
+    if (years === 0) {
+      return `${months} חודשים`;
+    }
+    
+    if (months === 0) {
+      return `${years} ${years === 1 ? 'שנה' : 'שנים'}`;
+    }
+    
+    return `${years} ${years === 1 ? 'שנה' : 'שנים'} ו-${months} חודשים`;
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+      if (event.type !== 'dismissed' && selectedDate) {
+        setBirthDate(selectedDate);
+      }
+    } else {
+      // iOS: keep picker open, update date immediately
+      if (selectedDate) {
+        setBirthDate(selectedDate);
+      }
+    }
+  };
+
+  const pickImage = async () => {
+    try {
+      if (!permissionGranted) {
+        Alert.alert('הרשאה נדרשת', 'אנא הענק הרשאה לגישה לתמונות');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.3, // Very low quality to reduce size
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        // Convert image to base64 with compression
+        const imageUri = result.assets[0].uri;
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          let base64 = reader.result as string;
+          
+          // Check size - if still too large, show warning
+          if (base64.length > 250000) {
+            Alert.alert('תמונה גדולה מדי', 'התמונה גדולה מדי. אנא בחר תמונה קטנה יותר או נמוכת רזולוציה.');
+            return;
+          }
+          
+          setSelectedImage(base64);
+          Alert.alert('הצלחה', 'התמונה נבחרה בהצלחה');
+        };
+        reader.readAsDataURL(blob);
+      }
+    } catch (error: any) {
+      console.error('Error picking image:', error);
+      Alert.alert('שגיאה', 'שגיאה בבחירת תמונה');
+    }
+  };
+
+  const handleSave = async () => {
+    // Validation
+    if (!name.trim()) {
+      Alert.alert('שגיאה', 'אנא הזן את שם הכלב');
+      return;
+    }
+    if (!breed.trim()) {
+      Alert.alert('שגיאה', 'אנא הזן את גזע הכלב');
+      return;
+    }
+    if (!gender) {
+      Alert.alert('שגיאה', 'אנא בחר את מין הכלב');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Use the userId that was fetched on mount
+      if (!userId) {
+        Alert.alert('שגיאה', 'לא נמצא משתמש. אנא התחבר מחדש');
+        setLoading(false);
+        return;
+      }
+
+      // Format birthdate from selected date to YYYY-MM-DD
+      const year = birthDate.getFullYear();
+      const month = (birthDate.getMonth() + 1).toString().padStart(2, '0');
+      const day = birthDate.getDate().toString().padStart(2, '0');
+      const birthdate = `${year}-${month}-${day}`;
+
+      // Call API to add dog
+      const response = await dogAPI.addDog({
+        userId,
+        name: name.trim(),
+        breed: breed.trim(),
+        birthdate,
+        gender,
+        profileImageUrl: selectedImage || undefined, // Include base64 image if selected
+      });
+
+      if (response.success) {
+        Alert.alert('הצלחה', `${name} נוסף בהצלחה! 🐕`, [
+          {
+            text: 'בסדר',
+            onPress: () => {
+              // Navigate to Home screen to refresh the dogs list
+              navigation.navigate('Home', { refresh: true });
+            },
+          },
+        ]);
+      }
+    } catch (error: any) {
+      console.error('Error adding dog:', error);
+      Alert.alert('שגיאה', error.message || 'שגיאה בהוספת הכלב');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Show loading while fetching user
+  if (loadingUser) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#7FB069" />
+        <Text style={{ marginTop: 10, color: '#5C4033' }}>טוען נתונים...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -48,12 +264,24 @@ const AddDogScreen = ({ navigation }: any) => {
             {/* Image Picker Placeholder */}
             <TouchableOpacity 
               style={styles.imagePicker}
-              onPress={() => Alert.alert('הוסף תמונה', 'פונקציונליות זו תתווסף בקרוב')}
+              onPress={pickImage}
             >
               <View style={styles.imageCircle}>
-                <MaterialCommunityIcons name="camera-plus" size={40} color="#8B7355" />
+                {selectedImage ? (
+                  <Image
+                    source={{ uri: selectedImage }}
+                    style={styles.selectedImage}
+                  />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="camera-plus" size={40} color="#8B7355" />
+                    <Text style={styles.cameraLabel}>הוסף תמונה</Text>
+                  </>
+                )}
               </View>
-              <Text style={styles.imageLabel}>הוסף תמונה</Text>
+              <Text style={styles.imageLabel}>
+                {selectedImage ? 'בחר תמונה אחרת' : 'הוסף תמונה'}
+              </Text>
             </TouchableOpacity>
 
             {/* Form Fields */}
@@ -67,6 +295,7 @@ const AddDogScreen = ({ navigation }: any) => {
                   textAlign="right"
                   value={name}
                   onChangeText={setName}
+                  editable={!loading}
                 />
               </View>
 
@@ -79,18 +308,61 @@ const AddDogScreen = ({ navigation }: any) => {
                     textAlign="right"
                     value={breed}
                     onChangeText={setBreed}
+                    editable={!loading}
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 0.48 }]}>
-                  <Text style={styles.label}>גיל (שנים):</Text>
-                  <TextInput
+                  <Text style={styles.label}>תאריך לידה:</Text>
+                  <TouchableOpacity
                     style={styles.input}
-                    placeholderTextColor="#A9B5C7"
-                    keyboardType="numeric"
-                    textAlign="right"
-                    value={age}
-                    onChangeText={setAge}
-                  />
+                    onPress={() => setShowDatePicker(true)}
+                    activeOpacity={0.7}
+                    disabled={loading}
+                  >
+                    <View style={styles.datePickerContent}>
+                      <Text style={styles.dateText}>{formatDate(birthDate)}</Text>
+                      <Feather name="calendar" size={20} color="#8B7355" />
+                    </View>
+                  </TouchableOpacity>
+                  {Platform.OS === 'ios' && (
+                    <Modal
+                      visible={showDatePicker}
+                      transparent={true}
+                      animationType="slide"
+                      onRequestClose={() => setShowDatePicker(false)}
+                    >
+                      <View style={styles.modalContainer}>
+                        <View style={styles.modalContent}>
+                          <View style={styles.modalHeader}>
+                            <TouchableOpacity
+                              onPress={() => setShowDatePicker(false)}
+                            >
+                              <Text style={styles.modalDoneText}>סיום</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <DateTimePicker
+                            value={birthDate}
+                            mode="date"
+                            display="spinner"
+                            onChange={onDateChange}
+                            maximumDate={new Date()}
+                            textColor="#5C4033"
+                            style={styles.datePicker}
+                          />
+                        </View>
+                      </View>
+                    </Modal>
+                  )}
+                  {Platform.OS === 'android' && showDatePicker && (
+                    <DateTimePicker
+                      value={birthDate}
+                      mode="date"
+                      display="default"
+                      onChange={onDateChange}
+                      maximumDate={new Date()}
+                    />
+                  )}
+                  <Text style={styles.ageText}>{calculateAge(birthDate)}</Text>
                 </View>
               </View>
 
@@ -103,6 +375,7 @@ const AddDogScreen = ({ navigation }: any) => {
                   textAlign="right"
                   value={weight}
                   onChangeText={setWeight}
+                  editable={!loading}
                 />
               </View>
 
@@ -110,35 +383,45 @@ const AddDogScreen = ({ navigation }: any) => {
               <Text style={styles.label}>מין:</Text>
               <View style={styles.genderContainer}>
                 <TouchableOpacity
-                  style={[styles.genderButton, gender === 'male' && styles.genderActive]}
-                  onPress={() => setGender('male')}
+                  style={[styles.genderButton, gender === 'M' && styles.genderActive]}
+                  onPress={() => setGender('M')}
+                  disabled={loading}
                 >
                   <MaterialCommunityIcons 
                     name="gender-male" 
                     size={24} 
-                    color={gender === 'male' ? '#fff' : '#8B7355'} 
+                    color={gender === 'M' ? '#fff' : '#8B7355'} 
                   />
-                  <Text style={[styles.genderText, gender === 'male' && styles.genderTextActive]}>זכר</Text>
+                  <Text style={[styles.genderText, gender === 'M' && styles.genderTextActive]}>זכר</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.genderButton, gender === 'female' && styles.genderActive]}
-                  onPress={() => setGender('female')}
+                  style={[styles.genderButton, gender === 'F' && styles.genderActive]}
+                  onPress={() => setGender('F')}
+                  disabled={loading}
                 >
                   <MaterialCommunityIcons 
                     name="gender-female" 
                     size={24} 
-                    color={gender === 'female' ? '#fff' : '#8B7355'} 
+                    color={gender === 'F' ? '#fff' : '#8B7355'} 
                   />
-                  <Text style={[styles.genderText, gender === 'female' && styles.genderTextActive]}>נקבה</Text>
+                  <Text style={[styles.genderText, gender === 'F' && styles.genderTextActive]}>נקבה</Text>
                 </TouchableOpacity>
               </View>
 
             </View>
 
             {/* Save Button */}
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>שמור וצא לדרך!</Text>
+            <TouchableOpacity 
+              style={[styles.saveButton, loading && styles.saveButtonDisabled]} 
+              onPress={handleSave}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.saveButtonText}>שמור וצא לדרך!</Text>
+              )}
             </TouchableOpacity>
 
           </ScrollView>
@@ -193,6 +476,17 @@ const styles = StyleSheet.create({
     borderColor: '#D4C4A8',
     borderStyle: 'dashed',
     marginBottom: 10,
+    overflow: 'hidden',
+  },
+  selectedImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  cameraLabel: {
+    fontSize: 12,
+    color: '#8B7355',
+    marginTop: 4,
   },
   imageLabel: {
     color: '#8B7355',
@@ -270,5 +564,58 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
+  datePickerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  dateText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'right',
+    flex: 1,
+  },
+  ageText: {
+    fontSize: 14,
+    color: '#7FB069',
+    fontWeight: '600',
+    marginTop: 6,
+    textAlign: 'right',
+    paddingRight: 8,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: '#faf0e6',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    alignItems: 'center',
+  },
+  modalHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0D5C7',
+  },
+  modalDoneText: {
+    color: PRIMARY_COLOR,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  datePicker: {
+    width: '100%',
+    height: 200,
   },
 });

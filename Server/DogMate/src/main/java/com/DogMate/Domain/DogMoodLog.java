@@ -1,20 +1,37 @@
 package com.DogMate.Domain;
 
+import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@Entity
+@Table(name = "dog_mood_logs")
 public class DogMoodLog {
+    @Id
+    @Column(name = "id")
     private UUID ID;
 
+    @Column(name = "mood")
+    @Enumerated(EnumType.STRING)
     private Mood mood;                // e.g., HAPPY, NEUTRAL, ANXIOUS, SAD
 
+    @Column(name = "activity_level")
+    @Enumerated(EnumType.STRING)
     private ActivityLevel activityLevel; // e.g., LOW, MODERATE, HIGH
 
+    @Column(name = "notes")
     private String notes;
 
+    @Column(name = "timestamp")
     private LocalDateTime timestamp;
 
+    @ManyToOne
+    @JoinColumn(name = "dog_id")
     private Dog dog;
+
+    // Default constructor required by JPA
+    protected DogMoodLog() {
+    }
 
     public DogMoodLog(UUID ID, Mood mood, ActivityLevel activityLevel, String notes,
                       Dog dog){

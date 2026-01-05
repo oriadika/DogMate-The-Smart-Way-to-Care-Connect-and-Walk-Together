@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.68.106:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.68.104:8080/api';
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -47,6 +47,31 @@ export interface LoginResponse {
 export interface ErrorResponse {
   success: boolean;
   error: string;
+}
+
+// Dog-related interfaces
+export interface AddDogPayload {
+  userId: string;
+  name: string;
+  breed: string;
+  birthdate: string; // ISO date format (YYYY-MM-DD)
+  gender?: string; // 'M' for male, 'F' for female
+  profileImageUrl?: string;
+}
+
+export interface DogData {
+  id: string;
+  name: string;
+  breed: string;
+  birthdate: string;
+  gender: string;
+  profileImageUrl: string;
+}
+
+export interface AddDogResponse {
+  success: boolean;
+  message: string;
+  dog: DogData;
 }
 
 // API Methods
@@ -159,5 +184,49 @@ export const userAPI = {
    * Note: Ping notifications are now received via WebSocket in real-time.
    * No polling or marking as read needed.
    */
+};
+
+export const dogAPI = {
+  /**
+   * Add a new dog to a user
+   */
+  addDog: async (payload: AddDogPayload): Promise<AddDogResponse> => {
+    try {
+      const response = await apiClient.post('/dogs/add', payload);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to add dog';
+      console.error("Add dog failed:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Get all dogs for a user
+   */
+  getDogsForUser: async (userId: string) => {
+    try {
+      const response = await apiClient.get(`/dogs/user/${userId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch dogs';
+      console.error("Failed to get dogs:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Delete a dog for a user
+   */
+  deleteDog: async (userId: string, dogId: string) => {
+    try {
+      const response = await apiClient.delete(`/dogs/${userId}/${dogId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete dog';
+      console.error("Failed to delete dog:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
 };
 

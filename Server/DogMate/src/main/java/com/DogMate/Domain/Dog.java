@@ -1,36 +1,72 @@
 package com.DogMate.Domain;
 
+import jakarta.persistence.*;
+
+import java.time.LocalDate;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 
+@Entity
+@Table(name = "dogs")
 public class Dog {
+    @Id
+    @Column(name = "id")
     private UUID ID;
+    
+    @Column(name = "name")
     private String name;
+    
+    @Column(name = "breed")
     private String breed;
-    private Date birthdate;
+    
+    @Column(name = "birthdate")
+    private LocalDate birthdate;
+    
+    @Column(name = "gender")
     private char gender; // M for male, F for Female
+    
+    @Column(name = "profile_image_url", length = 1000000) // Increased size to handle base64 images
     private String profileImageURL;
+    
+    @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogEvent> dogEvents;
+    
+    @OneToMany(mappedBy = "dog", orphanRemoval = true)
     private List<FoodStock> foodStocks;
+    
+    @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogMoodLog> dogMoodLogs;
+    
+    @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogDocument> dogDocuments;
-    private RegularUser regularUser;
 
-    public Dog(UUID ID, String name, String breed, Date birthdate, char gender,
-               String profileImageURL, RegularUser regularUser){
+    @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<DogRelationship> dogRelationships;
+
+    // Default constructor required by JPA
+    protected Dog() {
+        this.dogEvents = new LinkedList<>();
+        this.foodStocks = new LinkedList<>();
+        this.dogMoodLogs = new LinkedList<>();
+        this.dogDocuments = new LinkedList<>();
+        this.dogRelationships = new LinkedList<>();
+    }
+
+    public Dog(UUID ID, String name, String breed, LocalDate  birthdate, char gender,
+               String profileImageURL){
         this.ID = ID;
         this.name = name;
         this.breed = breed;
         this.birthdate = birthdate;
         this.gender = gender;
         this.profileImageURL = profileImageURL;
-        this.regularUser = regularUser;
         this.dogEvents = new LinkedList<>();
         this.foodStocks = new LinkedList<>();
         this.dogMoodLogs = new LinkedList<>();
         this.dogDocuments = new LinkedList<>();
+        this.dogRelationships = new LinkedList<>();
     }
 
     public UUID getID() {
@@ -57,11 +93,11 @@ public class Dog {
         this.breed = breed;
     }
 
-    public Date getBirthdate() {
+    public LocalDate getBirthdate() {
         return birthdate;
     }
 
-    public void setBirthdate(Date birthdate) {
+    public void setBirthdate(LocalDate birthdate) {
         this.birthdate = birthdate;
     }
 
@@ -105,14 +141,6 @@ public class Dog {
         this.foodStocks.remove(foodStock);
     }
 
-    public RegularUser getRegularUser(){
-        return regularUser;
-    }
-
-    public void setRegularUser(RegularUser regularUser){
-        this.regularUser = regularUser;
-    }
-
     public List<DogMoodLog> getDogMoodLogs(){
         return this.dogMoodLogs;
     }
@@ -135,6 +163,18 @@ public class Dog {
 
     public void removeDogDocuments(DogDocument dogDocument){
         this.dogDocuments.remove(dogDocument);
+    }
+
+    public List<DogRelationship> getDogRelationships(){
+        return this.dogRelationships;
+    }
+
+    public void addDogRelationship(DogRelationship relationship){
+        this.dogRelationships.add(relationship);
+    }
+
+    public void removeDogRelationship(DogRelationship relationship){
+        this.dogRelationships.remove(relationship);
     }
 
 }
