@@ -33,12 +33,6 @@ const AddDogScreen = ({ navigation }: any) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [permissionGranted, setPermissionGranted] = useState(true);
 
-  // Fetch current user on screen mount
-  useEffect(() => {
-    fetchCurrentUser();
-    requestPhotoPermission();
-  }, []);
-
   const requestPhotoPermission = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     setPermissionGranted(status === 'granted');
@@ -66,6 +60,13 @@ const AddDogScreen = ({ navigation }: any) => {
       setLoadingUser(false);
     }
   };
+
+  // Fetch current user on screen mount
+  useEffect(() => {
+    fetchCurrentUser();
+    requestPhotoPermission();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Format date to DD/MM/YYYY
   const formatDate = (date: Date): string => {
@@ -145,7 +146,7 @@ const AddDogScreen = ({ navigation }: any) => {
         quality: 0.3, // Very low quality to reduce size
       });
 
-      if (!result.cancelled && result.assets && result.assets[0]) {
+      if (!result.canceled && result.assets && result.assets[0]) {
         // Convert image to base64 with compression
         const imageUri = result.assets[0].uri;
         const response = await fetch(imageUri);
@@ -218,7 +219,8 @@ const AddDogScreen = ({ navigation }: any) => {
           {
             text: 'בסדר',
             onPress: () => {
-              navigation.goBack();
+              // Navigate to Home screen to refresh the dogs list
+              navigation.navigate('Home', { refresh: true });
             },
           },
         ]);

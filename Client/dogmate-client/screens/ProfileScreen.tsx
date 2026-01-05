@@ -108,7 +108,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
     if (userLocation && loggedUsers.length > 0) {
       const updatedUsers = loggedUsers.map((user: any) => {
         if (user.latitude && user.longitude) {
-          const distance = locationService.constructor.calculateDistance(
+          const distance = LocationService.calculateDistance(
               userLocation.latitude,
               userLocation.longitude,
               user.latitude,
@@ -196,7 +196,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
         if (userLocation && formattedUsers.length > 0) {
           const updatedUsersWithDistance = formattedUsers.map((user: any) => {
             if (user.latitude && user.longitude) {
-              const distance = locationService.constructor.calculateDistance(
+              const distance = LocationService.calculateDistance(
                   userLocation.latitude,
                   userLocation.longitude,
                   user.latitude,
