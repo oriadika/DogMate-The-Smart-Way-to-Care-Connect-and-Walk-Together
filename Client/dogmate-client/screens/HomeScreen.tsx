@@ -347,16 +347,8 @@ const HomeScreen = ({ navigation, route }: any) => {
           <TouchableOpacity
             style={[styles.navItem, activeTab === 'health' && styles.navItemActive]}
             onPress={() => {
-              Alert.alert(
-                'פונקציונליות לא מומשה',
-                'פונקציונליות הבריאות עדיין לא מומשה.',
-                [
-                  {
-                    text: 'בסדר',
-                    style: 'default',
-                  },
-                ]
-              );
+              setActiveTab('health');
+              navigation.navigate('FoodIntake');
             }}
           >
             <Ionicons
