@@ -1,7 +1,8 @@
 import axios, { AxiosInstance } from 'axios';
+import { BASE_URL } from './config';
 
-// Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.68.104:8080/api';
+// API base URL from config
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || `${BASE_URL}/api`;
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
