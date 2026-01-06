@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://172.20.10.6:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://172.20.10.13:8080/api';
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -225,6 +225,55 @@ export const dogAPI = {
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to delete dog';
       console.error("Failed to delete dog:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+};
+
+// Reminder API methods
+export const reminderAPI = {
+  /**
+   * Create a new reminder for a user
+   */
+  createReminder: async (userId: string, title: string, description: string, remindAt: Date): Promise<{ success: boolean; message: string; reminder: any }> => {
+    try {
+      const response = await apiClient.post(`/users/${userId}/reminders`, {
+        title,
+        description,
+        remindAt,
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to create reminder';
+      console.error("Failed to create reminder:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Get all reminders for a user
+   */
+  getRemindersForUser: async (userId: string) => {
+    try {
+      const response = await apiClient.get(`/users/${userId}/reminders`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch reminders';
+      console.error("Failed to get reminders:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Delete a reminder
+   */
+  deleteReminder: async (userId: string, reminderId: string) => {
+    try {
+      const response = await apiClient.delete(`/users/${userId}/reminders/${reminderId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete reminder';
+      console.error("Failed to delete reminder:", errorMessage);
       throw new Error(errorMessage);
     }
   },

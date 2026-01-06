@@ -23,17 +23,33 @@ public class Reminder {
     @Column(name = "title", nullable = false)
     private String title;
 
+    @Column(name = "description")
+    private String description;
+
     @Column(name = "remind_at", nullable = false)
     private LocalDateTime remindAt;
 
     @Column(name = "sent", nullable = false)
     private boolean sent;
 
+    // Default constructor for JPA
+    public Reminder() {
+    }
 
     public Reminder(RegularUser regularUser, String title, LocalDateTime remindAt) {
         this.id = UUID.randomUUID();
         this.regularUser = regularUser;
         this.title = title;
+        this.description = null;
+        this.remindAt = remindAt;
+        this.sent = false;
+    }
+
+    public Reminder(RegularUser regularUser, String title, String description, LocalDateTime remindAt) {
+        this.id = UUID.randomUUID();
+        this.regularUser = regularUser;
+        this.title = title;
+        this.description = description;
         this.remindAt = remindAt;
         this.sent = false;
     }

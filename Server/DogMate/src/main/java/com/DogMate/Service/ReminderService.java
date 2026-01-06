@@ -24,7 +24,7 @@ public class ReminderService {
         this.userRepo = userRepo;
     }
 
-    public Reminder createReminder(UUID userId, String title, LocalDateTime remindAt) {
+    public Reminder createReminder(UUID userId, String title, String description, LocalDateTime remindAt) {
         var userAcc = userRepo.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User with id " + userId + " not found"));
 
@@ -40,7 +40,7 @@ public class ReminderService {
             throw new IllegalArgumentException("remindAt must be in the future");
         }
 
-        Reminder r = new Reminder((RegularUser) userAcc, title, remindAt);
+        Reminder r = new Reminder((RegularUser) userAcc, title, description, remindAt);
         return reminderRepo.save(r);
     }
 }

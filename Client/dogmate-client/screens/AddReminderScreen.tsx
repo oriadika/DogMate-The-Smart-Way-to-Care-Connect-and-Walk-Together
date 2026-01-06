@@ -18,7 +18,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, userAPI } from '../services/api';
+import { dogAPI, userAPI, reminderAPI } from '../services/api';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
@@ -47,6 +47,7 @@ const AddReminderScreen = ({ navigation }: any) => {
   const [loadingDogs, setLoadingDogs] = useState(true);
   const [showDogModal, setShowDogModal] = useState(false);
   const [selectedDogs, setSelectedDogs] = useState<string[]>([]); // Array of dog IDs
+  const [isSaving, setIsSaving] = useState(false); // Add loading state
 
   // Format date as DD/MM/YYYY
   const formatDate = (dateToFormat: Date): string => {
@@ -160,9 +161,14 @@ const AddReminderScreen = ({ navigation }: any) => {
   };
 
   // Handle save button press
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim()) {
       Alert.alert('שדה חובה', 'אנא הזן שם לאירוע');
+      return;
+    }
+
+    if (!userId) {
+      Alert.alert('שגיאה', 'לא מצא משתמש. אנא נסה שוב.');
       return;
     }
 
@@ -172,6 +178,12 @@ const AddReminderScreen = ({ navigation }: any) => {
     reminderDateTime.setMinutes(time.getMinutes());
     reminderDateTime.setSeconds(0);
     reminderDateTime.setMilliseconds(0);
+
+    // Validate that the reminder time is in the future
+    if (reminderDateTime <= new Date()) {
+      Alert.alert('שגיאה', 'התאריך והשעה חייבים להיות בעתיד');
+      return;
+    }
 
     // Get selected dogs names
     const selectedDogsNames = selectedDogs.length > 0
@@ -183,17 +195,32 @@ const AddReminderScreen = ({ navigation }: any) => {
           .filter((name) => name !== undefined) as string[]
       : ['(לא נבחרו כלבים)'];
 
-    // Show alert with gathered data (placeholder for future API integration)
-    Alert.alert(
-      'תזכורת נשמרה',
-      `שם: ${title}\nתיאור: ${description || '(ללא תיאור)'}\nכלבים: ${selectedDogsNames.join(', ')}\nתאריך: ${formatDate(date)}\nשעה: ${formatTime(time)}`,
-      [
-        {
-          text: 'בסדר',
-          onPress: () => navigation.goBack(),
-        },
-      ]
-    );
+    setIsSaving(true);
+    try {
+      // Call API to create reminder
+      const response = await reminderAPI.createReminder(
+        userId,
+        title,
+        description,
+        reminderDateTime
+      );
+
+      Alert.alert(
+        'תזכורת נשמרה בהצלחה',
+        `שם: ${title}\nתיאור: ${description || '(ללא תיאור)'}\nכלבים: ${selectedDogsNames.join(', ')}\nתאריך: ${formatDate(date)}\nשעה: ${formatTime(time)}`,
+        [
+          {
+            text: 'בסדר',
+            onPress: () => navigation.goBack(),
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('Error saving reminder:', error);
+      Alert.alert('שגיאה', `שגיאה בשמירת התזכורת: ${error.message}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -320,11 +347,16 @@ const AddReminderScreen = ({ navigation }: any) => {
 
             {/* Submit Button */}
             <TouchableOpacity
-              style={styles.submitButton}
+              style={[styles.submitButton, isSaving && styles.submitButtonDisabled]}
               onPress={handleSave}
               activeOpacity={0.85}
+              disabled={isSaving}
             >
-              <Text style={styles.submitButtonText}>שמור תזכורת</Text>
+              {isSaving ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text style={styles.submitButtonText}>שמור תזכורת</Text>
+              )}
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -626,6 +658,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#A9BBA3',
+    opacity: 0.6,
   },
   submitButtonText: {
     color: '#FFFFFF',
