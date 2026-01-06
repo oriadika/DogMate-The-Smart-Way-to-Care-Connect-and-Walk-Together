@@ -13,13 +13,13 @@ import java.util.*;
 @Service
 public class ReminderService {
 
-    private final ReminderRepository reminderRepo;
+    private final IReminderRepository reminderRepo;
     private final IUserRepository userRepo;
     private final IDogRepository dogRepository;
 
 
     @Autowired
-    public ReminderService(ReminderRepository reminderRepo, IUserRepository userRepo, IDogRepository dogRepository) {
+    public ReminderService(IReminderRepository reminderRepo, IUserRepository userRepo, IDogRepository dogRepository) {
         this.reminderRepo = reminderRepo;
         this.userRepo = userRepo;
         this.dogRepository = dogRepository;

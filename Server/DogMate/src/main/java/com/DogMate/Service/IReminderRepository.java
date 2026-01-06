@@ -10,11 +10,11 @@ import java.util.UUID;
 public interface IReminderRepository {
     Reminder save(Reminder reminder);
 
-//    Optional<Reminder> findById(UUID id);
+    Optional<Reminder> findById(UUID id);
 
-//    void deleteById(UUID id);
+    void deleteById(UUID id);
 
-//    boolean existsById(UUID id);
+    boolean existsById(UUID id);
 
     List<Reminder> findAll();
 }
