@@ -26,6 +26,10 @@ public class Dog {
     
     @Column(name = "gender")
     private char gender; // M for male, F for Female
+
+    @ManyToOne
+    @JoinColumn(name = "reminder_id")
+    private Reminder reminder;
     
     @Column(name = "profile_image_url", length = 1000000) // Increased size to handle base64 images
     private String profileImageURL;
