@@ -1,6 +1,7 @@
 package com.DogMate.Controller;
 
 import com.DogMate.DTO.ReminderDTO;
+import com.DogMate.DTO.ReminderResponseDTO;
 import com.DogMate.Domain.Reminder;
 import com.DogMate.Infrastructure.UserRepository;
 import com.DogMate.Service.ReminderService;
@@ -9,8 +10,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/users/{userId}/reminders")
@@ -48,7 +51,7 @@ public class ReminderController {
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "Reminder created successfully");
-            response.put("reminder", reminder);
+            response.put("reminder", convertToResponseDTO(reminder));
 
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
@@ -58,6 +61,44 @@ public class ReminderController {
             return ResponseEntity.internalServerError()
                 .body(createErrorResponse("Error creating reminder: " + e.getMessage()));
         }
+    }
+
+    /**
+     * Get all reminders for a user
+     * GET /api/users/{userId}/reminders
+     */
+    @GetMapping
+    public ResponseEntity<?> getRemindersForUser(
+            @PathVariable UUID userId
+    ) {
+        try {
+            List<Reminder> reminders = reminderService.getRemindersForUser(userId);
+            List<ReminderResponseDTO> reminderDTOs = reminders.stream()
+                    .map(this::convertToResponseDTO)
+                    .collect(Collectors.toList());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("reminders", reminderDTOs);
+
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                .body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                .body(createErrorResponse("Error fetching reminders: " + e.getMessage()));
+        }
+    }
+
+    private ReminderResponseDTO convertToResponseDTO(Reminder reminder) {
+        return new ReminderResponseDTO(
+                reminder.getId(),
+                reminder.getTitle(),
+                reminder.getDescription(),
+                reminder.getRemindAt(),
+                reminder.isSent()
+        );
     }
 
     private Map<String, Object> createErrorResponse(String error) {

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.Optional;
+import java.util.List;
 @Service
 public class ReminderService {
 
@@ -42,6 +43,18 @@ public class ReminderService {
 
         Reminder r = new Reminder((RegularUser) userAcc, title, description, remindAt);
         return reminderRepo.save(r);
+    }
+
+    public List<Reminder> getRemindersForUser(UUID userId) {
+        var userAcc = userRepo.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User with id " + userId + " not found"));
+
+        if (!(userAcc instanceof RegularUser)) {
+            throw new IllegalArgumentException("User must be a RegularUser");
+        }
+
+        RegularUser regularUser = (RegularUser) userAcc;
+        return reminderRepo.findByRegularUser(regularUser);
     }
 }
 
