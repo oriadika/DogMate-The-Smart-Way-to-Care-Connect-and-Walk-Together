@@ -59,8 +59,8 @@ class FoodStockIntegrationTest {
         assertEquals(7.5, fromDb.getCurrentLevelInKg());
         assertEquals(250.0, fromDb.getDailyConsumptionInGram());
 
-        assertNotNull(fromDb.getDog());
-        assertEquals(dog.getID(), fromDb.getDog().getID());
+        assertNotNull(fromDb.getDogs());
+        assertEquals(1, fromDb.getDogs().size());
     }
 
     @Test

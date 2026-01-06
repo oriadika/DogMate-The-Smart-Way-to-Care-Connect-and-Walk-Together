@@ -1,5 +1,6 @@
 package com.DogMate.Service;
 
+import com.DogMate.DTO.FoodStockDTO;
 import com.DogMate.Domain.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -7,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -43,6 +45,7 @@ public class DogService {
      * @return The created Dog entity
      * @throws IllegalArgumentException if user not found or validation fails
      */
+    @Transactional
     public Dog addDogToUser(UUID userId, String name, String breed, LocalDate birthdate,
                             char gender, String profileImageURL, RelationshipType relationshipType) {
         
@@ -172,9 +175,23 @@ public class DogService {
      * @param dogId The ID of the dog to delete
      */
     public void deleteDog(UUID dogId) {
+        Dog dog = dogRepository.findById(dogId)
+                .orElseThrow(() -> new IllegalArgumentException("Dog with ID " + dogId + " not found"));
+
+         FoodStock foodStock = dog.getFoodStock();
+        if (foodStock != null) {
+            // disconnect (owning side)
+            foodStock.removeDog(dog);
+            if (foodStock.getDogs().isEmpty()) {
+                foodStockRepository.deleteById(foodStock.getId());
+            }
+        }
+
         dogRepository.deleteById(dogId);
+
     }
 
+    @Transactional
     public FoodStock addFoodStockToDog(
             UUID dogId,
             String brandName,
@@ -184,18 +201,18 @@ public class DogService {
     ) {
         Dog dog = dogRepository.findById(dogId)
                 .orElseThrow(() -> new IllegalArgumentException("Dog with ID " + dogId + " not found"));
-        if(brandName == null || brandName.isEmpty()){
-            throw new IllegalArgumentException("Name is invalid");
+
+        validateFoodStockInput(brandName, bagSizeInKg, currentLevelInKg, dailyConsumptionInGram);
+        
+        FoodStock oldFoodStock = dog.getFoodStock();
+        if (oldFoodStock != null) {
+            // disconnect (owning side)
+            oldFoodStock.removeDog(dog);
+            if (oldFoodStock.getDogs().isEmpty()) {
+                foodStockRepository.deleteById(oldFoodStock.getId());
+            }
         }
-        if (bagSizeInKg <= 0){
-            throw new IllegalArgumentException("Bag size is invalid");
-        }
-        if (currentLevelInKg <= 0){
-            throw new IllegalArgumentException("Current level is invalid");
-        }
-        if (dailyConsumptionInGram <= 0){
-            throw new IllegalArgumentException("Daily consumption is invalid");
-        }
+
         FoodStock foodStock = new FoodStock(
                 brandName,
                 bagSizeInKg,
@@ -204,13 +221,48 @@ public class DogService {
         );
 
         // connect (owning side)
-        foodStock.setDog(dog);
+        foodStock.addDog(dog);
 
         // optional but good for consistency on both sides
-        dog.getFoodStocks().add(foodStock);
+        dog.setFoodStock(foodStock);
 
         // persist
         return foodStockRepository.save(foodStock);
+    }
+
+    @Transactional
+    public boolean addDogToFoodStock(UUID dogId, UUID foodStockId) {
+        Dog dog = dogRepository.findById(dogId)
+                .orElseThrow(() -> new IllegalArgumentException("Dog with ID " + dogId + " not found"));
+
+        FoodStock foodStock = foodStockRepository.findById(foodStockId)
+                .orElseThrow(() -> new IllegalArgumentException("Food stock with ID " + foodStockId + " not found"));
+
+        // disconnect (owning side)
+        FoodStock oldFoodStock = dog.getFoodStock();
+        if (oldFoodStock != null) {
+            oldFoodStock.removeDog(dog);
+            if (oldFoodStock.getDogs().isEmpty()) {
+                foodStockRepository.deleteById(oldFoodStock.getId());
+            }
+        }
+
+        // connect (owning side)
+        foodStock.addDog(dog);
+
+        // optional but good for consistency on both sides
+        dog.setFoodStock(foodStock);
+
+        // persist
+        return true;
+    }
+
+    private void validateFoodStockInput(String name, double size, double level, double consumption) {
+        if (name == null || name.isBlank()) {throw new IllegalArgumentException("Brand name cannot be empty");}
+        if (size <= 0) {throw new IllegalArgumentException("Bag size must be greater than 0 kg");}
+        if (level < 0) {throw new IllegalArgumentException("Current level cannot be negative");}
+        if (level > size) {throw new IllegalArgumentException("Current level cannot exceed the total bag size (" + size + " kg)");}
+        if (consumption <= 0) {throw new IllegalArgumentException("Daily consumption must be greater than 0 grams");}
     }
 
     /**
@@ -236,5 +288,64 @@ public class DogService {
         }
 
         return userDogs;
+    }
+
+    public List<Dog> getAllDogsforUser(UUID userId) {
+        return dogRepository.findAll().stream().filter(dog -> dog.getDogRelationships().stream().anyMatch(rel -> rel.getRegularUser().getId().equals(userId))).collect(Collectors.toList());
+    }
+
+    public List<FoodStockDTO> getUserFoodStocks(UUID userId) {
+        List<Dog> userDogs = getDogsForUser(userId);
+        List<FoodStock> userFoodStocks =  userDogs.stream()
+                .map(Dog::getFoodStock)
+                .filter(stock -> stock != null).distinct()
+                .collect(Collectors.toList());
+
+        List<FoodStockDTO> foodStockDTOs = new ArrayList<>();
+        for (FoodStock stock : userFoodStocks) {
+            foodStockDTOs.add(new FoodStockDTO(stock));
+        }
+        return foodStockDTOs;
+    }
+
+    public FoodStockDTO renewFoodStock(UUID foodStockId) {
+        FoodStock foodStock = foodStockRepository.findById(foodStockId)
+                .orElseThrow(() -> new IllegalArgumentException("Food stock with ID " + foodStockId + " not found"));
+        foodStock.renewStock();
+        FoodStock updatedStock = foodStockRepository.save(foodStock);
+        return new FoodStockDTO(updatedStock);
+    }
+
+    public void deleteFoodStock(UUID foodStockId) {
+        FoodStock foodStock = foodStockRepository.findById(foodStockId)
+                .orElseThrow(() -> new IllegalArgumentException("Food stock with ID " + foodStockId + " not found"));
+        List<Dog> dogs = foodStock.getDogs();        
+        for (Dog dog : new ArrayList<>(dogs)) {
+            foodStock.removeDog(dog);
+            dog.setFoodStock(null);
+            dogRepository.save(dog);
+        }
+        foodStockRepository.deleteById(foodStockId);
+    }
+
+    @Transactional
+    public FoodStockDTO updateFoodStock(UUID foodStockId, FoodStockDTO foodStockDTO) {
+        FoodStock foodStock = foodStockRepository.findById(foodStockId)
+                .orElseThrow(() -> new IllegalArgumentException("Food stock with ID " + foodStockId + " not found"));
+
+        validateFoodStockInput(
+                foodStockDTO.getBrandName(),
+                foodStockDTO.getBagSizeInKg(),
+                foodStockDTO.getCurrentLevelInKg(),
+                foodStockDTO.getDailyConsumptionInGram()
+        );
+
+        foodStock.setBrandName(foodStockDTO.getBrandName());
+        foodStock.setBagSizeInKg(foodStockDTO.getBagSizeInKg());
+        foodStock.setCurrentLevelInKg(foodStockDTO.getCurrentLevelInKg());
+        foodStock.setDailyConsumptionInGram(foodStockDTO.getDailyConsumptionInGram());
+
+        FoodStock updatedStock = foodStockRepository.save(foodStock);
+        return new FoodStockDTO(updatedStock);
     }
 }

@@ -1,5 +1,6 @@
 package com.DogMate.Service;
 
+import com.DogMate.Domain.Dog;
 import com.DogMate.Domain.FoodStock;
 import java.util.Optional;
 import java.util.UUID;
@@ -17,7 +18,7 @@ public interface IFoodStockRepository {
      * @param id The UUID of the food stock
      * @return Optional containing the food stock if found
      */
-//    Optional<FoodStock> findById(UUID id);
+    Optional<FoodStock> findById(UUID id);
 
     /**
      * Delete a food stock by ID
