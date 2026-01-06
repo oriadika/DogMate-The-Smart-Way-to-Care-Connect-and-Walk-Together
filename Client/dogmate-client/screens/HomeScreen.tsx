@@ -308,7 +308,18 @@ const HomeScreen = ({ navigation, route }: any) => {
 
               {/* Reminders Section */}
               <View style={styles.remindersSection}>
-                <Text style={styles.remindersTitle}>תזכורות להיום</Text>
+                <View style={styles.remindersHeader}>
+                  <Text style={styles.remindersTitle}>תזכורות</Text>
+                  <TouchableOpacity
+                    style={styles.addReminderButton}
+                    onPress={() => {
+                      navigation.navigate('AddReminder');
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.addReminderButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.remindersPlaceholder}>
                   אין תזכורות כרגע
                 </Text>
@@ -554,12 +565,36 @@ const styles = StyleSheet.create({
   remindersSection: {
     marginTop: 10,
   },
+  remindersHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   remindersTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: '#5C4033',
-    marginBottom: 12,
     textAlign: 'right',
+    flex: 1,
+  },
+  addReminderButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: PRIMARY_COLOR,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  addReminderButtonText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
   },
   remindersPlaceholder: {
     fontSize: 16,

@@ -12,6 +12,7 @@ import ProfileScreen from './screens/ProfileScreen';
 import AddDogScreen from './screens/AddDogScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import FoodIntakeScreen from './screens/FoodIntakeScreen';
+import AddReminderScreen from './screens/AddReminderScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -31,6 +32,7 @@ export default function App() {
         <Stack.Screen name="AddDog" component={AddDogScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="FoodIntake" component={FoodIntakeScreen} />
+        <Stack.Screen name="AddReminder" component={AddReminderScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
