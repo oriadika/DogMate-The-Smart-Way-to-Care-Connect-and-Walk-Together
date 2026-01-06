@@ -1,5 +1,6 @@
 package com.DogMate.Service;
 
+import com.DogMate.DTO.FoodStockDTO;
 import com.DogMate.Domain.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -7,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -289,5 +291,19 @@ public class DogService {
 
     public List<Dog> getAllDogsforUser(UUID userId) {
         return dogRepository.findAll().stream().filter(dog -> dog.getDogRelationships().stream().anyMatch(rel -> rel.getRegularUser().getId().equals(userId))).collect(Collectors.toList());
+    }
+
+    public List<FoodStockDTO> getUserFoodStocks(UUID userId) {
+        List<Dog> userDogs = getDogsForUser(userId);
+        List<FoodStock> userFoodStocks =  userDogs.stream()
+                .map(Dog::getFoodStock)
+                .filter(stock -> stock != null).distinct()
+                .collect(Collectors.toList());
+
+        List<FoodStockDTO> foodStockDTOs = new ArrayList<>();
+        for (FoodStock stock : userFoodStocks) {
+            foodStockDTOs.add(new FoodStockDTO(stock));
+        }
+        return foodStockDTOs;
     }
 }

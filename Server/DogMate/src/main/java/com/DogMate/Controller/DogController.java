@@ -1,6 +1,9 @@
 package com.DogMate.Controller;
 
+import com.DogMate.DTO.AddFoodStockRequest;
+import com.DogMate.DTO.FoodStockDTO;
 import com.DogMate.Domain.Dog;
+import com.DogMate.Domain.FoodStock;
 import com.DogMate.Domain.RelationshipType;
 import com.DogMate.Service.DogService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -144,6 +147,8 @@ public class DogController {
         }
     }
 
+    
+
     /**
      * Delete a dog for a user
      * DELETE /api/dogs/{userId}/{dogId}
@@ -190,6 +195,75 @@ public class DogController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(createErrorResponse("Failed to delete dog: " + e.getMessage()));
         }
+    }
+
+
+    /**
+     * Create a new food stock and assign it to a dog
+     * POST /api/dogs/{dogId}/food-stock
+     */
+    @PostMapping("/{dogId}/food-stock")
+    public ResponseEntity<?> addFoodStockToDog(
+            @PathVariable String dogId,
+            @RequestBody AddFoodStockRequest request) {
+        try {
+            UUID dogUuid = UUID.fromString(dogId);
+
+            FoodStock newStock = dogService.addFoodStockToDog(
+                    dogUuid,
+                    request.getBrandName(),
+                    request.getBagSizeInKg(),
+                    request.getCurrentLevelInKg(),
+                    request.getDailyConsumptionInGram()
+            );
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Food stock created and linked to dog");
+            response.put("foodStockId", newStock.getId().toString());
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("Failed to add food stock: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Connect an existing food stock to a dog
+     * POST /api/dogs/{dogId}/food-stock/{foodStockId}
+     */
+    @PostMapping("/{dogId}/food-stock/{foodStockId}")
+    public ResponseEntity<?> connectDogToFoodStock(
+            @PathVariable String dogId,
+            @PathVariable String foodStockId) {
+        try {
+            UUID dogUuid = UUID.fromString(dogId);
+            UUID stockUuid = UUID.fromString(foodStockId);
+
+            dogService.addDogToFoodStock(dogUuid, stockUuid);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Dog successfully connected to existing food stock");
+
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("Failed to connect dog to food stock: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/my-food-stocks")
+    public ResponseEntity<List<FoodStockDTO>> getMyDogsFoodStocks(@PathVariable String userId) {
+        List<FoodStockDTO> stocks = dogService.getUserFoodStocks(UUID.fromString(userId));
+        return ResponseEntity.ok(stocks);
     }
 
     /**
