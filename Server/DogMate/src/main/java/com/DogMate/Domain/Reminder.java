@@ -1,11 +1,11 @@
 package com.DogMate.Domain;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
-import java.util.Date;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -17,28 +17,86 @@ public class Reminder {
     private UUID id;
 
     @ManyToOne
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id")
     private RegularUser regularUser;
 
-    @Column(name = "title", nullable = false)
+    @OneToMany(mappedBy = "reminder", cascade = CascadeType.ALL, orphanRemoval = true)
+    private LinkedList<Dog> dogs;
+
+    @Column(name = "title")
     private String title;
 
-    @Column(name = "remind_at", nullable = false)
+    @Column(name = "description")
+    private String description;
+
+    @Column(name = "remindAt")
     private LocalDateTime remindAt;
 
-    @Column(name = "sent", nullable = false)
-    private boolean sent;
-
-
-    public Reminder(RegularUser regularUser, String title, LocalDateTime remindAt) {
+    public Reminder(RegularUser regularUser, LinkedList<Dog> dogs, String title, LocalDateTime remindAt, String description) {
         this.id = UUID.randomUUID();
         this.regularUser = regularUser;
         this.title = title;
         this.remindAt = remindAt;
-        this.sent = false;
+        this.description = description;
+        this.dogs = dogs;
     }
 
-    // getters/setters...
+    public UUID getId() {
+        return id;
+    }
+
+    public void setId(UUID id) {
+        this.id = id;
+    }
+
+    public RegularUser getUser() {
+        return regularUser;
+    }
+
+    public void setUser(RegularUser regularUser) {
+        this.regularUser = regularUser;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public LocalDateTime getRemindAt() {
+        return remindAt;
+    }
+
+    public void setRemindAt(LocalDateTime remindAt) {
+        this.remindAt = remindAt;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+
+    public LinkedList<Dog> getDogIds() {
+        return dogs;
+    }
+
+    public void setDogIds(LinkedList<Dog> dogs) {
+        this.dogs = dogs;
+    }
+
+    public void addDog(Dog dog){
+        this.dogs.add(dog);
+    }
+
+    public void removeDog(Dog dog){
+        this.dogs.remove(dog);
+    }
 }
 
 
