@@ -306,4 +306,26 @@ public class DogService {
         }
         return foodStockDTOs;
     }
+
+    public FoodStockDTO renewFoodStock(UUID foodStockId) {
+        FoodStock foodStock = foodStockRepository.findById(foodStockId)
+                .orElseThrow(() -> new IllegalArgumentException("Food stock with ID " + foodStockId + " not found"));
+        foodStock.renewStock();
+        FoodStock updatedStock = foodStockRepository.save(foodStock);
+        return new FoodStockDTO(updatedStock);
+    }
+
+    public void deleteFoodStock(UUID foodStockId) {
+        FoodStock foodStock = foodStockRepository.findById(foodStockId)
+                .orElseThrow(() -> new IllegalArgumentException("Food stock with ID " + foodStockId + " not found"));
+        List<Dog> dogs = foodStock.getDogs();        
+        for (Dog dog : new ArrayList<>(dogs)) {
+            foodStock.removeDog(dog);
+            dog.setFoodStock(null);
+            dogRepository.save(dog);
+        }
+        foodStockRepository.deleteById(foodStockId);
+    }
+
+
 }

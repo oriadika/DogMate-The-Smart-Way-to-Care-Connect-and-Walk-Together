@@ -260,11 +260,6 @@ public class DogController {
         }
     }
 
-    @GetMapping("/my-food-stocks")
-    public ResponseEntity<List<FoodStockDTO>> getMyDogsFoodStocks(@PathVariable String userId) {
-        List<FoodStockDTO> stocks = dogService.getUserFoodStocks(UUID.fromString(userId));
-        return ResponseEntity.ok(stocks);
-    }
 
     /**
      * Create a dog response object
