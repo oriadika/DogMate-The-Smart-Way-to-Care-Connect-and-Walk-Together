@@ -1,6 +1,9 @@
 package com.DogMate.Domain;
 
 import jakarta.persistence.*;
+
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -22,9 +25,8 @@ public class FoodStock {
     @Column(name = "daily_consumption_in_gram")
     private double dailyConsumptionInGram;
     
-    @ManyToOne
-    @JoinColumn(name = "dog_id")
-    private Dog dog;
+    @OneToMany(mappedBy = "foodStock")
+    private List<Dog> dogs = new ArrayList<>();
 
     // Default constructor required by JPA
     protected FoodStock() {
@@ -40,13 +42,13 @@ public class FoodStock {
     }
     
     public FoodStock(String brandName, double bagSizeInKg, double currentLevelInKg,
-                     double dailyConsumptionInGram, Dog dog) {
+                     double dailyConsumptionInGram, List<Dog> dogs) {
         this.id = UUID.randomUUID();
         this.brandName = brandName;
         this.bagSizeInKg = bagSizeInKg;
         this.currentLevelInKg = currentLevelInKg;
         this.dailyConsumptionInGram = dailyConsumptionInGram;
-        this.dog = dog;
+        this.dogs = dogs;
     }
 
     // --- Getters and Setters ---
@@ -82,6 +84,18 @@ public class FoodStock {
         this.currentLevelInKg = currentLevelInKg;
     }
 
+    public void decreaseCurrentLevel(double amountInKg) {
+        if (amountInKg <= currentLevelInKg) {
+            this.currentLevelInKg -= amountInKg;
+        } else {
+            this.currentLevelInKg = 0;
+        }
+    }
+
+    public void renewStock() {
+        this.currentLevelInKg = this.bagSizeInKg;
+    }
+
     public double getDailyConsumptionInGram() {
         return dailyConsumptionInGram;
     }
@@ -90,11 +104,19 @@ public class FoodStock {
         this.dailyConsumptionInGram = dailyConsumptionInGram;
     }
 
-    public Dog getDog(){
-        return dog;
+    public void addDog(Dog dog){
+        this.dogs.add(dog);
     }
 
-    public void setDog(Dog dog){
-        this.dog = dog;
+    public void removeDog(Dog dog){
+        this.dogs.remove(dog);
+    }
+
+    public List<Dog> getDogs(){
+        return dogs;
+    }
+
+    public void setDogList(List<Dog> dogs){
+        this.dogs = dogs;
     }
 }

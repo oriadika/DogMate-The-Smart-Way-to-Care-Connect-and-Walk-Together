@@ -33,8 +33,9 @@ public class Dog {
     @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogEvent> dogEvents;
     
-    @OneToMany(mappedBy = "dog", orphanRemoval = true)
-    private List<FoodStock> foodStocks;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "food_stock_id")
+    private FoodStock foodStock;
     
     @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogMoodLog> dogMoodLogs;
@@ -48,7 +49,7 @@ public class Dog {
     // Default constructor required by JPA
     protected Dog() {
         this.dogEvents = new LinkedList<>();
-        this.foodStocks = new LinkedList<>();
+        this.foodStock = null;
         this.dogMoodLogs = new LinkedList<>();
         this.dogDocuments = new LinkedList<>();
         this.dogRelationships = new LinkedList<>();
@@ -63,7 +64,7 @@ public class Dog {
         this.gender = gender;
         this.profileImageURL = profileImageURL;
         this.dogEvents = new LinkedList<>();
-        this.foodStocks = new LinkedList<>();
+        this.foodStock = null;
         this.dogMoodLogs = new LinkedList<>();
         this.dogDocuments = new LinkedList<>();
         this.dogRelationships = new LinkedList<>();
@@ -129,16 +130,16 @@ public class Dog {
         this.dogEvents.remove(dogEvent);
     }
 
-    public List<FoodStock> getFoodStocks(){
-        return this.foodStocks;
+    public FoodStock getFoodStock(){
+        return this.foodStock;
     }
 
-    public void addFoodStocks(FoodStock foodStock){
-        this.foodStocks.add(foodStock);
+    public void setFoodStock(FoodStock foodStock){
+        this.foodStock = foodStock;
     }
 
     public void removeFoodStock(FoodStock foodStock){
-        this.foodStocks.remove(foodStock);
+        this.foodStock = null;
     }
 
     public List<DogMoodLog> getDogMoodLogs(){
