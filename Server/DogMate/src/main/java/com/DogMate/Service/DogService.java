@@ -258,11 +258,12 @@ public class DogService {
     }
 
     private void validateFoodStockInput(String name, double size, double level, double consumption) {
-    if (name == null || name.isEmpty()) throw new IllegalArgumentException("Name is invalid");
-    if (size <= 0) throw new IllegalArgumentException("Bag size is invalid");
-    if (level <= 0) throw new IllegalArgumentException("Current level is invalid");
-    if (consumption <= 0) throw new IllegalArgumentException("Daily consumption is invalid");
-}
+        if (name == null || name.isBlank()) {throw new IllegalArgumentException("Brand name cannot be empty");}
+        if (size <= 0) {throw new IllegalArgumentException("Bag size must be greater than 0 kg");}
+        if (level < 0) {throw new IllegalArgumentException("Current level cannot be negative");}
+        if (level > size) {throw new IllegalArgumentException("Current level cannot exceed the total bag size (" + size + " kg)");}
+        if (consumption <= 0) {throw new IllegalArgumentException("Daily consumption must be greater than 0 grams");}
+    }
 
     /**
      * Get all dogs for a specific user
@@ -327,5 +328,24 @@ public class DogService {
         foodStockRepository.deleteById(foodStockId);
     }
 
+    @Transactional
+    public FoodStockDTO updateFoodStock(UUID foodStockId, FoodStockDTO foodStockDTO) {
+        FoodStock foodStock = foodStockRepository.findById(foodStockId)
+                .orElseThrow(() -> new IllegalArgumentException("Food stock with ID " + foodStockId + " not found"));
 
+        validateFoodStockInput(
+                foodStockDTO.getBrandName(),
+                foodStockDTO.getBagSizeInKg(),
+                foodStockDTO.getCurrentLevelInKg(),
+                foodStockDTO.getDailyConsumptionInGram()
+        );
+
+        foodStock.setBrandName(foodStockDTO.getBrandName());
+        foodStock.setBagSizeInKg(foodStockDTO.getBagSizeInKg());
+        foodStock.setCurrentLevelInKg(foodStockDTO.getCurrentLevelInKg());
+        foodStock.setDailyConsumptionInGram(foodStockDTO.getDailyConsumptionInGram());
+
+        FoodStock updatedStock = foodStockRepository.save(foodStock);
+        return new FoodStockDTO(updatedStock);
+    }
 }
