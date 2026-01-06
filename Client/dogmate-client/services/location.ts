@@ -174,4 +174,6 @@ class LocationService {
 }
 
 // Export singleton instance
-export default new LocationService();
+const locationService = new LocationService();
+export default locationService;
+export { LocationService };
