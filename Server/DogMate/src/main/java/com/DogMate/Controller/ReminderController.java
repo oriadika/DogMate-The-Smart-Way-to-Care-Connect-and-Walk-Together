@@ -22,19 +22,27 @@ public class ReminderController {
 
     // POST /api/users/{userId}/reminders
     @PostMapping
-    public ResponseEntity<ReminderResponse> createReminder(
+    public ResponseEntity<?> createReminder(
             @PathVariable UUID userId,
             @RequestBody CreateReminderRequest req
     ) {
-        Reminder reminder = reminderService.createReminder(
-                userId,
-                new LinkedList<>(req.dogIds),
-                req.title,
-                req.remindAt,
-                req.description
-        );
+        try {
+            Reminder reminder = reminderService.createReminder(
+                    userId,
+                    new LinkedList<>(req.dogIds),
+                    req.title,
+                    req.remindAt,
+                    req.description
+            );
 
-        return ResponseEntity.ok(toResponse(reminder));
+            return ResponseEntity.ok(toResponse(reminder));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(500)
+                    .body(createErrorResponse("Failed to create reminder: " + e.getMessage()));
+        }
     }
 
     // GET /api/users/{userId}/reminders
@@ -74,5 +82,12 @@ public class ReminderController {
         res.remindAt = r.getRemindAt();
         res.description = r.getDescription();
         return res;
+    }
+
+    private Map<String, Object> createErrorResponse(String message) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("success", false);
+        error.put("error", message);
+        return error;
     }
 }

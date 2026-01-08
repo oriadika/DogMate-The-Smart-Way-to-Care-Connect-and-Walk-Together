@@ -11,7 +11,6 @@ public class ReminderResponse {
     public List<UUID> dogIds;
     public String title;
 
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
     public LocalDateTime remindAt;
 
     public String description;

@@ -10,7 +10,7 @@ public class CreateReminderRequest {
     public List<UUID> dogIds;
     public String title;
 
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm") // matches your UI format
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm")
     public LocalDateTime remindAt;
 
     public String description;

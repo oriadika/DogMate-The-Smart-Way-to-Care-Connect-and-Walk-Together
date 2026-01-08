@@ -275,17 +275,33 @@ export const reminderAPI = {
   /**
    * Create a new reminder for a user
    */
-  createReminder: async (userId: string, title: string, description: string, remindAt: Date): Promise<{ success: boolean; message: string; reminder: any }> => {
+  createReminder: async (userId: string, title: string, description: string, remindAt: Date, dogIds: string[]): Promise<{ success: boolean; message: string; reminder: any }> => {
     try {
-      const response = await apiClient.post(`/users/${userId}/reminders`, {
+      const url = `/users/${userId}/reminders`;
+      
+      // Format the date as yyyy-MM-dd HH:mm for server
+      const year = remindAt.getFullYear();
+      const month = String(remindAt.getMonth() + 1).padStart(2, '0');
+      const day = String(remindAt.getDate()).padStart(2, '0');
+      const hours = String(remindAt.getHours()).padStart(2, '0');
+      const minutes = String(remindAt.getMinutes()).padStart(2, '0');
+      const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}`;
+      
+      console.log('Creating reminder with URL:', url);
+      console.log('Request body:', { title, description, remindAt: formattedDate, dogIds });
+      
+      const response = await apiClient.post(url, {
         title,
         description,
-        remindAt,
+        remindAt: formattedDate,
+        dogIds,
       });
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to create reminder';
       console.error("Failed to create reminder:", errorMessage);
+      console.error("Error response status:", error.response?.status);
+      console.error("Error response data:", error.response?.data);
       throw new Error(errorMessage);
     }
   },

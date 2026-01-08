@@ -202,7 +202,8 @@ const AddReminderScreen = ({ navigation }: any) => {
         userId,
         title,
         description,
-        reminderDateTime
+        reminderDateTime,
+        selectedDogs
       );
 
       Alert.alert(

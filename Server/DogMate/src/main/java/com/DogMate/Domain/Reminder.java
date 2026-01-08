@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -21,7 +22,7 @@ public class Reminder {
     private RegularUser regularUser;
 
     @OneToMany(mappedBy = "reminder", cascade = CascadeType.ALL, orphanRemoval = true)
-    private LinkedList<Dog> dogs;
+    private List<Dog> dogs;
 
     @Column(name = "title")
     private String title;
@@ -32,13 +33,18 @@ public class Reminder {
     @Column(name = "remindAt")
     private LocalDateTime remindAt;
 
+    // Default constructor for Hibernate
+    public Reminder() {
+        this.dogs = new LinkedList<>();
+    }
+
     public Reminder(RegularUser regularUser, LinkedList<Dog> dogs, String title, LocalDateTime remindAt, String description) {
         this.id = UUID.randomUUID();
         this.regularUser = regularUser;
         this.title = title;
         this.remindAt = remindAt;
         this.description = description;
-        this.dogs = dogs;
+        this.dogs = dogs != null ? dogs : new LinkedList<>();
     }
 
     public UUID getId() {
@@ -82,11 +88,11 @@ public class Reminder {
     }
 
 
-    public LinkedList<Dog> getDogIds() {
+    public List<Dog> getDogIds() {
         return dogs;
     }
 
-    public void setDogIds(LinkedList<Dog> dogs) {
+    public void setDogIds(List<Dog> dogs) {
         this.dogs = dogs;
     }
 
