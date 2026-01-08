@@ -9,6 +9,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface IReminderRepository {
+    Reminder save(Reminder reminder);
+
     Optional<Reminder> findById(UUID id);
 
     void deleteById(UUID id);

@@ -1,7 +1,9 @@
 import axios, { AxiosInstance } from 'axios';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://172.20.10.4:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.15.204:8080/api';
+
+let authToken: string | null = null;
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -10,6 +12,32 @@ const apiClient: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Add request interceptor to include JWT token
+apiClient.interceptors.request.use(
+  (config) => {
+    if (authToken) {
+      config.headers.Authorization = `Bearer ${authToken}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Export function to set token
+export const setAuthToken = (token: string) => {
+  authToken = token;
+  // Update the default header for future requests
+  apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+};
+
+// Export function to clear token
+export const clearAuthToken = () => {
+  authToken = null;
+  delete apiClient.defaults.headers.common['Authorization'];
+};
 
 // Types for API requests/responses
 export interface RegisterUserPayload {
@@ -97,6 +125,13 @@ export const userAPI = {
     try {
       // Replace with your actual login endpoint once available
       const response = await apiClient.post('/auth/login', payload);
+      console.log("Login response data:", response.data); // 👈 הדפסה לקונסול
+      
+      // Save token if provided
+      if (response.data.token) {
+        setAuthToken(response.data.token);
+      }
+      
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Login failed';
@@ -138,10 +173,15 @@ export const userAPI = {
       // Call logout endpoint on backend
       console.log('Logging out user:', { userId, email });
       const response = await apiClient.post('/auth/logout', { userId, email });
+      
+      // Clear token on logout
+      clearAuthToken();
+      
       return response.data;
     } catch (error: any) {
       // Even if logout fails on backend, we can still clear local data
       console.warn('Logout request failed:', error.message);
+      clearAuthToken();
       // Return success anyway to allow local logout
       return { success: true, message: 'Local logout completed' };
     }

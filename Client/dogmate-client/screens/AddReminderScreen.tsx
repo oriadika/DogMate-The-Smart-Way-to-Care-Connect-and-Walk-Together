@@ -785,6 +785,12 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     alignItems: 'center',
   },
+  noDogsText: {
+    fontSize: 16,
+    color: TEXT_DARK,
+    fontWeight: '500',
+    marginTop: 12,
+  },
   dogItem: {
     flexDirection: 'row', // LTR for avatar/name, checkbox on right
     alignItems: 'center',

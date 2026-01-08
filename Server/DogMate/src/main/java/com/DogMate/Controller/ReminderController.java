@@ -1,19 +1,14 @@
 package com.DogMate.Controller;
 
-import com.DogMate.DTO.ReminderDTO;
-import com.DogMate.DTO.ReminderResponseDTO;
+import com.DogMate.DTO.CreateReminderRequest;
+import com.DogMate.DTO.ReminderResponse;
+import com.DogMate.Domain.Dog;
 import com.DogMate.Domain.Reminder;
-import com.DogMate.Infrastructure.UserRepository;
 import com.DogMate.Service.ReminderService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/users/{userId}/reminders")
@@ -21,92 +16,63 @@ public class ReminderController {
 
     private final ReminderService reminderService;
 
-    @Autowired
     public ReminderController(ReminderService reminderService) {
         this.reminderService = reminderService;
     }
 
-    /**
-     * Create a new reminder for a user
-     * POST /api/users/{userId}/reminders
-     */
+    // POST /api/users/{userId}/reminders
     @PostMapping
-    public ResponseEntity<?> createReminder(
+    public ResponseEntity<ReminderResponse> createReminder(
             @PathVariable UUID userId,
-            @RequestBody ReminderDTO request
+            @RequestBody CreateReminderRequest req
     ) {
-        try {
-            if (request == null || request.title() == null) {
-                return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Title is required"));
-            }
-
-            Reminder reminder = reminderService.createReminder(
-                    userId,
-                    request.title(),
-                    request.description(),
-                    request.remindAt()
-            );
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Reminder created successfully");
-            response.put("reminder", convertToResponseDTO(reminder));
-
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                .body(createErrorResponse(e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError()
-                .body(createErrorResponse("Error creating reminder: " + e.getMessage()));
-        }
-    }
-
-    /**
-     * Get all reminders for a user
-     * GET /api/users/{userId}/reminders
-     */
-    @GetMapping
-    public ResponseEntity<?> getRemindersForUser(
-            @PathVariable UUID userId
-    ) {
-        try {
-            List<Reminder> reminders = reminderService.getRemindersForUser(userId);
-            List<ReminderResponseDTO> reminderDTOs = reminders.stream()
-                    .map(this::convertToResponseDTO)
-                    .collect(Collectors.toList());
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("reminders", reminderDTOs);
-
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest()
-                .body(createErrorResponse(e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError()
-                .body(createErrorResponse("Error fetching reminders: " + e.getMessage()));
-        }
-    }
-
-    private ReminderResponseDTO convertToResponseDTO(Reminder reminder) {
-        return new ReminderResponseDTO(
-                reminder.getId(),
-                reminder.getTitle(),
-                reminder.getDescription(),
-                reminder.getRemindAt(),
-                reminder.isSent()
+        Reminder reminder = reminderService.createReminder(
+                userId,
+                new LinkedList<>(req.dogIds),
+                req.title,
+                req.remindAt,
+                req.description
         );
+
+        return ResponseEntity.ok(toResponse(reminder));
     }
 
-    private Map<String, Object> createErrorResponse(String error) {
+    // GET /api/users/{userId}/reminders
+    @GetMapping
+    public ResponseEntity<Map<String, Object>> getRemindersForUser(@PathVariable UUID userId) {
+        List<Reminder> reminders = reminderService.getRemindersForUser(userId);
+
+        List<ReminderResponse> data = reminders.stream()
+                .map(this::toResponse)
+                .toList();
+
         Map<String, Object> response = new HashMap<>();
-        response.put("success", false);
-        response.put("error", error);
-        return response;
+        response.put("success", true);
+        response.put("count", data.size());
+        response.put("reminders", data);
+
+        return ResponseEntity.ok(response);
+    }
+
+    // DELETE /api/users/{userId}/reminders/{reminderId}
+    @DeleteMapping("/{reminderId}")
+    public ResponseEntity<Void> deleteReminder(
+            @PathVariable UUID userId,
+            @PathVariable UUID reminderId
+    ) {
+        boolean deleted = reminderService.removeReminder(userId, reminderId);
+        return deleted ? ResponseEntity.noContent().build()
+                : ResponseEntity.notFound().build();
+    }
+
+    private ReminderResponse toResponse(Reminder r) {
+        ReminderResponse res = new ReminderResponse();
+        res.id = r.getId();
+        res.userId = r.getUser().getId();
+        res.dogIds = r.getDogIds().stream().map(Dog::getID).toList();
+        res.title = r.getTitle();
+        res.remindAt = r.getRemindAt();
+        res.description = r.getDescription();
+        return res;
     }
 }
-
-
