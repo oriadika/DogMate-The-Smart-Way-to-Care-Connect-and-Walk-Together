@@ -78,6 +78,12 @@ public class ReminderService {
         Reminder r = reminderOpt.get();
         if (!r.getUser().getId().equals(userId)) return false; // user-scoped security
 
+        // Set reminder to null for all associated dogs
+        r.getDogIds().forEach(dog -> {
+            dog.setReminder(null);
+            dogRepository.save(dog);
+        });
+
         reminderRepo.deleteById(reminderId);
         return true;
     }

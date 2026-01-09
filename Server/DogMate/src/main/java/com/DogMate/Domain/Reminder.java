@@ -21,7 +21,7 @@ public class Reminder {
     @JoinColumn(name = "user_id")
     private RegularUser regularUser;
 
-    @OneToMany(mappedBy = "reminder", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "reminder", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     private List<Dog> dogs;
 
     @Column(name = "title")
