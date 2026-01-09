@@ -411,6 +411,7 @@ const HomeScreen = ({ navigation, route }: any) => {
                           {reminder.description && (
                             <Text style={styles.reminderDescription}>{reminder.description}</Text>
                           )}
+                          <Text style={styles.reminderDate}>{formatReminderDateTime(reminder.remindAt)}</Text>
                         </View>
                         <View style={[styles.reminderStatus, reminder.sent && styles.reminderSent]}>
                           <Text style={styles.reminderStatusText}>
@@ -460,6 +461,11 @@ const HomeScreen = ({ navigation, route }: any) => {
                   <Text style={styles.detailsValue}>{selectedReminder.description}</Text>
                 </View>
               )}
+
+              <View style={styles.detailsCard}>
+                <Text style={styles.detailsLabel}>תאריך ושעה</Text>
+                <Text style={styles.detailsValue}>{formatReminderDateTime(selectedReminder?.remindAt)}</Text>
+              </View>
 
               <View style={styles.detailsCard}>
                 <Text style={styles.detailsLabel}>סטטוס</Text>

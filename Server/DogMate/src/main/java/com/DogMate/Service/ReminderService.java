@@ -61,9 +61,13 @@ public class ReminderService {
         }
 
         List<Dog> dogs = dogRepository.findAll().stream().filter(dog -> (dogIds.contains(dog.getID()))).toList();
-
         Reminder r = new Reminder(user,
                 new LinkedList<>(dogs),title, remindAt, description);
+        dogs.forEach(dog -> {
+            dog.setReminder(r);
+        });
+
+
         return reminderRepo.save(r);
     }
 

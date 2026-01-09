@@ -71,6 +71,7 @@ public class Dog {
         this.dogMoodLogs = new LinkedList<>();
         this.dogDocuments = new LinkedList<>();
         this.dogRelationships = new LinkedList<>();
+
     }
 
     public UUID getID() {
@@ -181,4 +182,11 @@ public class Dog {
         this.dogRelationships.remove(relationship);
     }
 
+    public Reminder getReminder() {
+        return reminder;
+    }
+
+    public void setReminder(Reminder reminder) {
+        this.reminder = reminder;
+    }
 }
