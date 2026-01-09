@@ -1,6 +1,7 @@
 package com.DogMate.Service;
 
 import com.DogMate.Domain.DogRelationship;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -18,6 +19,12 @@ public interface IDogRelationshipRepository {
      * @return Optional containing the relationship if found
      */
     Optional<DogRelationship> findById(UUID id);
+
+    /**
+     * Find all relationships
+     * @return List of all relationships
+     */
+    List<DogRelationship> findAll();
 
     /**
      * Delete a relationship by ID

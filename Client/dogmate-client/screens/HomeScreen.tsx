@@ -138,6 +138,39 @@ const HomeScreen = ({ navigation, route }: any) => {
     return `${years} ${years === 1 ? 'שנה' : 'שנים'} ו-${months} חודשים`;
   };
 
+  // Get dog names from dog IDs
+  const getDogNames = (dogIds: string[]): string => {
+    if (!dogIds || dogIds.length === 0) return 'כל הכלבים';
+    
+    const names = dogIds.map(id => {
+      const dog = dogs.find(d => d.id === id);
+      return dog ? dog.name : 'כלב לא ידוע';
+    });
+    
+    return names.join(', ');
+  };
+
+  // Get formatted dog text for reminders
+  const getDogText = (dogIds: string[]): string => {
+    if (!dogIds || dogIds.length === 0) return 'כל הכלבים';
+
+    if (dogIds.length === dogs.length) {
+      return 'כל הכלבים';
+    }
+    
+    if (dogIds.length === 1) {
+      const dog = dogs.find(d => d.id === dogIds[0]);
+      return `כלב: ${dog ? dog.name : 'כלב לא ידוע'}`;
+    }
+    
+    const names = dogIds.map(id => {
+      const dog = dogs.find(d => d.id === id);
+      return dog ? dog.name : 'כלב לא ידוע';
+    });
+    
+    return `כלבים: ${names.join(', ')}`;
+  };
+
   const handleEditDog = (dogId: string, dogName: string) => {
     Alert.alert(
       'עריכת כלב',
@@ -411,6 +444,7 @@ const HomeScreen = ({ navigation, route }: any) => {
                           {reminder.description && (
                             <Text style={styles.reminderDescription}>{reminder.description}</Text>
                           )}
+                          <Text style={styles.reminderDogs}>{getDogText(reminder.dogIds)}</Text>
                           <Text style={styles.reminderDate}>{formatReminderDateTime(reminder.remindAt)}</Text>
                         </View>
                         <View style={[styles.reminderStatus, reminder.sent && styles.reminderSent]}>
@@ -465,6 +499,10 @@ const HomeScreen = ({ navigation, route }: any) => {
               <View style={styles.detailsCard}>
                 <Text style={styles.detailsLabel}>תאריך ושעה</Text>
                 <Text style={styles.detailsValue}>{formatReminderDateTime(selectedReminder?.remindAt)}</Text>
+              </View>
+
+              <View style={styles.detailsCard}>
+                <Text style={styles.detailsValue}>{getDogText(selectedReminder?.dogIds || [])}</Text>
               </View>
 
               <View style={styles.detailsCard}>
@@ -795,6 +833,13 @@ const styles = StyleSheet.create({
     color: '#8B7355',
     textAlign: 'right',
     marginBottom: 4,
+  },
+  reminderDogs: {
+    fontSize: 12,
+    color: '#7FB069',
+    textAlign: 'right',
+    marginBottom: 4,
+    fontWeight: '500',
   },
   reminderDate: {
     fontSize: 12,

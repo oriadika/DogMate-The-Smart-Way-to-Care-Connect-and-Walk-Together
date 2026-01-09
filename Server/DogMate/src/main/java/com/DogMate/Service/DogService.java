@@ -20,14 +20,17 @@ public class DogService {
     private final IDogRelationshipRepository dogRelationshipRepository;
     private final IUserRepository userRepository;
     private final IFoodStockRepository foodStockRepository;
+    private final ReminderService reminderService;
 
     @Autowired
     public DogService(IDogRepository dogRepository, IDogRelationshipRepository dogRelationshipRepository, 
-                      IUserRepository userRepository, IFoodStockRepository foodStockRepository) {
+                      IUserRepository userRepository, IFoodStockRepository foodStockRepository,
+                      ReminderService reminderService) {
         this.dogRepository = dogRepository;
         this.dogRelationshipRepository = dogRelationshipRepository;
         this.userRepository = userRepository;
         this.foodStockRepository = foodStockRepository;
+        this.reminderService = reminderService;
     }
 
     /**
@@ -156,6 +159,17 @@ public class DogService {
         
         // Save updated user
         userRepository.save(user);
+        
+        // Check if the dog has any remaining relationships
+        List<DogRelationship> allRelationships = dogRelationshipRepository.findAll();
+        boolean hasRelationships = allRelationships.stream()
+            .anyMatch(rel -> rel.getDogID().equals(dogId));
+        
+        // If no relationships left, remove from reminders and delete the dog
+        if (!hasRelationships) {
+            reminderService.removeDogFromAllReminders(dogId);
+            dogRepository.deleteById(dogId);
+        }
     }
 
     /**

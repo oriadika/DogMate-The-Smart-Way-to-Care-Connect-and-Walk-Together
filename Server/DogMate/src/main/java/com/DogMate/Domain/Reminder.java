@@ -21,7 +21,12 @@ public class Reminder {
     @JoinColumn(name = "user_id")
     private RegularUser regularUser;
 
-    @OneToMany(mappedBy = "reminder", cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @ManyToMany
+    @JoinTable(
+        name = "reminder_dogs",
+        joinColumns = @JoinColumn(name = "reminder_id"),
+        inverseJoinColumns = @JoinColumn(name = "dog_id")
+    )
     private List<Dog> dogs;
 
     @Column(name = "title")

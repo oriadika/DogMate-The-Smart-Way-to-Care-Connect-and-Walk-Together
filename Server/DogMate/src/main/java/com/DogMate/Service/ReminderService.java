@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.*;
 
 @Service
 public class ReminderService {
@@ -63,10 +64,6 @@ public class ReminderService {
         List<Dog> dogs = dogRepository.findAll().stream().filter(dog -> (dogIds.contains(dog.getID()))).toList();
         Reminder r = new Reminder(user,
                 new LinkedList<>(dogs),title, remindAt, description);
-        dogs.forEach(dog -> {
-            dog.setReminder(r);
-        });
-
 
         return reminderRepo.save(r);
     }
@@ -77,12 +74,6 @@ public class ReminderService {
 
         Reminder r = reminderOpt.get();
         if (!r.getUser().getId().equals(userId)) return false; // user-scoped security
-
-        // Set reminder to null for all associated dogs
-        r.getDogIds().forEach(dog -> {
-            dog.setReminder(null);
-            dogRepository.save(dog);
-        });
 
         reminderRepo.deleteById(reminderId);
         return true;
@@ -98,5 +89,21 @@ public class ReminderService {
 
         RegularUser regularUser = (RegularUser) userAcc;
         return reminderRepo.findByRegularUser(regularUser);
+    }
+
+    public void removeDogFromAllReminders(UUID dogId) {
+        List<Reminder> allReminders = reminderRepo.findAll();
+        List<UUID> remindersToDelete = new ArrayList<>();
+        for (Reminder r : allReminders) {
+            r.getDogIds().removeIf(dog -> dog.getID().equals(dogId));
+            if (r.getDogIds().isEmpty()) {
+                remindersToDelete.add(r.getId());
+            } else {
+                reminderRepo.save(r);
+            }
+        }
+        for (UUID reminderId : remindersToDelete) {
+            reminderRepo.deleteById(reminderId);
+        }
     }
 }
