@@ -1,5 +1,5 @@
 // App.tsx
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -13,10 +13,26 @@ import AddDogScreen from './screens/AddDogScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import FoodIntakeScreen from './screens/FoodIntakeScreen';
 import AddReminderScreen from './screens/AddReminderScreen';
+import { setupNotificationListeners, requestNotificationPermissions } from './services/notifications';
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  useEffect(() => {
+    // Initialize notifications
+    const initializeNotifications = async () => {
+      await requestNotificationPermissions();
+    };
+
+    initializeNotifications();
+
+    // Set up notification listeners
+    const cleanup = setupNotificationListeners();
+
+    // Cleanup on unmount
+    return cleanup;
+  }, []);
+
   return (
     <NavigationContainer>
       <Stack.Navigator

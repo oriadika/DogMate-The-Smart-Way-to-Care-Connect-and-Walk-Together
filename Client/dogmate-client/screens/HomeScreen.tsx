@@ -16,6 +16,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { dogAPI, userAPI, reminderAPI } from '../services/api';
+import { scheduleReminderNotification, cancelReminderNotification } from '../services/notifications';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
@@ -62,6 +63,20 @@ const HomeScreen = ({ navigation, route }: any) => {
         const remindersResponse = await reminderAPI.getRemindersForUser(currentUser.id);
         if (remindersResponse.success && remindersResponse.reminders) {
           setReminders(remindersResponse.reminders);
+          
+          // Schedule notifications for future reminders
+          const now = new Date();
+          for (const reminder of remindersResponse.reminders) {
+            const reminderDate = new Date(reminder.remindAt);
+            if (reminderDate > now) {
+              await scheduleReminderNotification(
+                reminder.id,
+                reminder.title,
+                reminder.description || 'זמן לתזכורת!',
+                reminderDate
+              );
+            }
+          }
         }
       }
     } catch (error: any) {
@@ -250,6 +265,9 @@ const HomeScreen = ({ navigation, route }: any) => {
                 Alert.alert('שגיאה', 'לא נמצא משתמש');
                 return;
               }
+
+              // Cancel the notification before deleting the reminder
+              await cancelReminderNotification(reminderId);
 
               await reminderAPI.deleteReminder(userId, reminderId);
               Alert.alert('הצלחה', `התזכורת נמחקה בהצלחה`);

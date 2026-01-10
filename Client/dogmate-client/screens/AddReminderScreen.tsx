@@ -19,6 +19,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { dogAPI, userAPI, reminderAPI } from '../services/api';
+import { scheduleReminderNotification } from '../services/notifications';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
@@ -205,6 +206,16 @@ const AddReminderScreen = ({ navigation }: any) => {
         reminderDateTime,
         selectedDogs
       );
+
+      // Schedule local notification for the reminder
+      if (response.success && response.reminder) {
+        await scheduleReminderNotification(
+          response.reminder.id,
+          title,
+          description || 'זמן לתזכורת!',
+          reminderDateTime
+        );
+      }
 
       Alert.alert(
         'תזכורת נשמרה בהצלחה',
