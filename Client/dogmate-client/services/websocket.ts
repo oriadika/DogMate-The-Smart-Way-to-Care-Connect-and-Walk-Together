@@ -2,11 +2,12 @@ import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { BASE_URL } from './config';
 
-// Derive WebSocket URLs from BASE_URL
-const WS_PROTOCOL = BASE_URL.startsWith('https') ? 'wss:' : 'ws:';
-const HOST = BASE_URL.replace(/^https?:\/\//, '');
-const WEBSOCKET_URL = `${WS_PROTOCOL}//${HOST}/ws-ping`;
-const SOCKJS_URL = `${BASE_URL.replace(/\/$/, '')}/ws-ping`;
+
+// Use ws:// protocol for WebSocket instead of http://
+const WEBSOCKET_URL = 'ws://192.168.15.204:8080/ws-ping';
+// Fallback SockJS endpoint
+const SOCKJS_URL = 'http://192.168.15.204:8080/ws-ping';
+
 
 interface PingNotification {
   fromUserId: string;

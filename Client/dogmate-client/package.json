@@ -19,6 +19,7 @@
     "expo": "~54.0.23",
     "expo-image-picker": "~17.0.10",
     "expo-location": "~19.0.7",
+    "expo-notifications": "^0.32.16",
     "expo-status-bar": "~3.0.8",
     "react": "19.1.0",
     "react-dom": "19.1.0",

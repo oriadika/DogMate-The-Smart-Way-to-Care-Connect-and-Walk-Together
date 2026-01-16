@@ -1,8 +1,10 @@
 import axios, { AxiosInstance } from 'axios';
 import { BASE_URL } from './config';
 
-// API base URL from config
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || `${BASE_URL}/api`;
+// Configure your backend URL here
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.15.204:8080/api';
+
+let authToken: string | null = null;
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -11,6 +13,32 @@ const apiClient: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Add request interceptor to include JWT token
+apiClient.interceptors.request.use(
+  (config) => {
+    if (authToken) {
+      config.headers.Authorization = `Bearer ${authToken}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Export function to set token
+export const setAuthToken = (token: string) => {
+  authToken = token;
+  // Update the default header for future requests
+  apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+};
+
+// Export function to clear token
+export const clearAuthToken = () => {
+  authToken = null;
+  delete apiClient.defaults.headers.common['Authorization'];
+};
 
 // Types for API requests/responses
 export interface RegisterUserPayload {
@@ -98,6 +126,13 @@ export const userAPI = {
     try {
       // Replace with your actual login endpoint once available
       const response = await apiClient.post('/auth/login', payload);
+      console.log("Login response data:", response.data); // 👈 הדפסה לקונסול
+      
+      // Save token if provided
+      if (response.data.token) {
+        setAuthToken(response.data.token);
+      }
+      
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Login failed';
@@ -139,10 +174,15 @@ export const userAPI = {
       // Call logout endpoint on backend
       console.log('Logging out user:', { userId, email });
       const response = await apiClient.post('/auth/logout', { userId, email });
+      
+      // Clear token on logout
+      clearAuthToken();
+      
       return response.data;
     } catch (error: any) {
       // Even if logout fails on backend, we can still clear local data
       console.warn('Logout request failed:', error.message);
+      clearAuthToken();
       // Return success anyway to allow local logout
       return { success: true, message: 'Local logout completed' };
     }
@@ -226,6 +266,71 @@ export const dogAPI = {
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to delete dog';
       console.error("Failed to delete dog:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+};
+
+// Reminder API methods
+export const reminderAPI = {
+  /**
+   * Create a new reminder for a user
+   */
+  createReminder: async (userId: string, title: string, description: string, remindAt: Date, dogIds: string[]): Promise<{ success: boolean; message: string; reminder: any }> => {
+    try {
+      const url = `/users/${userId}/reminders`;
+      
+      // Format the date as yyyy-MM-dd HH:mm for server
+      const year = remindAt.getFullYear();
+      const month = String(remindAt.getMonth() + 1).padStart(2, '0');
+      const day = String(remindAt.getDate()).padStart(2, '0');
+      const hours = String(remindAt.getHours()).padStart(2, '0');
+      const minutes = String(remindAt.getMinutes()).padStart(2, '0');
+      const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}`;
+      
+      console.log('Creating reminder with URL:', url);
+      console.log('Request body:', { title, description, remindAt: formattedDate, dogIds });
+      
+      const response = await apiClient.post(url, {
+        title,
+        description,
+        remindAt: formattedDate,
+        dogIds,
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to create reminder';
+      console.error("Failed to create reminder:", errorMessage);
+      console.error("Error response status:", error.response?.status);
+      console.error("Error response data:", error.response?.data);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Get all reminders for a user
+   */
+  getRemindersForUser: async (userId: string) => {
+    try {
+      const response = await apiClient.get(`/users/${userId}/reminders`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch reminders';
+      console.error("Failed to get reminders:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Delete a reminder
+   */
+  deleteReminder: async (userId: string, reminderId: string) => {
+    try {
+      const response = await apiClient.delete(`/users/${userId}/reminders/${reminderId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete reminder';
+      console.error("Failed to delete reminder:", errorMessage);
       throw new Error(errorMessage);
     }
   },

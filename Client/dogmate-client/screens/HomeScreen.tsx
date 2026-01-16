@@ -11,19 +11,28 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, userAPI } from '../services/api';
+import { dogAPI, userAPI, reminderAPI } from '../services/api';
+import { scheduleReminderNotification, cancelReminderNotification } from '../services/notifications';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
+const BG_COLOR = '#FAEFDD'; // Main background
+const TEXT_DARK = '#5C4033'; // Dark brown for text
+const CARD_BG = '#faf0e6'; // Lighter beige for inputs/cards
+const BORDER_COLOR = '#E0D5C7'; // Border color
 
 const HomeScreen = ({ navigation, route }: any) => {
   const [activeTab, setActiveTab] = useState<'home' | 'health' | 'walks' | 'profile'>('home');
   const [userName, setUserName] = useState<string>('');
   const [userId, setUserId] = useState<string | null>(null);
   const [dogs, setDogs] = useState<any[]>([]);
+  const [reminders, setReminders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedReminder, setSelectedReminder] = useState<any | null>(null);
+  const [showReminderDetails, setShowReminderDetails] = useState(false);
   const userName_param = route?.params?.userFirstName;
 
   // Load data when screen is focused (including when returning from AddDog screen)
@@ -49,12 +58,56 @@ const HomeScreen = ({ navigation, route }: any) => {
         if (dogsResponse.success && dogsResponse.dogs) {
           setDogs(dogsResponse.dogs);
         }
+
+        // Fetch reminders for this user
+        const remindersResponse = await reminderAPI.getRemindersForUser(currentUser.id);
+        if (remindersResponse.success && remindersResponse.reminders) {
+          setReminders(remindersResponse.reminders);
+          
+          // Schedule notifications for future reminders
+          const now = new Date();
+          for (const reminder of remindersResponse.reminders) {
+            const reminderDate = new Date(reminder.remindAt);
+            if (reminderDate > now) {
+              await scheduleReminderNotification(
+                reminder.id,
+                reminder.title,
+                reminder.description || 'זמן לתזכורת!',
+                reminderDate
+              );
+            }
+          }
+        }
       }
     } catch (error: any) {
       console.error('Error loading user/dogs:', error);
       Alert.alert('שגיאה', 'שגיאה בטעינת הנתונים');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Format reminder date/time
+  const formatReminderDateTime = (dateValue: any): string => {
+    try {
+      // Backend now sends ISO 8601 string: "2026-01-06T14:30:00"
+      const date = new Date(dateValue);
+      
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date received:', dateValue);
+        return 'תאריך לא תקין';
+      }
+
+      return date.toLocaleDateString('he-IL', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (error) {
+      console.warn('Error formatting date:', error);
+      return 'תאריך לא תקין';
     }
   };
 
@@ -98,6 +151,39 @@ const HomeScreen = ({ navigation, route }: any) => {
     }
     
     return `${years} ${years === 1 ? 'שנה' : 'שנים'} ו-${months} חודשים`;
+  };
+
+  // Get dog names from dog IDs
+  const getDogNames = (dogIds: string[]): string => {
+    if (!dogIds || dogIds.length === 0) return 'כל הכלבים';
+    
+    const names = dogIds.map(id => {
+      const dog = dogs.find(d => d.id === id);
+      return dog ? dog.name : 'כלב לא ידוע';
+    });
+    
+    return names.join(', ');
+  };
+
+  // Get formatted dog text for reminders
+  const getDogText = (dogIds: string[]): string => {
+    if (!dogIds || dogIds.length === 0) return 'כל הכלבים';
+
+    if (dogIds.length === dogs.length) {
+      return 'כל הכלבים';
+    }
+    
+    if (dogIds.length === 1) {
+      const dog = dogs.find(d => d.id === dogIds[0]);
+      return `כלב: ${dog ? dog.name : 'כלב לא ידוע'}`;
+    }
+    
+    const names = dogIds.map(id => {
+      const dog = dogs.find(d => d.id === id);
+      return dog ? dog.name : 'כלב לא ידוע';
+    });
+    
+    return `כלבים: ${names.join(', ')}`;
   };
 
   const handleEditDog = (dogId: string, dogName: string) => {
@@ -153,6 +239,45 @@ const HomeScreen = ({ navigation, route }: any) => {
             } catch (error: any) {
               console.error('Error deleting dog:', error);
               Alert.alert('שגיאה', error.message || 'שגיאה במחיקת הכלב');
+            }
+          },
+          style: 'destructive',
+        },
+      ]
+    );
+  };
+
+  const handleDeleteReminder = (reminderId: string, reminderTitle: string) => {
+    Alert.alert(
+      'מחיקת תזכורת',
+      `האם אתה בטוח שברצונך למחוק את "${reminderTitle}"?`,
+      [
+        {
+          text: 'ביטול',
+          onPress: () => {},
+          style: 'cancel',
+        },
+        {
+          text: 'מחוק',
+          onPress: async () => {
+            try {
+              if (!userId) {
+                Alert.alert('שגיאה', 'לא נמצא משתמש');
+                return;
+              }
+
+              // Cancel the notification before deleting the reminder
+              await cancelReminderNotification(reminderId);
+
+              await reminderAPI.deleteReminder(userId, reminderId);
+              Alert.alert('הצלחה', `התזכורת נמחקה בהצלחה`);
+              setShowReminderDetails(false);
+              
+              // Refresh reminders list
+              loadUserAndDogs();
+            } catch (error: any) {
+              console.error('Error deleting reminder:', error);
+              Alert.alert('שגיאה', error.message || 'שגיאה במחיקת התזכורת');
             }
           },
           style: 'destructive',
@@ -308,14 +433,115 @@ const HomeScreen = ({ navigation, route }: any) => {
 
               {/* Reminders Section */}
               <View style={styles.remindersSection}>
-                <Text style={styles.remindersTitle}>תזכורות להיום</Text>
-                <Text style={styles.remindersPlaceholder}>
-                  אין תזכורות כרגע
-                </Text>
+                <View style={styles.remindersHeader}>
+                  <Text style={styles.remindersTitle}>תזכורות</Text>
+                  <TouchableOpacity
+                    style={styles.addReminderButton}
+                    onPress={() => {
+                      navigation.navigate('AddReminder');
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.addReminderButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {reminders && reminders.length > 0 ? (
+                  <FlatList
+                    data={reminders}
+                    renderItem={({ item: reminder }) => (
+                      <TouchableOpacity 
+                        style={styles.reminderCard}
+                        onPress={() => {
+                          setSelectedReminder(reminder);
+                          setShowReminderDetails(true);
+                        }}
+                      >
+                        <View style={styles.reminderContent}>
+                          <Text style={styles.reminderTitle}>{reminder.title}</Text>
+                          {reminder.description && (
+                            <Text style={styles.reminderDescription}>{reminder.description}</Text>
+                          )}
+                          <Text style={styles.reminderDogs}>{getDogText(reminder.dogIds)}</Text>
+                          <Text style={styles.reminderDate}>{formatReminderDateTime(reminder.remindAt)}</Text>
+                        </View>
+                        <View style={[styles.reminderStatus, reminder.sent && styles.reminderSent]}>
+                          <Text style={styles.reminderStatusText}>
+                            {reminder.sent ? '✓' : '⏰'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                    keyExtractor={(item, index) => item.id ? item.id.toString() : `reminder-${index}`}
+                    scrollEnabled={false}
+                  />
+                ) : (
+                  <Text style={styles.remindersPlaceholder}>
+                    אין תזכורות כרגע
+                  </Text>
+                )}
               </View>
             </>
           )}
         </ScrollView>
+
+        {/* Reminder Details Modal */}
+        <Modal
+          visible={showReminderDetails && selectedReminder !== null}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowReminderDetails(false)}
+        >
+          <SafeAreaView style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setShowReminderDetails(false)}>
+                <Ionicons name="arrow-forward" size={28} color={TEXT_DARK} />
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>פרטי התזכורת</Text>
+              <View style={{ width: 28 }} />
+            </View>
+
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+              <View style={styles.detailsCard}>
+                <Text style={styles.detailsLabel}>שם</Text>
+                <Text style={styles.detailsValue}>{selectedReminder?.title}</Text>
+              </View>
+
+              {selectedReminder?.description && (
+                <View style={styles.detailsCard}>
+                  <Text style={styles.detailsLabel}>תיאור</Text>
+                  <Text style={styles.detailsValue}>{selectedReminder.description}</Text>
+                </View>
+              )}
+
+              <View style={styles.detailsCard}>
+                <Text style={styles.detailsLabel}>תאריך ושעה</Text>
+                <Text style={styles.detailsValue}>{formatReminderDateTime(selectedReminder?.remindAt)}</Text>
+              </View>
+
+              <View style={styles.detailsCard}>
+                <Text style={styles.detailsValue}>{getDogText(selectedReminder?.dogIds || [])}</Text>
+              </View>
+
+              <View style={styles.detailsCard}>
+                <Text style={styles.detailsLabel}>סטטוס</Text>
+                <Text style={[styles.detailsValue, selectedReminder?.sent && { color: PRIMARY_COLOR }]}>
+                  {selectedReminder?.sent ? '✓ נשלח' : '⏰ ממתין'}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => {
+                  handleDeleteReminder(selectedReminder?.id, selectedReminder?.title);
+                }}
+              >
+                <MaterialCommunityIcons name="trash-can" size={20} color="#fff" />
+                <Text style={styles.deleteButtonText}>מחוק תזכורת</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
 
         {/* Bottom Navigation Bar */}
         <View style={styles.bottomNav}>
@@ -554,12 +780,36 @@ const styles = StyleSheet.create({
   remindersSection: {
     marginTop: 10,
   },
+  remindersHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   remindersTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: '#5C4033',
-    marginBottom: 12,
     textAlign: 'right',
+    flex: 1,
+  },
+  addReminderButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: PRIMARY_COLOR,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  addReminderButtonText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
   },
   remindersPlaceholder: {
     fontSize: 16,
@@ -569,6 +819,124 @@ const styles = StyleSheet.create({
     backgroundColor: '#F6D9B7',
     padding: 16,
     borderRadius: 12,
+  },
+  reminderCard: {
+    flexDirection: 'row-reverse',
+    backgroundColor: '#FFFFFF',
+    borderLeftWidth: 4,
+    borderLeftColor: PRIMARY_COLOR,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  reminderContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  reminderTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#5C4033',
+    textAlign: 'right',
+    marginBottom: 4,
+  },
+  reminderDescription: {
+    fontSize: 13,
+    color: '#8B7355',
+    textAlign: 'right',
+    marginBottom: 4,
+  },
+  reminderDogs: {
+    fontSize: 12,
+    color: '#7FB069',
+    textAlign: 'right',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  reminderDate: {
+    fontSize: 12,
+    color: '#A9A9A9',
+    textAlign: 'right',
+  },
+  reminderStatus: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F0F0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reminderSent: {
+    backgroundColor: '#E8F5E9',
+  },
+  reminderStatusText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: BG_COLOR,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_COLOR,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: TEXT_DARK,
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  detailsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: PRIMARY_COLOR,
+  },
+  detailsLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8B7355',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  detailsValue: {
+    fontSize: 16,
+    color: TEXT_DARK,
+    lineHeight: 24,
+  },
+  deleteButton: {
+    backgroundColor: '#E74C3C',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   bottomNav: {
     flexDirection: 'row',
