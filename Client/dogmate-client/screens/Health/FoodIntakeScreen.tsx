@@ -1,4 +1,4 @@
-// screens/FoodIntakeScreen.tsx
+// screens/Health/FoodIntakeScreen.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   SafeAreaView,
@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, userAPI } from '../services/api';
+import { dogAPI, userAPI } from '../../services/api';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 
@@ -26,7 +26,7 @@ interface Dog {
   profileImageUrl?: string;
 }
 
-const FoodIntakeScreen = ({ navigation }: any) => {
+const FoodIntakeScreen = ({ navigation, route }: any) => {
   const [userId, setUserId] = useState<string | null>(null);
   const [dogs, setDogs] = useState<Dog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +34,7 @@ const FoodIntakeScreen = ({ navigation }: any) => {
   const [selectedDogs, setSelectedDogs] = useState<string[]>([]); // Array of dog IDs
   const [dailyConsumption, setDailyConsumption] = useState('');
   const [bagSize, setBagSize] = useState('');
+  const [currentAmount, setCurrentAmount] = useState(''); // כמות נוכחית במלאי (ק״ג)
 
   // Load user and dogs data - same logic as HomeScreen
   useFocusEffect(
@@ -103,32 +104,67 @@ const FoodIntakeScreen = ({ navigation }: any) => {
     return selectedDogNames.join(', ');
   };
 
-  // Calculate and show results
+  // Calculate and add to inventory
   const handleCalculate = () => {
-    if (!dailyConsumption || !bagSize) {
+    // Validation
+    if (selectedDogs.length === 0) {
+      Alert.alert('שגיאה', 'אנא בחר כלב אחד לפחות');
+      return;
+    }
+
+    if (!dailyConsumption || !bagSize || !currentAmount) {
       Alert.alert('שדות חסרים', 'אנא מלא את כל השדות הנדרשים');
       return;
     }
 
     const dailyGrams = parseFloat(dailyConsumption);
     const bagKg = parseFloat(bagSize);
+    const currentKg = parseFloat(currentAmount);
     const bagGrams = bagKg * 1000;
 
-    if (isNaN(dailyGrams) || isNaN(bagGrams) || dailyGrams <= 0 || bagGrams <= 0) {
+    if (isNaN(dailyGrams) || isNaN(bagGrams) || isNaN(currentKg) || dailyGrams <= 0 || bagGrams <= 0 || currentKg < 0) {
       Alert.alert('שגיאה', 'אנא הזן ערכים תקינים');
       return;
     }
 
-    const days = Math.floor(bagGrams / dailyGrams);
-    const selectedDogsNames = selectedDogs.length > 0
-      ? selectedDogs.map((id) => dogs.find((d) => d.id === id)?.name).filter(Boolean).join(', ')
-      : 'כל הכלבים';
+    if (currentKg > bagKg) {
+      Alert.alert('שגיאה', 'כמות נוכחית לא יכולה להיות גדולה מגודל השק');
+      return;
+    }
 
-    Alert.alert(
-      'תוצאות חישוב',
-      `שק מזון של ${bagKg} ק״ג יספיק ל-${days} ימים\nלכלבים: ${selectedDogsNames}\nצריכה יומית: ${dailyGrams} גרם`,
-      [{ text: 'בסדר' }]
-    );
+    // Calculate days remaining until bag is finished
+    // currentAmount is in kg, dailyConsumption is in grams
+    const currentGrams = currentKg * 1000;
+    const daysRemaining = Math.floor(currentGrams / dailyGrams);
+
+    // Create array of dog info for all selected dogs
+    const selectedDogsInfo = selectedDogs
+      .map((dogId) => {
+        const dog = dogs.find((d) => d.id === dogId);
+        if (!dog) return null;
+        return {
+          id: dogId,
+          name: dog.name,
+          imageUrl: dog.profileImageUrl,
+        };
+      })
+      .filter((item) => item !== null);
+
+    if (selectedDogsInfo.length === 0) {
+      Alert.alert('שגיאה', 'לא נמצאו כלבים תקינים');
+      return;
+    }
+
+    // Navigate back with single inventory item containing all dogs
+    navigation.navigate('FoodInventoryHub', {
+      newInventory: {
+        dogs: selectedDogsInfo,
+        daysRemaining,
+        dailyConsumption,
+        bagSize,
+        currentAmount,
+      },
+    });
   };
 
   if (loading) {
@@ -148,7 +184,7 @@ const FoodIntakeScreen = ({ navigation }: any) => {
         {/* Header */}
         <View style={styles.header}>
           <View style={{ width: 40 }} />
-          <Text style={styles.headerTitle}>ניהול מלאי מזון</Text>
+          <Text style={styles.headerTitle}>חישוב מלאי מזון</Text>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
@@ -207,6 +243,35 @@ const FoodIntakeScreen = ({ navigation }: any) => {
               onChangeText={setBagSize}
               textAlign="right"
             />
+          </View>
+
+          {/* Current Amount Input */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>כמות נוכחית במלאי (ק״ג)</Text>
+            <View style={styles.inputWithButtonContainer}>
+              <TextInput
+                style={styles.inputWithButtonText}
+                placeholder="הזן כמות נוכחית בקילוגרמים"
+                placeholderTextColor="#8B7355"
+                keyboardType="numeric"
+                value={currentAmount}
+                onChangeText={setCurrentAmount}
+                textAlign="right"
+              />
+              <TouchableOpacity
+                style={styles.newBagButton}
+                onPress={() => {
+                  if (bagSize) {
+                    setCurrentAmount(bagSize);
+                  } else {
+                    Alert.alert('שגיאה', 'אנא הזן תחילה את גודל שק המזון');
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.newBagButtonText}>שק חדש</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Calculate Button */}
@@ -401,6 +466,39 @@ const styles = StyleSheet.create({
     color: '#5C4033',
     borderWidth: 1,
     borderColor: '#E0D5C7',
+  },
+  inputWithButtonContainer: {
+    backgroundColor: '#F6D9B7',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E0D5C7',
+  },
+  inputWithButtonText: {
+    fontSize: 16,
+    color: '#5C4033',
+    textAlign: 'right',
+    flex: 1,
+  },
+  newBagButton: {
+    backgroundColor: '#FAEFDD',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E0D5C7',
+  },
+  newBagButtonText: {
+    color: '#5C4033',
+    fontSize: 14,
+    fontWeight: '600',
   },
   calculateButton: {
     backgroundColor: PRIMARY_COLOR,

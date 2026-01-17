@@ -11,8 +11,10 @@ import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import AddDogScreen from './screens/AddDogScreen';
 import SettingsScreen from './screens/SettingsScreen';
-import FoodIntakeScreen from './screens/FoodIntakeScreen';
+import FoodIntakeScreen from './screens/Health/FoodIntakeScreen';
 import AddReminderScreen from './screens/AddReminderScreen';
+import HealthScreen from './screens/Health/HealthScreen';
+import FoodInventoryHubScreen from './screens/Health/FoodInventoryHubScreen';
 import { setupNotificationListeners, requestNotificationPermissions } from './services/notifications';
 
 const Stack = createNativeStackNavigator();
@@ -47,6 +49,8 @@ export default function App() {
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="AddDog" component={AddDogScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
+        <Stack.Screen name="Health" component={HealthScreen} />
+        <Stack.Screen name="FoodInventoryHub" component={FoodInventoryHubScreen} />
         <Stack.Screen name="FoodIntake" component={FoodIntakeScreen} />
         <Stack.Screen name="AddReminder" component={AddReminderScreen} />
       </Stack.Navigator>

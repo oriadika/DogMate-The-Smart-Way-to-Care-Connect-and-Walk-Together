@@ -327,6 +327,13 @@ const HomeScreen = ({ navigation, route }: any) => {
       <View style={styles.dogActions}>
         <TouchableOpacity 
           style={styles.actionButton}
+          onPress={() => handleDeleteDog(dog.id, dog.name)}
+        >
+          <MaterialCommunityIcons name="trash-can-outline" size={18} color="#E74C3C" />
+          <Text style={[styles.actionButtonText, { color: '#E74C3C' }]}>מחיקה</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.actionButton}
           onPress={() => handleEditDog(dog.id, dog.name)}
         >
           <MaterialCommunityIcons name="pencil" size={18} color="#7FB069" />
@@ -338,13 +345,6 @@ const HomeScreen = ({ navigation, route }: any) => {
         >
           <MaterialCommunityIcons name="information-outline" size={18} color="#7FB069" />
           <Text style={styles.actionButtonText}>פרטים</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleDeleteDog(dog.id, dog.name)}
-        >
-          <MaterialCommunityIcons name="trash-can-outline" size={18} color="#E74C3C" />
-          <Text style={[styles.actionButtonText, { color: '#E74C3C' }]}>מחיקה</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -574,7 +574,7 @@ const HomeScreen = ({ navigation, route }: any) => {
             style={[styles.navItem, activeTab === 'health' && styles.navItemActive]}
             onPress={() => {
               setActiveTab('health');
-              navigation.navigate('FoodIntake');
+              navigation.navigate('Health');
             }}
           >
             <Ionicons
