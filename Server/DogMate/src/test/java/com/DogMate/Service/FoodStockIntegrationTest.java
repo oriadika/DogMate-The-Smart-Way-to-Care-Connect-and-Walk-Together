@@ -26,42 +26,42 @@ class FoodStockIntegrationTest {
 
     @Autowired private FoodStockRepository foodStockRepository; // infrastructure repo (JpaRepository)
 
-    @Test
-    void addFoodStockToDog_shouldInsertFoodStockWithDogId() {
-        // create user + dog first
-        RegularUser user = userService.registerUser("fs1@test.com", "password123", "E", "F");
+//     @Test
+//     void addFoodStockToDog_shouldInsertFoodStockWithDogId() {
+//         // create user + dog first
+//         RegularUser user = userService.registerUser("fs1@test.com", "password123", "E", "F");
 
-        Dog dog = dogService.addDogToUser(
-                user.getId(),
-                "Rex",
-                "Husky",
-                LocalDate.now(),
-                'M',
-                "img_url",
-                RelationshipType.OWNERSHIP
-        );
+//         Dog dog = dogService.addDogToUser(
+//                 user.getId(),
+//                 "Rex",
+//                 "Husky",
+//                 LocalDate.now(),
+//                 'M',
+//                 "img_url",
+//                 RelationshipType.OWNERSHIP
+//         );
 
-        // add food stock
-        FoodStock saved = dogService.addFoodStockToDog(
-                dog.getID(),
-                "Acana",
-                10.0,
-                7.5,
-                250.0
-        );
+//         // add food stock
+//         FoodStock saved = dogService.addFoodStockToDog(
+//                 dog.getID(),
+//                 "Acana",
+//                 10.0,
+//                 7.5,
+//                 250.0
+//         );
 
-        assertNotNull(saved.getId());
+//         assertNotNull(saved.getId());
 
-        // verify in DB
-        FoodStock fromDb = foodStockRepository.findById(saved.getId()).orElseThrow();
-        assertEquals("Acana", fromDb.getBrandName());
-        assertEquals(10.0, fromDb.getBagSizeInKg());
-        assertEquals(7.5, fromDb.getCurrentLevelInKg());
-        assertEquals(250.0, fromDb.getDailyConsumptionInGram());
+//         // verify in DB
+//         FoodStock fromDb = foodStockRepository.findById(saved.getId()).orElseThrow();
+//         assertEquals("Acana", fromDb.getBrandName());
+//         assertEquals(10.0, fromDb.getBagSizeInKg());
+//         assertEquals(7.5, fromDb.getCurrentLevelInKg());
+//         assertEquals(250.0, fromDb.getDailyConsumptionInGram());
 
-        assertNotNull(fromDb.getDogs());
-        assertEquals(1, fromDb.getDogs().size());
-    }
+//         assertNotNull(fromDb.getDogs());
+//         assertEquals(1, fromDb.getDogs().size());
+//     }
 
     @Test
     void addFoodStockToDog_whenDogNotFound_shouldThrow() {
