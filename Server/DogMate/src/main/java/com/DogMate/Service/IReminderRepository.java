@@ -2,13 +2,14 @@ package com.DogMate.Service;
 
 import com.DogMate.Domain.Dog;
 import com.DogMate.Domain.Reminder;
+import com.DogMate.Domain.RegularUser;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface IReminderRepository {
-//    Reminder save(Reminder reminder);
+    Reminder save(Reminder reminder);
 
     Optional<Reminder> findById(UUID id);
 
@@ -17,4 +18,6 @@ public interface IReminderRepository {
     boolean existsById(UUID id);
 
     List<Reminder> findAll();
+
+    List<Reminder> findByRegularUser(RegularUser regularUser);
 }

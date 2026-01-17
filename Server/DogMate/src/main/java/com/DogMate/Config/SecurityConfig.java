@@ -13,14 +13,14 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable()) // Disable CSRF for API (can enable later if needed)
+            .csrf(csrf -> csrf.disable()) // Disable CSRF for API
             .authorizeHttpRequests(auth -> auth
-                // Allow public access to root, registration, login endpoints, H2 console, WebSocket, dogs, and get logged users
-                .requestMatchers("/", "/api/auth/**", "/api/users/**", "/api/dogs/**", "/h2-console/**", "/ws-ping", "/ws-ping/**").permitAll()
+                // Allow public access to all API endpoints (no authentication required)
+                .requestMatchers("/", "/api/**", "/h2-console/**", "/ws-ping", "/ws-ping/**").permitAll()
                 // Require authentication for all other endpoints
                 .anyRequest().authenticated()
             )
-            // Allow H2 console frames (needed for H2 console to work)
+            // Allow H2 console frames
             .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()));
         
         return http.build();

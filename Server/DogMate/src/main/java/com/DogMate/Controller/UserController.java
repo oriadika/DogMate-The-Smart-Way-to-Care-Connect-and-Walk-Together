@@ -228,7 +228,7 @@ public class UserController {
      * Get all users
      * GET /api/users
      */
-    @GetMapping("/api/users")
+    @GetMapping
     public ResponseEntity<?> getAllUsers() {
         try {
             java.util.List<com.DogMate.Domain.UserAccount> users = userService.getAllUsers();
