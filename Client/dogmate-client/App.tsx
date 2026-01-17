@@ -14,6 +14,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import FoodIntakeScreen from './screens/FoodIntakeScreen';
 import AddReminderScreen from './screens/AddReminderScreen';
 import { setupNotificationListeners, requestNotificationPermissions } from './services/notifications';
+import SOSScreen from './screens/SOSScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -49,6 +50,7 @@ export default function App() {
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="FoodIntake" component={FoodIntakeScreen} />
         <Stack.Screen name="AddReminder" component={AddReminderScreen} />
+        <Stack.Screen name="Emergency" component={SOSScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

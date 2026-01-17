@@ -546,6 +546,32 @@ const HomeScreen = ({ navigation, route }: any) => {
         {/* Bottom Navigation Bar */}
         <View style={styles.bottomNav}>
           <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => {
+              Alert.alert(
+                'מצב חירום',
+                `האם הכלב שלך זקוק לעזרה דחופה?`,
+                [
+                  { text: 'ביטול', style: 'cancel' },
+                  {
+                    text: 'עזרה',
+                    style: 'destructive',
+                    onPress: async () => {
+                      navigation.navigate('Emergency');
+                    },
+                  },
+                ],
+                { cancelable: true }
+              );
+            }}
+          >
+            <MaterialCommunityIcons name="alarm-light" size={24} color="#E53935" />
+            <Text style={styles.navLabel}>
+             עזרה
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.navItem, activeTab === 'profile' && styles.navItemActive]}
             onPress={() => {
               Alert.alert(
