@@ -1,8 +1,11 @@
 package com.DogMate.Controller;
 
 import com.DogMate.DTO.AddFoodStockRequest;
+import com.DogMate.DTO.AddMoodLogRequest;
+import com.DogMate.DTO.DogMoodLogDTO;
 import com.DogMate.DTO.FoodStockDTO;
 import com.DogMate.Domain.Dog;
+import com.DogMate.Domain.DogMoodLog;
 import com.DogMate.Domain.FoodStock;
 import com.DogMate.Domain.RelationshipType;
 import com.DogMate.Service.DogService;
@@ -349,5 +352,41 @@ public class DogController {
         public void setProfileImageUrl(String profileImageUrl) {
             this.profileImageUrl = profileImageUrl;
         }
+    }
+
+    @PostMapping("/{dogId}/mood")
+    public ResponseEntity<?> addMoodLog(
+            @PathVariable UUID dogId,
+            @RequestBody AddMoodLogRequest request) {
+        try {
+            DogMoodLog log = dogService.addMoodLogToDog(dogId, request);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("moodLogId", log.getId());
+            response.put("timestamp", log.getTimestamp());
+            
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Failed to add mood log: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/{dogId}/moods")
+    public ResponseEntity<List<DogMoodLogDTO>> getDogMoods(@PathVariable UUID dogId) {
+        List<DogMoodLogDTO> moods = dogService.getMoodLogsByDogId(dogId);
+        return ResponseEntity.ok(moods);
+    }
+
+    @DeleteMapping("/moods/{dogId}/{moodLogId}")
+    public ResponseEntity<?> deleteMoodLog(@PathVariable UUID dogId, @PathVariable UUID moodLogId) {
+        dogService.deleteMoodLog(dogId, moodLogId);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Mood log deleted successfully");
+        
+        return ResponseEntity.ok(response);
     }
 }

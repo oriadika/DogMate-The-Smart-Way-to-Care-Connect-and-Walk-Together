@@ -1,5 +1,7 @@
 package com.DogMate.Service;
 
+import com.DogMate.DTO.AddMoodLogRequest;
+import com.DogMate.DTO.DogMoodLogDTO;
 import com.DogMate.DTO.FoodStockDTO;
 import com.DogMate.Domain.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -347,5 +349,48 @@ public class DogService {
 
         FoodStock updatedStock = foodStockRepository.save(foodStock);
         return new FoodStockDTO(updatedStock);
+    }
+
+    @Transactional
+    public DogMoodLog addMoodLogToDog(UUID dogId, AddMoodLogRequest request) {
+        Dog dog = dogRepository.findById(dogId)
+                .orElseThrow(() -> new RuntimeException("Dog not found"));
+
+        DogMoodLog newLog = new DogMoodLog(
+                UUID.randomUUID(), 
+                request.getMood(),
+                request.getActivityLevel(),
+                request.getNotes(),
+                dog
+        );
+
+        dog.getDogMoodLogs().add(newLog);
+
+        dogRepository.save(dog);
+        
+        return newLog;
+    }
+
+
+    public List<DogMoodLogDTO> getMoodLogsByDogId(UUID dogId) {
+        Dog dog = dogRepository.findById(dogId)
+                .orElseThrow(() -> new RuntimeException("Dog not found"));
+        List<DogMoodLog> logs = dog.getDogMoodLogs();
+        List<DogMoodLogDTO> logDTOs = new ArrayList<>();
+        for (DogMoodLog log : logs) {
+            logDTOs.add(new DogMoodLogDTO(log));
+        }
+        return logDTOs;
+
+    }
+
+    @Transactional
+    public void deleteMoodLog(UUID dogID,UUID moodLogId) {
+        Dog dog = dogRepository.findById(dogID)
+                .orElseThrow(() -> new RuntimeException("Dog not found"));
+
+        dog.getDogMoodLogs().removeIf(log -> log.getId().equals(moodLogId));
+
+        dogRepository.save(dog);
     }
 }
