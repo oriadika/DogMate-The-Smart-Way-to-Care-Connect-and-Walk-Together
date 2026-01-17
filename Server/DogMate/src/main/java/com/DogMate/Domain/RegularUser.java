@@ -5,6 +5,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 
+import org.apache.catalina.User;
+
 @Entity
 @Table(name = "regular_users")
 @PrimaryKeyJoinColumn(name = "id")
