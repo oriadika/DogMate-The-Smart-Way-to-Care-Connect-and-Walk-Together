@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, userAPI } from '../services/api';
+import { dogAPI } from '../services/api';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 
@@ -26,8 +26,11 @@ interface Dog {
   profileImageUrl?: string;
 }
 
-const FoodIntakeScreen = ({ navigation }: any) => {
-  const [userId, setUserId] = useState<string | null>(null);
+const FoodIntakeScreen = ({ navigation, route }: any) => {
+  // Get userId from route params (passed from HomeScreen)
+  const userIdFromParams = route?.params?.userId;
+  
+  const [userId, setUserId] = useState<string | null>(userIdFromParams || null);
   const [dogs, setDogs] = useState<Dog[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDogModal, setShowDogModal] = useState(false);
@@ -35,30 +38,30 @@ const FoodIntakeScreen = ({ navigation }: any) => {
   const [dailyConsumption, setDailyConsumption] = useState('');
   const [bagSize, setBagSize] = useState('');
 
-  // Load user and dogs data - same logic as HomeScreen
+  // Load dogs data
   useFocusEffect(
     useCallback(() => {
-      loadUserAndDogs();
-    }, [])
+      if (userIdFromParams) {
+        loadDogsForUser(userIdFromParams);
+      } else {
+        Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
+        navigation.goBack();
+      }
+    }, [userIdFromParams])
   );
 
-  const loadUserAndDogs = async () => {
+  const loadDogsForUser = async (userIdToLoad: string) => {
     try {
       setLoading(true);
-      // Fetch current logged-in user - same as HomeScreen
-      const userResponse = await userAPI.getLoggedUsers();
-      if (userResponse.success && userResponse.users && userResponse.users.length > 0) {
-        const currentUser = userResponse.users[0];
-        setUserId(currentUser.id);
+      setUserId(userIdToLoad);
 
-        // Fetch dogs for this user - same as HomeScreen
-        const dogsResponse = await dogAPI.getDogsForUser(currentUser.id);
-        if (dogsResponse.success && dogsResponse.dogs) {
-          setDogs(dogsResponse.dogs);
-        }
+      // Fetch dogs for this user
+      const dogsResponse = await dogAPI.getDogsForUser(userIdToLoad);
+      if (dogsResponse.success && dogsResponse.dogs) {
+        setDogs(dogsResponse.dogs);
       }
     } catch (error: any) {
-      console.error('Error loading user/dogs:', error);
+      console.error('Error loading dogs:', error);
       Alert.alert('שגיאה', 'שגיאה בטעינת הנתונים');
     } finally {
       setLoading(false);
