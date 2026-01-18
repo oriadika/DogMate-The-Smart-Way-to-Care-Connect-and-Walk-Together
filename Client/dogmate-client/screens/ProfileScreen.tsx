@@ -32,11 +32,25 @@ const ProfileScreen = ({ navigation, route }: any) => {
   const [showRadiusFilter, setShowRadiusFilter] = useState<boolean>(true);
   const mapRef = useRef<MapView>(null);
 
-  // Filter users by radius
+  // Filter users by radius (for the list)
   const usersInRadius = loggedUsers.filter((user: any) => {
-    if (!user.distance) return false; // No distance = no location
+    if (!user.distance && !user.latitude) return false; // No distance and no location = skip
+    if (!user.distance) return true; // Has location but no distance yet - include them
     return user.distance <= radiusKm;
   });
+
+  // Users with location data (for the map - show all users with coordinates)
+  const usersWithLocation = loggedUsers.filter((user: any) => user.latitude && user.longitude);
+
+  // Debug: Log users data
+  useEffect(() => {
+    console.log('📊 Total logged users:', loggedUsers.length);
+    console.log('📊 Users with location:', usersWithLocation.length);
+    console.log('📊 Users in radius:', usersInRadius.length);
+    if (loggedUsers.length > 0) {
+      console.log('📊 First user data:', JSON.stringify(loggedUsers[0]));
+    }
+  }, [loggedUsers]);
 
   useEffect(() => {
     fetchLoggedUsers();
@@ -308,6 +322,20 @@ const ProfileScreen = ({ navigation, route }: any) => {
     }
   };
 
+  // Function to focus map on a user's location
+  const focusOnUser = (user: any) => {
+    if (user.latitude && user.longitude && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: user.latitude,
+        longitude: user.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      }, 500);
+    } else {
+      Alert.alert('מיקום לא זמין', 'למשתמש זה אין מיקום פעיל');
+    }
+  };
+
   const handlePing = async (toUserId: string, toUserName: string) => {
     try {
       const fromUserId = route?.params?.userId;
@@ -327,7 +355,11 @@ const ProfileScreen = ({ navigation, route }: any) => {
   };
 
   const renderContact = ({ item }: any) => (
-    <View style={styles.userCard}>
+    <TouchableOpacity 
+      style={styles.userCard}
+      onPress={() => focusOnUser(item)}
+      activeOpacity={0.7}
+    >
       <View style={styles.avatar}>
         {item.role === 'בעל כלב' ? (
           <MaterialCommunityIcons name="dog" size={24} color="#fff" />
@@ -341,9 +373,13 @@ const ProfileScreen = ({ navigation, route }: any) => {
         <Text style={styles.userMeta}>{item.role}</Text>
         {/* Show distance if user has location */}
         {item.distance !== undefined && (
-          <Text style={styles.distanceText}>
-            📍 {LocationService.formatDistance(item.distance)} ממך
-          </Text>
+          <View style={styles.locationRow}>
+            <Ionicons name="location" size={14} color={PRIMARY_COLOR} />
+            <Text style={styles.distanceText}>
+              {LocationService.formatDistance(item.distance)} ממך
+            </Text>
+            <Text style={styles.tapToShowText}>(לחץ להצגה במפה)</Text>
+          </View>
         )}
       </View>
 
@@ -354,7 +390,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
       >
         <Text style={styles.pingText}>פינג</Text>
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 
   const handleSignOut = async () => {
@@ -566,23 +602,30 @@ const ProfileScreen = ({ navigation, route }: any) => {
                       longitude: userLocation.longitude,
                     }}
                     title="אתה כאן"
-                    pinColor={PRIMARY_COLOR}
-                  />
+                  >
+                    <View style={styles.currentUserMarker}>
+                      <MaterialCommunityIcons name="dog" size={20} color="#fff" />
+                    </View>
+                  </Marker>
 
-                  {/* Other users markers - only show users within radius */}
-                  {usersInRadius
-                    .filter((user: any) => user.latitude && user.longitude)
-                    .map((user: any) => (
+                  {/* Other users markers - show ALL users with location on map */}
+                  {/* TEST MODE: Placing other users 10 meters from current user for testing */}
+                  {usersWithLocation
+                    .map((user: any, index: number) => (
                       <Marker
                         key={user.id}
                         coordinate={{
-                          latitude: user.latitude,
-                          longitude: user.longitude,
+                          // TEST: Place user 10 meters away from current user (offset varies by index)
+                          latitude: userLocation.latitude + (0.00009 * (index + 1)),
+                          longitude: userLocation.longitude + (0.00009 * (index + 1)),
                         }}
                         title={user.name}
                         description={user.distance ? `${LocationService.formatDistance(user.distance)} ממך` : ''}
-                        pinColor="#5C4033"
-                      />
+                      >
+                        <View style={styles.otherUserMarker}>
+                          <FontAwesome5 name="dog" size={16} color="#fff" />
+                        </View>
+                      </Marker>
                     ))}
                 </MapView>
               ) : (
@@ -849,7 +892,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: PRIMARY_COLOR,
     fontWeight: '600',
-    marginTop: 6,
+    marginRight: 4,
     textAlign: 'right',
   },
 
@@ -1035,5 +1078,46 @@ const styles = StyleSheet.create({
   radiusLabelText: {
     fontSize: 11,
     color: '#8B7355',
+  },
+
+  // Location row for user cards
+  locationRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+
+  tapToShowText: {
+    fontSize: 10,
+    color: '#8B7355',
+    marginRight: 4,
+    fontStyle: 'italic',
+  },
+
+  // Custom marker styles
+  currentUserMarker: {
+    backgroundColor: PRIMARY_COLOR,
+    borderRadius: 20,
+    padding: 8,
+    borderWidth: 3,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+
+  otherUserMarker: {
+    backgroundColor: '#FF6B6B',
+    borderRadius: 18,
+    padding: 7,
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 4,
   },
 });
