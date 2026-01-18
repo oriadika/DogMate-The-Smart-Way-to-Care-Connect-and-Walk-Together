@@ -11,7 +11,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, Circle } from 'react-native-maps';
+import Slider from '@react-native-community/slider';
 import { userAPI } from '../services/api';
 import websocketService from '../services/websocket';
 import locationService, { LocationService } from '../services/location';
@@ -27,15 +28,26 @@ const ProfileScreen = ({ navigation, route }: any) => {
   const [isLocationSharingEnabled, setIsLocationSharingEnabled] = useState(false); // Default: sharing disabled (location hidden)
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapRegion, setMapRegion] = useState<any>(null);
+  const [radiusKm, setRadiusKm] = useState<number>(1); // Default 1km radius
+  const [showRadiusFilter, setShowRadiusFilter] = useState<boolean>(true);
   const mapRef = useRef<MapView>(null);
+
+  // Filter users by radius
+  const usersInRadius = loggedUsers.filter((user: any) => {
+    if (!user.distance) return false; // No distance = no location
+    return user.distance <= radiusKm;
+  });
 
   useEffect(() => {
     fetchLoggedUsers();
     
-    // Set up auto-refresh of logged-in users every 7 seconds
+    // Set up auto-refresh of logged-in users every 2 seconds for more responsive updates
     const refreshInterval = setInterval(() => {
       fetchLoggedUsers();
-    }, 7000);
+    }, 2000);
+    
+    // Set up periodic location sending (every 5 seconds when sharing is enabled)
+    let locationSendInterval: ReturnType<typeof setInterval> | null = null;
     
     // Request location permissions and start tracking
     const initializeLocation = async () => {
@@ -49,22 +61,13 @@ const ProfileScreen = ({ navigation, route }: any) => {
         const initialLocation = await locationService.getCurrentLocation();
         if (initialLocation && userId) {
           setUserLocation(initialLocation);
-          // Only send to server if sharing is enabled
-          if (isLocationSharingEnabled) {
-            try {
-              await userAPI.updateLocation(userId, initialLocation.latitude, initialLocation.longitude);
-              console.log('📍 Initial location sent to server');
-            } catch (error) {
-              console.error('Failed to send initial location:', error);
-            }
-          }
+          console.log('📍 Initial location obtained:', initialLocation);
         }
 
         // Start watching location for continuous updates
         const success = locationService.startWatchingLocation(
           async (location) => {
             setUserLocation(location);
-            // Location will be sent to server via useEffect when isLocationSharingEnabled changes
           },
           (error) => {
             console.error('Location tracking error:', error);
@@ -92,6 +95,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
       return () => {
         clearTimeout(timer);
         clearInterval(refreshInterval);
+        if (locationSendInterval) clearInterval(locationSendInterval);
         locationService.stopWatchingLocation();
         console.log('📱 ProfileScreen unmounting, disconnecting WebSocket');
         websocketService.disconnect();
@@ -101,21 +105,47 @@ const ProfileScreen = ({ navigation, route }: any) => {
     // Cleanup on unmount
     return () => {
       clearInterval(refreshInterval);
+      if (locationSendInterval) clearInterval(locationSendInterval);
       locationService.stopWatchingLocation();
       console.log('📱 ProfileScreen unmounting, disconnecting WebSocket');
       websocketService.disconnect();
     };
   }, [route?.params?.userId]);
 
-  // Send location updates to server when location changes and sharing is enabled
+  // Send location updates to server continuously when sharing is enabled
+  // Use a ref to store the latest location to avoid recreating the interval
+  const userLocationRef = useRef(userLocation);
+  useEffect(() => {
+    userLocationRef.current = userLocation;
+  }, [userLocation]);
+
   useEffect(() => {
     const userId = route?.params?.userId;
-    if (userId && userLocation && isLocationSharingEnabled) {
-      userAPI.updateLocation(userId, userLocation.latitude, userLocation.longitude)
-        .then(() => console.log('📍 Location updated on server'))
-        .catch((error) => console.error('Failed to update location:', error));
+    let locationInterval: ReturnType<typeof setInterval> | null = null;
+    
+    if (userId && isLocationSharingEnabled) {
+      // Send location immediately
+      if (userLocationRef.current) {
+        userAPI.updateLocation(userId, userLocationRef.current.latitude, userLocationRef.current.longitude)
+          .then(() => console.log('📍 Location sent to server'))
+          .catch((error) => console.error('Failed to update location:', error));
+      }
+      
+      // Set up interval to send location every 2 seconds for better responsiveness
+      locationInterval = setInterval(() => {
+        if (userLocationRef.current) {
+          userAPI.updateLocation(userId, userLocationRef.current.latitude, userLocationRef.current.longitude)
+            .catch((error) => console.error('Failed to update location:', error));
+        }
+      }, 2000);
     }
-  }, [userLocation, isLocationSharingEnabled, route?.params?.userId]);
+    
+    return () => {
+      if (locationInterval) {
+        clearInterval(locationInterval);
+      }
+    };
+  }, [isLocationSharingEnabled, route?.params?.userId]);
 
   // Recalculate distances when userLocation changes
   useEffect(() => {
@@ -193,12 +223,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
         setWsConnected(false);
       },
       onPingReceived: (ping: any) => {
-        console.log('=== PING RECEIVED DEBUG ===');
-        console.log('Full ping object:', JSON.stringify(ping, null, 2));
-        console.log('ping.fromUserName:', ping.fromUserName);
-        console.log('ping.fromUserId:', ping.fromUserId);
-        console.log('ping.toUserId:', ping.toUserId);
-        console.log('===========================');
+        console.log('Ping received from:', ping.fromUserName);
         
         // Show instant notification when ping is received
         Alert.alert(
@@ -287,14 +312,6 @@ const ProfileScreen = ({ navigation, route }: any) => {
     try {
       const fromUserId = route?.params?.userId;
       const fromUserName = `${route?.params?.userFirstName || ''} ${route?.params?.userLastName || ''}`.trim();
-      
-      console.log('=== PING DEBUG ===');
-      console.log('fromUserId:', fromUserId);
-      console.log('fromUserName:', fromUserName);
-      console.log('toUserId:', toUserId);
-      console.log('toUserName:', toUserName);
-      console.log('route.params:', route?.params);
-      console.log('==================');
       
       if (!fromUserId) {
         Alert.alert('שגיאה', 'מזהה משתמש לא נמצא');
@@ -390,7 +407,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
       </View>
 
       <FlatList
-        data={loggedUsers}
+        data={usersInRadius}
         keyExtractor={(item) => item.id}
         renderItem={renderContact}
         contentContainerStyle={styles.listContent}
@@ -469,11 +486,13 @@ const ProfileScreen = ({ navigation, route }: any) => {
                     style={styles.myLocationButton}
                     onPress={() => {
                     if (mapRef.current && userLocation) {
+                      // Zoom to fit the radius
+                      const latDelta = (radiusKm / 111) * 2.5; // ~111km per degree latitude
                       mapRef.current.animateToRegion({
                         latitude: userLocation.latitude,
                         longitude: userLocation.longitude,
-                        latitudeDelta: 0.005,
-                        longitudeDelta: 0.005,
+                        latitudeDelta: latDelta,
+                        longitudeDelta: latDelta,
                       }, 500);
                     }
                     }}
@@ -482,6 +501,35 @@ const ProfileScreen = ({ navigation, route }: any) => {
                   </TouchableOpacity>
                 )}
               </View>
+
+              {/* Radius Filter Slider */}
+              {userLocation && (
+                <View style={styles.radiusFilterContainer}>
+                  <View style={styles.radiusHeader}>
+                    <Ionicons name="radio-button-on" size={16} color={PRIMARY_COLOR} />
+                    <Text style={styles.radiusTitle}>טווח חיפוש: {radiusKm >= 1 ? `${radiusKm} ק"מ` : `${Math.round(radiusKm * 1000)} מ'`}</Text>
+                    <Text style={styles.usersInRadiusCount}>
+                      ({usersInRadius.length} משתמשים בטווח)
+                    </Text>
+                  </View>
+                  <Slider
+                    style={styles.radiusSlider}
+                    minimumValue={0.05}
+                    maximumValue={5}
+                    step={0.05}
+                    value={radiusKm}
+                    onValueChange={(value) => setRadiusKm(Math.round(value * 100) / 100)}
+                    minimumTrackTintColor={PRIMARY_COLOR}
+                    maximumTrackTintColor="#E0D5C7"
+                    thumbTintColor={PRIMARY_COLOR}
+                  />
+                  <View style={styles.radiusLabels}>
+                    <Text style={styles.radiusLabelText}>50 מ'</Text>
+                    <Text style={styles.radiusLabelText}>5 ק"מ</Text>
+                  </View>
+                </View>
+              )}
+
               {userLocation ? (
                 <MapView
                   ref={mapRef}
@@ -489,8 +537,8 @@ const ProfileScreen = ({ navigation, route }: any) => {
                   initialRegion={mapRegion || {
                     latitude: userLocation.latitude,
                     longitude: userLocation.longitude,
-                    latitudeDelta: 0.005,
-                    longitudeDelta: 0.005,
+                    latitudeDelta: (radiusKm / 111) * 2.5,
+                    longitudeDelta: (radiusKm / 111) * 2.5,
                   }}
                   showsUserLocation={true}
                   showsMyLocationButton={false}
@@ -499,6 +547,18 @@ const ProfileScreen = ({ navigation, route }: any) => {
                   scrollEnabled={true}
                   rotateEnabled={false}
                 >
+                  {/* Radius circle */}
+                  <Circle
+                    center={{
+                      latitude: userLocation.latitude,
+                      longitude: userLocation.longitude,
+                    }}
+                    radius={radiusKm * 1000} // Convert km to meters
+                    strokeColor="rgba(127, 176, 105, 0.8)"
+                    fillColor="rgba(127, 176, 105, 0.15)"
+                    strokeWidth={2}
+                  />
+
                   {/* Current user marker */}
                   <Marker
                     coordinate={{
@@ -509,8 +569,8 @@ const ProfileScreen = ({ navigation, route }: any) => {
                     pinColor={PRIMARY_COLOR}
                   />
 
-                  {/* Other users markers */}
-                  {loggedUsers
+                  {/* Other users markers - only show users within radius */}
+                  {usersInRadius
                     .filter((user: any) => user.latitude && user.longitude)
                     .map((user: any) => (
                       <Marker
@@ -535,7 +595,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
               )}
             </View>
 
-            <Text style={styles.sectionTitle}>משתמשים מחוברים:</Text>
+            <Text style={styles.sectionTitle}>משתמשים בטווח ({usersInRadius.length}):</Text>
             {isLoadingUsers && (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator color={PRIMARY_COLOR} size="large" />
@@ -928,5 +988,52 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
+  },
+
+  // Radius filter styles
+  radiusFilterContainer: {
+    backgroundColor: '#faf0e6',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0D5C7',
+  },
+
+  radiusHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+
+  radiusTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5C4033',
+    marginRight: 8,
+    textAlign: 'right',
+  },
+
+  usersInRadiusCount: {
+    fontSize: 12,
+    color: PRIMARY_COLOR,
+    fontWeight: '600',
+    marginRight: 8,
+  },
+
+  radiusSlider: {
+    width: '100%',
+    height: 40,
+  },
+
+  radiusLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+
+  radiusLabelText: {
+    fontSize: 11,
+    color: '#8B7355',
   },
 });
