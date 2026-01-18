@@ -27,6 +27,7 @@ const BORDER_COLOR = '#E0D5C7'; // Border color
 const HomeScreen = ({ navigation, route }: any) => {
   const [activeTab, setActiveTab] = useState<'home' | 'health' | 'walks' | 'profile'>('home');
   const [userName, setUserName] = useState<string>(route?.params?.userFirstName || '');
+  const [userLastName, setUserLastName] = useState<string>(route?.params?.userLastName || '');
   const [userId, setUserId] = useState<string | null>(route?.params?.userId || null);
   const [dogs, setDogs] = useState<any[]>([]);
   const [reminders, setReminders] = useState<any[]>([]);
@@ -37,6 +38,7 @@ const HomeScreen = ({ navigation, route }: any) => {
   // Get user data from route params (passed from LoginScreen) - use state as fallback
   const currentUserId = route?.params?.userId || userId;
   const currentUserName = route?.params?.userFirstName || userName;
+  const currentUserLastName = route?.params?.userLastName || userLastName;
 
   // Update state when route params change (e.g., on first login)
   React.useEffect(() => {
@@ -46,7 +48,10 @@ const HomeScreen = ({ navigation, route }: any) => {
     if (route?.params?.userFirstName && route.params.userFirstName !== userName) {
       setUserName(route.params.userFirstName);
     }
-  }, [route?.params?.userId, route?.params?.userFirstName]);
+    if (route?.params?.userLastName && route.params.userLastName !== userLastName) {
+      setUserLastName(route.params.userLastName);
+    }
+  }, [route?.params?.userId, route?.params?.userFirstName, route?.params?.userLastName]);
 
   // Load data when screen is focused (including when returning from AddDog screen)
   useFocusEffect(
@@ -635,7 +640,8 @@ const HomeScreen = ({ navigation, route }: any) => {
               setActiveTab('walks');
               navigation.navigate('Profile', {
                 userId: currentUserId,
-                userFirstName: userName,
+                userFirstName: currentUserName,
+                userLastName: currentUserLastName,
               });
             }}
           >
