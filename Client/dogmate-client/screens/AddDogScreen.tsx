@@ -18,11 +18,13 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { dogAPI, userAPI } from '../services/api';
+import { dogAPI } from '../services/api';
 
-const AddDogScreen = ({ navigation }: any) => {
-  const [userId, setUserId] = useState<string | null>(null);
-  const [loadingUser, setLoadingUser] = useState(true);
+const AddDogScreen = ({ navigation, route }: any) => {
+  // Get userId from route params (passed from HomeScreen)
+  const userIdFromParams = route?.params?.userId;
+  const [userId, setUserId] = useState<string | null>(userIdFromParams || null);
+  const [loadingUser, setLoadingUser] = useState(!userIdFromParams);
   const [name, setName] = useState('');
   const [breed, setBreed] = useState('');
   const [birthDate, setBirthDate] = useState(new Date());
@@ -38,35 +40,19 @@ const AddDogScreen = ({ navigation }: any) => {
     setPermissionGranted(status === 'granted');
   };
 
-  const fetchCurrentUser = async () => {
-    try {
-      setLoadingUser(true);
-      // Try to get logged-in users list (this gives us the current user)
-      const response = await userAPI.getLoggedUsers();
-      
-      if (response.success && response.users && response.users.length > 0) {
-        // Get the first logged-in user (or you can filter by current user)
-        const currentUser = response.users[0];
-        setUserId(currentUser.id);
-      } else {
-        Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
-        navigation.goBack();
-      }
-    } catch (error: any) {
-      console.error('Error fetching current user:', error);
-      Alert.alert('שגיאה', 'שגיאה בטעינת נתוני המשתמש');
+  // Fetch current user on screen mount (only if userId not provided in params)
+  useEffect(() => {
+    if (!userIdFromParams) {
+      // If no userId provided, show error and go back
+      Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
       navigation.goBack();
-    } finally {
+    } else {
+      setUserId(userIdFromParams);
       setLoadingUser(false);
     }
-  };
-
-  // Fetch current user on screen mount
-  useEffect(() => {
-    fetchCurrentUser();
     requestPhotoPermission();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [userIdFromParams]);
 
   // Format date to DD/MM/YYYY
   const formatDate = (date: Date): string => {
@@ -219,8 +205,8 @@ const AddDogScreen = ({ navigation }: any) => {
           {
             text: 'בסדר',
             onPress: () => {
-              // Navigate to Home screen to refresh the dogs list
-              navigation.navigate('Home', { refresh: true });
+              // Navigate to Home screen to refresh the dogs list - pass userId back
+              navigation.navigate('Home', { userId: userIdFromParams, refresh: true });
             },
           },
         ]);
