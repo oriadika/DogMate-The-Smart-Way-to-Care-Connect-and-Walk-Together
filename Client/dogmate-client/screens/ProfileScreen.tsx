@@ -193,7 +193,13 @@ const ProfileScreen = ({ navigation, route }: any) => {
         setWsConnected(false);
       },
       onPingReceived: (ping: any) => {
-        console.log('Ping received:', ping);
+        console.log('=== PING RECEIVED DEBUG ===');
+        console.log('Full ping object:', JSON.stringify(ping, null, 2));
+        console.log('ping.fromUserName:', ping.fromUserName);
+        console.log('ping.fromUserId:', ping.fromUserId);
+        console.log('ping.toUserId:', ping.toUserId);
+        console.log('===========================');
+        
         // Show instant notification when ping is received
         Alert.alert(
           'פינג חדש! 🐕',
@@ -280,7 +286,15 @@ const ProfileScreen = ({ navigation, route }: any) => {
   const handlePing = async (toUserId: string, toUserName: string) => {
     try {
       const fromUserId = route?.params?.userId;
-      const fromUserName = `${route?.params?.userFirstName} ${route?.params?.userLastName}`;
+      const fromUserName = `${route?.params?.userFirstName || ''} ${route?.params?.userLastName || ''}`.trim();
+      
+      console.log('=== PING DEBUG ===');
+      console.log('fromUserId:', fromUserId);
+      console.log('fromUserName:', fromUserName);
+      console.log('toUserId:', toUserId);
+      console.log('toUserName:', toUserName);
+      console.log('route.params:', route?.params);
+      console.log('==================');
       
       if (!fromUserId) {
         Alert.alert('שגיאה', 'מזהה משתמש לא נמצא');
