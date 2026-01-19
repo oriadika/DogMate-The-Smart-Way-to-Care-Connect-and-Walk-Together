@@ -170,11 +170,12 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
           <TouchableOpacity
             style={styles.homeButton}
             onPress={() => {
-              // Navigate back to Home, going through the stack
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Home', params: { userId } }],
-              });
+              // Navigate back to Home with userId to ensure data loads
+              if (userId) {
+                navigation.navigate('Home', { userId });
+              } else {
+                navigation.goBack();
+              }
             }}
           >
             <Ionicons name="home-outline" size={24} color={TEXT_DARK} />

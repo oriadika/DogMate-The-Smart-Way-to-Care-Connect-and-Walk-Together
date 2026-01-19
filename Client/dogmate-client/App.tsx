@@ -9,6 +9,7 @@ import HomeScreen from './screens/HomeScreen';
 import LoginScreen from './screens/LoginScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import DogProfileScreen from './screens/DogProfileScreen';
 import AddDogScreen from './screens/AddDogScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import FoodIntakeScreen from './screens/Health/FoodIntakeScreen';
@@ -48,6 +49,7 @@ export default function App() {
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="DogProfile" component={DogProfileScreen} />
         <Stack.Screen name="AddDog" component={AddDogScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         <Stack.Screen name="Health" component={HealthScreen} />

@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, reminderAPI } from '../services/api';
+import { dogAPI, reminderAPI, userAPI } from '../services/api';
 import { scheduleReminderNotification, cancelReminderNotification } from '../services/notifications';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
@@ -69,7 +69,29 @@ const HomeScreen = ({ navigation, route }: any) => {
 
       // Use the userId passed from login instead of fetching logged users
       setUserId(userIdToLoad);
-      setUserName(userNameToLoad || 'חברים');
+      
+      // If userName is missing, try to fetch it from logged users
+      if (!userNameToLoad) {
+        try {
+          const loggedUsersResponse = await userAPI.getLoggedUsers();
+          if (loggedUsersResponse.success && loggedUsersResponse.users) {
+            const currentUser = loggedUsersResponse.users.find((u: any) => u.id === userIdToLoad);
+            if (currentUser) {
+              setUserName(currentUser.firstName || 'חברים');
+              setUserLastName(currentUser.lastName || '');
+            } else {
+              setUserName('חברים');
+            }
+          } else {
+            setUserName('חברים');
+          }
+        } catch (e) {
+          console.log('Could not fetch user info:', e);
+          setUserName('חברים');
+        }
+      } else {
+        setUserName(userNameToLoad);
+      }
 
       // Fetch dogs for this specific user
       const dogsResponse = await dogAPI.getDogsForUser(userIdToLoad);
@@ -600,16 +622,8 @@ const HomeScreen = ({ navigation, route }: any) => {
           <TouchableOpacity
             style={[styles.navItem, activeTab === 'profile' && styles.navItemActive]}
             onPress={() => {
-              Alert.alert(
-                'פונקציונליות לא מומשה',
-                'פונקציונליות הפרופיל עדיין לא מומשה.',
-                [
-                  {
-                    text: 'בסדר',
-                    style: 'default',
-                  },
-                ]
-              );
+              setActiveTab('profile');
+              navigation.navigate('DogProfile', { userId: currentUserId });
             }}
           >
             <FontAwesome5
