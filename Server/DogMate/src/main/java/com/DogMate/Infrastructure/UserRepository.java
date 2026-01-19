@@ -3,6 +3,8 @@ package com.DogMate.Infrastructure;
 import com.DogMate.Domain.UserAccount;
 import com.DogMate.Service.IUserRepository;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -22,6 +24,15 @@ public interface UserRepository extends JpaRepository<UserAccount, UUID>, IUserR
      * Checks if a user with the given email exists
      */
     boolean existsByEmail(String email);
+
+    /**
+     * Reset all users on server startup:
+     * - Set loggedIn to false
+     * - Clear latitude and longitude (hide location)
+     */
+    @Modifying
+    @Query("UPDATE UserAccount u SET u.loggedIn = false, u.latitude = null, u.longitude = null")
+    int resetAllUsersOnStartup();
 
     // IUserRepository interface methods are automatically implemented by JpaRepository:
     // - save() -> JpaRepository.save()
