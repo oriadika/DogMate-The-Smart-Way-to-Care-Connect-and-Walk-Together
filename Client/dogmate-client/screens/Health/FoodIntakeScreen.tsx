@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, userAPI } from '../../services/api';
+import { dogAPI, userAPI, foodStockAPI } from '../../services/api';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 
@@ -105,7 +105,7 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
   };
 
   // Calculate and add to inventory
-  const handleCalculate = () => {
+  const handleCalculate = async () => {
     // Validation
     if (selectedDogs.length === 0) {
       Alert.alert('שגיאה', 'אנא בחר כלב אחד לפחות');
@@ -155,16 +155,38 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
       return;
     }
 
-    // Navigate back with single inventory item containing all dogs
-    navigation.navigate('FoodInventoryHub', {
-      newInventory: {
-        dogs: selectedDogsInfo,
-        daysRemaining,
-        dailyConsumption,
-        bagSize,
-        currentAmount,
-      },
-    });
+    try {
+      // Save to database - create food stock for the first dog
+      const firstDogId = selectedDogs[0];
+      const response = await foodStockAPI.createFoodStock(
+        firstDogId,
+        'מזון כלבים', // Default brand name
+        bagKg,
+        dailyGrams,
+        currentKg
+      );
+
+      // If there are more dogs, connect the food stock to them
+      if (selectedDogs.length > 1 && response.foodStock?.id) {
+        for (let i = 1; i < selectedDogs.length; i++) {
+          try {
+            await foodStockAPI.connectFoodStockToDog(selectedDogs[i], response.foodStock.id);
+          } catch (connectError) {
+            console.error('Failed to connect food stock to dog:', connectError);
+          }
+        }
+      }
+
+      Alert.alert('הצלחה', 'מלאי המזון נשמר בהצלחה!', [
+        {
+          text: 'אישור',
+          onPress: () => navigation.navigate('FoodInventoryHub', { refresh: true }),
+        },
+      ]);
+    } catch (error: any) {
+      console.error('Error saving food stock:', error);
+      Alert.alert('שגיאה', error.message || 'שגיאה בשמירת מלאי המזון');
+    }
   };
 
   if (loading) {

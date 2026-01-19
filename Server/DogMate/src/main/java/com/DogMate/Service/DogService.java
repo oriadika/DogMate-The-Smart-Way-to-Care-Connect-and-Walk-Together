@@ -236,13 +236,16 @@ public class DogService {
                 dailyConsumptionInGram
         );
 
+        // persist first to avoid transient instance error
+        foodStock = foodStockRepository.save(foodStock);
+
         // connect (owning side)
         foodStock.addDog(dog);
 
         // optional but good for consistency on both sides
         dog.setFoodStock(foodStock);
 
-        // persist
+        // persist the updated foodStock with the dog relationship
         return foodStockRepository.save(foodStock);
     }
 

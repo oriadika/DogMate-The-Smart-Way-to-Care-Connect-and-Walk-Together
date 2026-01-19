@@ -1,5 +1,5 @@
 // screens/Health/HealthScreen.tsx
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   SafeAreaView,
   View,
@@ -8,7 +8,9 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { userAPI } from '../../services/api';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
@@ -17,6 +19,25 @@ const CARD_BG = '#faf0e6'; // Lighter beige for inputs/cards
 const BORDER_COLOR = '#E0D5C7'; // Border color
 
 const HealthScreen = ({ navigation }: any) => {
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Load user ID on focus
+  useFocusEffect(
+    useCallback(() => {
+      const loadUserId = async () => {
+        try {
+          const userResponse = await userAPI.getLoggedUsers();
+          if (userResponse.success && userResponse.users && userResponse.users.length > 0) {
+            setUserId(userResponse.users[0].id);
+          }
+        } catch (error) {
+          console.error('Error loading user:', error);
+        }
+      };
+      loadUserId();
+    }, [])
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -26,7 +47,12 @@ const HealthScreen = ({ navigation }: any) => {
           <Text style={styles.headerTitle}>בריאות</Text>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.navigate('Home')}
+            onPress={() => {
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Home', params: { userId } }],
+              });
+            }}
           >
             <Ionicons name="arrow-forward" size={28} color="#5C4033" />
           </TouchableOpacity>

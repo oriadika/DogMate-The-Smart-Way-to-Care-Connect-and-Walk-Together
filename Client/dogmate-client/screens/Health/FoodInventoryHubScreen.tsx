@@ -1,5 +1,5 @@
 // screens/Health/FoodInventoryHubScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   SafeAreaView,
   View,
@@ -8,17 +8,18 @@ import {
   FlatList,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import FoodInventoryCard from '../../components/FoodInventoryCard';
+import { userAPI, foodStockAPI } from '../../services/api';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
 const TEXT_DARK = '#5C4033'; // Dark brown for text
 const BORDER_COLOR = '#E0D5C7'; // Border color
 
-// נתוני דמה ראשוניים - רשימה ריקה
 type DogInfo = {
   id: string;
   name: string;
@@ -32,42 +33,72 @@ type InventoryItem = {
   dailyConsumption: string; // in grams
   bagSize: string; // in kg
   currentAmount: string; // in kg
+  brandName?: string;
 };
 
-const INITIAL_INVENTORY_DATA: InventoryItem[] = [];
-
-let idCounter = 1; // Counter for generating unique IDs
-
 const FoodInventoryHubScreen = ({ navigation, route }: any) => {
-  const [inventoryList, setInventoryList] = useState<InventoryItem[]>(INITIAL_INVENTORY_DATA);
+  const [inventoryList, setInventoryList] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  // Listen for new inventory data from FoodIntakeScreen
-  useFocusEffect(
-    React.useCallback(() => {
-      if (route?.params?.newInventory) {
-        const newInventory = route.params.newInventory;
-        
-        // Generate unique ID
-        const newId = idCounter.toString();
-        idCounter++;
-
-        // Create inventory item with all dogs
-        const inventoryItem: InventoryItem = {
-          id: newId,
-          dogs: newInventory.dogs,
-          daysRemaining: newInventory.daysRemaining,
-          dailyConsumption: newInventory.dailyConsumption,
-          bagSize: newInventory.bagSize,
-          currentAmount: newInventory.currentAmount,
-        };
-
-        // Add new inventory to list
-        setInventoryList((prev) => [inventoryItem, ...prev]);
-
-        // Clear the params to prevent adding again
-        navigation.setParams({ newInventory: undefined });
+  // Load food stocks from database
+  const loadFoodStocks = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // Get current user
+      const userResponse = await userAPI.getLoggedUsers();
+      if (!userResponse.success || !userResponse.users || userResponse.users.length === 0) {
+        Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
+        setLoading(false);
+        return;
       }
-    }, [route?.params?.newInventory, navigation])
+      
+      const currentUser = userResponse.users[0];
+      setUserId(currentUser.id);
+
+      // Fetch food stocks for this user
+      const response = await foodStockAPI.getFoodStocksForUser(currentUser.id);
+      
+      if (response.success && response.foodStocks) {
+        // Transform API response to our format
+        const transformedList: InventoryItem[] = response.foodStocks.map((stock: any) => {
+          // Calculate days remaining - currentLevelInKg is in kg, dailyConsumptionInGram is in grams
+          const currentGrams = stock.currentLevelInKg * 1000;
+          const daysRemaining = stock.dailyConsumptionInGram > 0 
+            ? Math.floor(currentGrams / stock.dailyConsumptionInGram) 
+            : 0;
+
+          return {
+            id: stock.id,
+            dogs: stock.dogs?.map((dog: any) => ({
+              id: dog.id,
+              name: dog.name,
+              imageUrl: dog.profileImageUrl,
+            })) || [],
+            daysRemaining,
+            dailyConsumption: stock.dailyConsumptionInGram.toString(),
+            bagSize: stock.bagSizeInKg.toString(),
+            currentAmount: stock.currentLevelInKg.toString(),
+            brandName: stock.brandName,
+          };
+        });
+        
+        setInventoryList(transformedList);
+      }
+    } catch (error: any) {
+      console.error('Error loading food stocks:', error);
+      Alert.alert('שגיאה', 'שגיאה בטעינת מלאי המזון');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Load data when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      loadFoodStocks();
+    }, [loadFoodStocks])
   );
 
   // ניווט להוספה (ללא ID)
@@ -92,47 +123,62 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
         {
           text: 'מחק',
           style: 'destructive',
-          onPress: () => {
-            setInventoryList((prev) => prev.filter((item) => item.id !== id));
+          onPress: async () => {
+            try {
+              await foodStockAPI.deleteFoodStock(id);
+              // Reload the list
+              loadFoodStocks();
+              Alert.alert('הצלחה', 'המלאי נמחק בהצלחה');
+            } catch (error: any) {
+              console.error('Error deleting food stock:', error);
+              Alert.alert('שגיאה', error.message || 'שגיאה במחיקת המלאי');
+            }
           },
         },
       ]
     );
   };
 
-  const handleBuyNewBag = (id: string) => {
-    setInventoryList((prev) => {
-      return prev.map((item) => {
-        if (item.id === id) {
-          // Add bag size to current amount
-          const currentKg = parseFloat(item.currentAmount);
-          const bagKg = parseFloat(item.bagSize);
-          const newCurrentAmount = currentKg + bagKg;
-          
-          // Calculate new days remaining
-          const dailyGrams = parseFloat(item.dailyConsumption);
-          const currentGrams = newCurrentAmount * 1000;
-          const newDaysRemaining = Math.floor(currentGrams / dailyGrams);
-          
-          return {
-            ...item,
-            currentAmount: newCurrentAmount.toString(),
-            daysRemaining: newDaysRemaining,
-          };
-        }
-        return item;
-      });
-    });
-    
-    Alert.alert('הצלחה', 'השק החדש נוסף למלאי בהצלחה!');
+  const handleBuyNewBag = async (id: string) => {
+    try {
+      await foodStockAPI.renewFoodStock(id);
+      // Reload the list to get updated values
+      loadFoodStocks();
+      Alert.alert('הצלחה', 'השק החדש נוסף למלאי בהצלחה!');
+    } catch (error: any) {
+      console.error('Error renewing food stock:', error);
+      Alert.alert('שגיאה', error.message || 'שגיאה בחידוש המלאי');
+    }
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+          <Text style={styles.loadingText}>טוען מלאי מזון...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={{ width: 40 }} />
+          <TouchableOpacity
+            style={styles.homeButton}
+            onPress={() => {
+              // Navigate back to Home, going through the stack
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Home', params: { userId } }],
+              });
+            }}
+          >
+            <Ionicons name="home-outline" size={24} color={TEXT_DARK} />
+          </TouchableOpacity>
           <Text style={styles.headerTitle}>ניהול מלאי מזון</Text>
           <TouchableOpacity
             style={styles.backButton}
@@ -187,6 +233,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: TEXT_DARK,
+    fontSize: 16,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -206,6 +262,11 @@ const styles = StyleSheet.create({
     padding: 5,
     width: 40,
     alignItems: 'flex-end',
+  },
+  homeButton: {
+    padding: 5,
+    width: 40,
+    alignItems: 'flex-start',
   },
   titleContainer: {
     flexDirection: 'row-reverse',

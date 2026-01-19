@@ -1104,31 +1104,4 @@ const styles = StyleSheet.create({
     marginRight: 4,
     fontStyle: 'italic',
   },
-
-  // Custom marker styles
-  currentUserMarker: {
-    backgroundColor: PRIMARY_COLOR,
-    borderRadius: 20,
-    padding: 8,
-    borderWidth: 3,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 5,
-  },
-
-  otherUserMarker: {
-    backgroundColor: '#FF6B6B',
-    borderRadius: 18,
-    padding: 7,
-    borderWidth: 2,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 4,
-  },
 });

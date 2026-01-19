@@ -28,10 +28,15 @@ public class FoodStockController {
     }
 
 
-    @GetMapping("/my-food-stocks")
-    public ResponseEntity<List<FoodStockDTO>> getMyDogsFoodStocks(@PathVariable String userId) {
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<?> getMyDogsFoodStocks(@PathVariable String userId) {
         List<FoodStockDTO> stocks = dogService.getUserFoodStocks(UUID.fromString(userId));
-        return ResponseEntity.ok(stocks);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("foodStocks", stocks);
+        
+        return ResponseEntity.ok(response);
     }
 
 
