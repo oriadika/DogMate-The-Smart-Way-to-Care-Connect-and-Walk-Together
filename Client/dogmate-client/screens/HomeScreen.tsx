@@ -34,7 +34,7 @@ const HomeScreen = ({ navigation, route }: any) => {
   const [loading, setLoading] = useState(true);
   const [selectedReminder, setSelectedReminder] = useState<any | null>(null);
   const [showReminderDetails, setShowReminderDetails] = useState(false);
-  
+
   // Get user data from route params (passed from LoginScreen) - use state as fallback
   const currentUserId = route?.params?.userId || userId;
   const currentUserName = route?.params?.userFirstName || userName;
@@ -66,7 +66,7 @@ const HomeScreen = ({ navigation, route }: any) => {
   const loadUserAndDogs = async (userIdToLoad: string, userNameToLoad?: string) => {
     try {
       setLoading(true);
-      
+
       // Use the userId passed from login instead of fetching logged users
       setUserId(userIdToLoad);
       setUserName(userNameToLoad || 'חברים');
@@ -81,7 +81,7 @@ const HomeScreen = ({ navigation, route }: any) => {
       const remindersResponse = await reminderAPI.getRemindersForUser(userIdToLoad);
       if (remindersResponse.success && remindersResponse.reminders) {
         setReminders(remindersResponse.reminders);
-        
+
         // Schedule notifications for future reminders
         const now = new Date();
         for (const reminder of remindersResponse.reminders) {
@@ -348,6 +348,13 @@ const HomeScreen = ({ navigation, route }: any) => {
       <View style={styles.dogActions}>
         <TouchableOpacity 
           style={styles.actionButton}
+          onPress={() => handleDeleteDog(dog.id, dog.name)}
+        >
+          <MaterialCommunityIcons name="trash-can-outline" size={18} color="#E74C3C" />
+          <Text style={[styles.actionButtonText, { color: '#E74C3C' }]}>מחיקה</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionButton}
           onPress={() => handleEditDog(dog.id, dog.name)}
         >
           <MaterialCommunityIcons name="pencil" size={18} color="#7FB069" />
@@ -359,13 +366,6 @@ const HomeScreen = ({ navigation, route }: any) => {
         >
           <MaterialCommunityIcons name="information-outline" size={18} color="#7FB069" />
           <Text style={styles.actionButtonText}>פרטים</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleDeleteDog(dog.id, dog.name)}
-        >
-          <MaterialCommunityIcons name="trash-can-outline" size={18} color="#E74C3C" />
-          <Text style={[styles.actionButtonText, { color: '#E74C3C' }]}>מחיקה</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -626,7 +626,7 @@ const HomeScreen = ({ navigation, route }: any) => {
             style={[styles.navItem, activeTab === 'health' && styles.navItemActive]}
             onPress={() => {
               setActiveTab('health');
-              navigation.navigate('FoodIntake', { userId: currentUserId });
+              navigation.navigate('Health');
             }}
           >
             <Ionicons

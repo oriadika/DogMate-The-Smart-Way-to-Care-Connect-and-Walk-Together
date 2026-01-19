@@ -349,3 +349,100 @@ export const reminderAPI = {
   },
 };
 
+// Food Stock API methods
+export const foodStockAPI = {
+  /**
+   * Get all food stocks for a user's dogs
+   */
+  getFoodStocksForUser: async (userId: string) => {
+    try {
+      const response = await apiClient.get(`/food-stock/user/${userId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch food stocks';
+      console.error("Failed to get food stocks:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Create a new food stock and assign to a dog
+   */
+  createFoodStock: async (dogId: string, brandName: string, bagSizeInKg: number, dailyConsumptionInGram: number, currentLevelInKg: number) => {
+    try {
+      const response = await apiClient.post(`/dogs/${dogId}/food-stock`, {
+        brandName,
+        bagSizeInKg,
+        dailyConsumptionInGram,
+        currentLevelInKg,
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to create food stock';
+      console.error("Failed to create food stock:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Connect an existing food stock to a dog
+   */
+  connectFoodStockToDog: async (dogId: string, foodStockId: string) => {
+    try {
+      const response = await apiClient.post(`/dogs/${dogId}/food-stock/${foodStockId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to connect food stock to dog';
+      console.error("Failed to connect food stock:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Renew/refill food stock to full bag size
+   */
+  renewFoodStock: async (foodStockId: string) => {
+    try {
+      const response = await apiClient.put(`/food-stock/${foodStockId}/renew`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to renew food stock';
+      console.error("Failed to renew food stock:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Update food stock details
+   */
+  updateFoodStock: async (foodStockId: string, brandName?: string, bagSize?: number, dailyConsumption?: number, currentLevel?: number) => {
+    try {
+      const response = await apiClient.put(`/food-stock/${foodStockId}`, {
+        brandName,
+        bagSize,
+        dailyConsumption,
+        currentLevel,
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to update food stock';
+      console.error("Failed to update food stock:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Delete a food stock
+   */
+  deleteFoodStock: async (foodStockId: string) => {
+    try {
+      const response = await apiClient.delete(`/food-stock/${foodStockId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete food stock';
+      console.error("Failed to delete food stock:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+};
+
