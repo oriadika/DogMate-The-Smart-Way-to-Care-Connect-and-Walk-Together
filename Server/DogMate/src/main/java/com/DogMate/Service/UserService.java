@@ -4,6 +4,7 @@ import com.DogMate.Domain.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -185,6 +186,7 @@ public class UserService {
      * @return The authenticated UserAccount
      * @throws IllegalArgumentException if credentials are invalid
      */
+    @Transactional
     public UserAccount login(String email, String password) {
         // Validate email using domain method (business logic in domain)
         UserAccount.validateEmail(email);
@@ -206,10 +208,15 @@ public class UserService {
             throw new IllegalArgumentException("Invalid credentials");
         }
         
-        user.setLoggedIn(passwordMatches);
-        userRepository.save(user);
+        // Set logged in status to true
+        user.setLoggedIn(true);
+        System.out.println("Setting user " + email + " loggedIn to true");
         
-        return user;
+        // Save the updated user
+        UserAccount savedUser = userRepository.save(user);
+        System.out.println("User saved, loggedIn status: " + savedUser.isLoggedIn());
+        
+        return savedUser;
     }
     
     /**
@@ -232,6 +239,7 @@ public class UserService {
      * @param userId The UUID of the user to logout
      * @throws IllegalArgumentException if user ID is null or user doesn't exist
      */
+    @Transactional
     public void logout(UUID userId) {
         // Validate user ID using domain method (business logic in domain)
         UserAccount.validateUserId(userId);
@@ -248,6 +256,13 @@ public class UserService {
         UserAccount user = userOpt.get();
         user.setLoggedIn(false);
         
+        // Clear location when logging out
+        if (user instanceof RegularUser) {
+            RegularUser regularUser = (RegularUser) user;
+            regularUser.setLatitude(null);
+            regularUser.setLongitude(null);
+        }
+        
         // Save to repository (orchestration)
         userRepository.save(user);
     }
@@ -258,6 +273,7 @@ public class UserService {
      * @param email The email of the user to logout
      * @throws IllegalArgumentException if email is null/empty or user doesn't exist
      */
+    @Transactional
     public void logoutByEmail(String email) {
         // Validate email using domain method (business logic in domain)
         UserAccount.validateEmail(email);
@@ -273,6 +289,13 @@ public class UserService {
         // Update user's logged-in status (orchestration)
         UserAccount user = userOpt.get();
         user.setLoggedIn(false);
+        
+        // Clear location when logging out
+        if (user instanceof RegularUser) {
+            RegularUser regularUser = (RegularUser) user;
+            regularUser.setLatitude(null);
+            regularUser.setLongitude(null);
+        }
         
         // Save to repository (orchestration)
         userRepository.save(user);
@@ -294,6 +317,13 @@ public class UserService {
         UserAccount user = userOpt.get();
         user.setLoggedIn(isActive);
         
+        // Clear location when logging out
+        if (!isActive && user instanceof RegularUser) {
+            RegularUser regularUser = (RegularUser) user;
+            regularUser.setLatitude(null);
+            regularUser.setLongitude(null);
+        }
+        
         userRepository.save(user);
     }    /**
      * Updates the active status (isActive) of a user by email.
@@ -310,6 +340,13 @@ public class UserService {
 
         UserAccount user = userOpt.get();
         user.setLoggedIn(isActive);
+        
+        // Clear location when logging out
+        if (!isActive && user instanceof RegularUser) {
+            RegularUser regularUser = (RegularUser) user;
+            regularUser.setLatitude(null);
+            regularUser.setLongitude(null);
+        }
         
         userRepository.save(user);
     }
@@ -349,6 +386,38 @@ public class UserService {
             regularUser.setLatitude(latitude);
             regularUser.setLongitude(longitude);
             userRepository.save(regularUser);
+        } else {
+            throw new IllegalArgumentException("Only RegularUser accounts support location tracking");
+        }
+    }
+
+    /**
+     * Clear user's location (set to null to hide from other users)
+     * Service layer - only orchestration
+     * @param userId The UUID of the user to clear location for
+     * @throws IllegalArgumentException if user ID is null or user doesn't exist
+     */
+    @Transactional
+    public void clearUserLocation(UUID userId) {
+        // Validate user ID using domain method (business logic in domain)
+        UserAccount.validateUserId(userId);
+
+        // Find user by ID (orchestration)
+        Optional<UserAccount> userOpt = userRepository.findById(userId);
+
+        // Validate user exists (business logic)
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with ID: " + userId);
+        }
+
+        // Clear user location (orchestration)
+        UserAccount user = userOpt.get();
+        if (user instanceof RegularUser) {
+            RegularUser regularUser = (RegularUser) user;
+            regularUser.setLatitude(null);
+            regularUser.setLongitude(null);
+            userRepository.save(regularUser);
+            System.out.println("Location cleared for user: " + userId);
         } else {
             throw new IllegalArgumentException("Only RegularUser accounts support location tracking");
         }

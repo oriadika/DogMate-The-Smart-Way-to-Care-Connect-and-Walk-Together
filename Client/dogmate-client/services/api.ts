@@ -222,6 +222,19 @@ export const userAPI = {
   },
 
   /**
+   * Clear user's location (hide from other users)
+   */
+  clearLocation: async (userId: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await apiClient.delete(`/users/${userId}/location`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to clear location';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
    * Note: Ping notifications are now received via WebSocket in real-time.
    * No polling or marking as read needed.
    */

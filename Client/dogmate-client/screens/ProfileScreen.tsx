@@ -219,10 +219,21 @@ const ProfileScreen = ({ navigation, route }: any) => {
       }
     }
   }, [userLocation, loggedUsers]);
-  const toggleLocationSharing = () => {
+  const toggleLocationSharing = async () => {
     const newState = !isLocationSharingEnabled;
     setIsLocationSharingEnabled(newState);
-    // Location will be sent/stopped automatically via useEffect when state changes
+    
+    const userId = route?.params?.userId;
+    if (!newState && userId) {
+      // Clear location from server when sharing is disabled
+      try {
+        await userAPI.clearLocation(userId);
+        console.log('🔒 Location cleared from server - you are now hidden');
+      } catch (error) {
+        console.error('Failed to clear location:', error);
+      }
+    }
+    
     console.log(`📍 Location sharing ${newState ? 'enabled' : 'disabled'}`);
   };
 

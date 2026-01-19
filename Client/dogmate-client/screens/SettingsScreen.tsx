@@ -8,8 +8,10 @@ import {
   ScrollView,
   Switch,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
+import { userAPI } from '../services/api';
 
 // קומפוננטת עזר לשורה בהגדרות
 const SettingItem = ({ icon, label, onPress, isDestructive, value, onToggle }: any) => (
@@ -48,9 +50,14 @@ const SettingItem = ({ icon, label, onPress, isDestructive, value, onToggle }: a
   </TouchableOpacity>
 );
 
-const SettingsScreen = ({ navigation }: any) => {
+const SettingsScreen = ({ navigation, route }: any) => {
   // משתני State לדוגמה
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Get user info from route params
+  const userId = route?.params?.userId;
+  const email = route?.params?.email;
 
   // פונקציית התנתקות
   const handleLogout = () => {
@@ -62,13 +69,25 @@ const SettingsScreen = ({ navigation }: any) => {
         { 
           text: 'התנתק', 
           style: 'destructive',
-          onPress: () => {
-            // כאן תוסיף את לוגיקת ההתנתקות האמיתית שלך
-            console.log('User logged out');
-            navigation.reset({
+          onPress: async () => {
+            setIsLoggingOut(true);
+            try {
+              // Call logout API
+              console.log('Logging out user:', { userId, email });
+              await userAPI.logout(userId || '', email || '');
+              console.log('User logged out successfully');
+              
+              // Navigate to login screen
+              navigation.reset({
                 index: 0,
-                routes: [{ name: 'Login' }], // או לאן שתרצה לנווט
-            });
+                routes: [{ name: 'Start' }],
+              });
+            } catch (error: any) {
+              console.error('Logout error:', error);
+              Alert.alert('שגיאה', 'ההתנתקות נכשלה. נסה שוב.');
+            } finally {
+              setIsLoggingOut(false);
+            }
           }
         },
       ]
@@ -159,11 +178,21 @@ const SettingsScreen = ({ navigation }: any) => {
 
           {/* כפתור התנתקות */}
           <View style={styles.logoutContainer}>
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <Text style={styles.logoutText}>התנתק מהמערכת</Text>
-              <View style={{ marginLeft: 8 }}>
-                <MaterialCommunityIcons name="logout" size={20} color="#FF6B6B" />
-              </View>
+            <TouchableOpacity 
+              style={styles.logoutButton} 
+              onPress={handleLogout}
+              disabled={isLoggingOut}
+            >
+              {isLoggingOut ? (
+                <ActivityIndicator color="#FF6B6B" size="small" />
+              ) : (
+                <>
+                  <Text style={styles.logoutText}>התנתק מהמערכת</Text>
+                  <View style={{ marginLeft: 8 }}>
+                    <MaterialCommunityIcons name="logout" size={20} color="#FF6B6B" />
+                  </View>
+                </>
+              )}
             </TouchableOpacity>
           </View>
 

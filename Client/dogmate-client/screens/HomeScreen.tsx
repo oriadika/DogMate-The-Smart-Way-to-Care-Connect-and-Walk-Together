@@ -389,7 +389,12 @@ const HomeScreen = ({ navigation, route }: any) => {
             />
             <TouchableOpacity 
               style={styles.settingsButton}
-              onPress={() => navigation.navigate('Settings')}
+              onPress={() => navigation.navigate('Settings', {
+                userId: currentUserId,
+                email: route?.params?.email,
+                userFirstName: currentUserName,
+                userLastName: currentUserLastName,
+              })}
             >
               <Ionicons name="settings-outline" size={28} color="#5C4033" />
             </TouchableOpacity>
