@@ -82,12 +82,12 @@ class LocationService {
     try {
       console.log('📍 Starting location watcher...');
       
-      // Watch location with 1000ms update interval and 100m distance threshold
+      // Watch location with more frequent updates for better nearby user detection
       this.locationWatcher = Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 5000, // Update every 5 seconds minimum
-          distanceInterval: 10, // Update if location changes by 10 meters
+          accuracy: Location.Accuracy.High, // Higher accuracy for better positioning
+          timeInterval: 2000, // Update every 2 seconds minimum
+          distanceInterval: 5, // Update if location changes by 5 meters
         },
         (location) => {
           const userLocation: UserLocation = {

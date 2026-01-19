@@ -21,7 +21,8 @@
         "backgroundColor": "#FAEFDD"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.dogmateclient"
     },
     "web": {
       "favicon": "./assets/favicon.png"

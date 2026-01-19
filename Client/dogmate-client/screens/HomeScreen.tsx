@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, userAPI, reminderAPI } from '../services/api';
+import { dogAPI, reminderAPI } from '../services/api';
 import { scheduleReminderNotification, cancelReminderNotification } from '../services/notifications';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
@@ -26,56 +26,73 @@ const BORDER_COLOR = '#E0D5C7'; // Border color
 
 const HomeScreen = ({ navigation, route }: any) => {
   const [activeTab, setActiveTab] = useState<'home' | 'health' | 'walks' | 'profile'>('home');
-  const [userName, setUserName] = useState<string>('');
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>(route?.params?.userFirstName || '');
+  const [userLastName, setUserLastName] = useState<string>(route?.params?.userLastName || '');
+  const [userId, setUserId] = useState<string | null>(route?.params?.userId || null);
   const [dogs, setDogs] = useState<any[]>([]);
   const [reminders, setReminders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedReminder, setSelectedReminder] = useState<any | null>(null);
   const [showReminderDetails, setShowReminderDetails] = useState(false);
-  const userName_param = route?.params?.userFirstName;
+
+  // Get user data from route params (passed from LoginScreen) - use state as fallback
+  const currentUserId = route?.params?.userId || userId;
+  const currentUserName = route?.params?.userFirstName || userName;
+  const currentUserLastName = route?.params?.userLastName || userLastName;
+
+  // Update state when route params change (e.g., on first login)
+  React.useEffect(() => {
+    if (route?.params?.userId && route.params.userId !== userId) {
+      setUserId(route.params.userId);
+    }
+    if (route?.params?.userFirstName && route.params.userFirstName !== userName) {
+      setUserName(route.params.userFirstName);
+    }
+    if (route?.params?.userLastName && route.params.userLastName !== userLastName) {
+      setUserLastName(route.params.userLastName);
+    }
+  }, [route?.params?.userId, route?.params?.userFirstName, route?.params?.userLastName]);
 
   // Load data when screen is focused (including when returning from AddDog screen)
   useFocusEffect(
     React.useCallback(() => {
       setActiveTab('home'); // Set home tab as active when screen is focused
-      loadUserAndDogs();
-    }, [])
+      if (currentUserId) {
+        loadUserAndDogs(currentUserId, currentUserName);
+      }
+    }, [currentUserId, currentUserName])
   );
 
-  const loadUserAndDogs = async () => {
+  const loadUserAndDogs = async (userIdToLoad: string, userNameToLoad?: string) => {
     try {
       setLoading(true);
-      // Fetch current logged-in user
-      const userResponse = await userAPI.getLoggedUsers();
-      if (userResponse.success && userResponse.users && userResponse.users.length > 0) {
-        const currentUser = userResponse.users[0];
-        setUserId(currentUser.id);
-        setUserName(currentUser.firstName || 'חברים');
 
-        // Fetch dogs for this user
-        const dogsResponse = await dogAPI.getDogsForUser(currentUser.id);
-        if (dogsResponse.success && dogsResponse.dogs) {
-          setDogs(dogsResponse.dogs);
-        }
+      // Use the userId passed from login instead of fetching logged users
+      setUserId(userIdToLoad);
+      setUserName(userNameToLoad || 'חברים');
 
-        // Fetch reminders for this user
-        const remindersResponse = await reminderAPI.getRemindersForUser(currentUser.id);
-        if (remindersResponse.success && remindersResponse.reminders) {
-          setReminders(remindersResponse.reminders);
-          
-          // Schedule notifications for future reminders
-          const now = new Date();
-          for (const reminder of remindersResponse.reminders) {
-            const reminderDate = new Date(reminder.remindAt);
-            if (reminderDate > now) {
-              await scheduleReminderNotification(
-                reminder.id,
-                reminder.title,
-                reminder.description || 'זמן לתזכורת!',
-                reminderDate
-              );
-            }
+      // Fetch dogs for this specific user
+      const dogsResponse = await dogAPI.getDogsForUser(userIdToLoad);
+      if (dogsResponse.success && dogsResponse.dogs) {
+        setDogs(dogsResponse.dogs);
+      }
+
+      // Fetch reminders for this specific user
+      const remindersResponse = await reminderAPI.getRemindersForUser(userIdToLoad);
+      if (remindersResponse.success && remindersResponse.reminders) {
+        setReminders(remindersResponse.reminders);
+
+        // Schedule notifications for future reminders
+        const now = new Date();
+        for (const reminder of remindersResponse.reminders) {
+          const reminderDate = new Date(reminder.remindAt);
+          if (reminderDate > now) {
+            await scheduleReminderNotification(
+              reminder.id,
+              reminder.title,
+              reminder.description || 'זמן לתזכורת!',
+              reminderDate
+            );
           }
         }
       }
@@ -235,7 +252,9 @@ const HomeScreen = ({ navigation, route }: any) => {
               Alert.alert('הצלחה', `${dogName} נמחק בהצלחה`);
               
               // Refresh dogs list
-              loadUserAndDogs();
+              if (currentUserId) {
+                loadUserAndDogs(currentUserId, currentUserName);
+              }
             } catch (error: any) {
               console.error('Error deleting dog:', error);
               Alert.alert('שגיאה', error.message || 'שגיאה במחיקת הכלב');
@@ -274,7 +293,9 @@ const HomeScreen = ({ navigation, route }: any) => {
               setShowReminderDetails(false);
               
               // Refresh reminders list
-              loadUserAndDogs();
+              if (currentUserId) {
+                loadUserAndDogs(currentUserId, currentUserName);
+              }
             } catch (error: any) {
               console.error('Error deleting reminder:', error);
               Alert.alert('שגיאה', error.message || 'שגיאה במחיקת התזכורת');
@@ -332,7 +353,7 @@ const HomeScreen = ({ navigation, route }: any) => {
           <MaterialCommunityIcons name="trash-can-outline" size={18} color="#E74C3C" />
           <Text style={[styles.actionButtonText, { color: '#E74C3C' }]}>מחיקה</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.actionButton}
           onPress={() => handleEditDog(dog.id, dog.name)}
         >
@@ -368,7 +389,12 @@ const HomeScreen = ({ navigation, route }: any) => {
             />
             <TouchableOpacity 
               style={styles.settingsButton}
-              onPress={() => navigation.navigate('Settings')}
+              onPress={() => navigation.navigate('Settings', {
+                userId: currentUserId,
+                email: route?.params?.email,
+                userFirstName: currentUserName,
+                userLastName: currentUserLastName,
+              })}
             >
               <Ionicons name="settings-outline" size={28} color="#5C4033" />
             </TouchableOpacity>
@@ -398,7 +424,7 @@ const HomeScreen = ({ navigation, route }: any) => {
               <TouchableOpacity
                 style={styles.addDogButton}
                 activeOpacity={0.85}
-                onPress={() => navigation.navigate('AddDog')}
+                onPress={() => navigation.navigate('AddDog', { userId: currentUserId })}
               >
                 <Text style={styles.addDogButtonText}>הוסף כלב</Text>
               </TouchableOpacity>
@@ -413,7 +439,7 @@ const HomeScreen = ({ navigation, route }: any) => {
                 </View>
                 <TouchableOpacity
                   style={styles.addDogFab}
-                  onPress={() => navigation.navigate('AddDog')}
+                  onPress={() => navigation.navigate('AddDog', { userId: currentUserId })}
                 >
                   <Text style={styles.addDogFabText}>הוסף כלב</Text>
                 </TouchableOpacity>
@@ -438,7 +464,7 @@ const HomeScreen = ({ navigation, route }: any) => {
                   <TouchableOpacity
                     style={styles.addReminderButton}
                     onPress={() => {
-                      navigation.navigate('AddReminder');
+                      navigation.navigate('AddReminder', { userId: currentUserId });
                     }}
                     activeOpacity={0.85}
                   >
@@ -546,6 +572,32 @@ const HomeScreen = ({ navigation, route }: any) => {
         {/* Bottom Navigation Bar */}
         <View style={styles.bottomNav}>
           <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => {
+              Alert.alert(
+                'מצב חירום',
+                `האם הכלב שלך זקוק לעזרה דחופה?`,
+                [
+                  { text: 'ביטול', style: 'cancel' },
+                  {
+                    text: 'עזרה',
+                    style: 'destructive',
+                    onPress: async () => {
+                      navigation.navigate('Emergency');
+                    },
+                  },
+                ],
+                { cancelable: true }
+              );
+            }}
+          >
+            <MaterialCommunityIcons name="alarm-light" size={24} color="#E53935" />
+            <Text style={styles.navLabel}>
+             עזרה
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.navItem, activeTab === 'profile' && styles.navItemActive]}
             onPress={() => {
               Alert.alert(
@@ -592,7 +644,9 @@ const HomeScreen = ({ navigation, route }: any) => {
             onPress={() => {
               setActiveTab('walks');
               navigation.navigate('Profile', {
-                userFirstName: userName,
+                userId: currentUserId,
+                userFirstName: currentUserName,
+                userLastName: currentUserLastName,
               });
             }}
           >

@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { BASE_URL } from './config';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.68.104:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.105:8080/api';
 
 let authToken: string | null = null;
 
@@ -127,12 +127,12 @@ export const userAPI = {
       // Replace with your actual login endpoint once available
       const response = await apiClient.post('/auth/login', payload);
       console.log("Login response data:", response.data); // 👈 הדפסה לקונסול
-      
+
       // Save token if provided
       if (response.data.token) {
         setAuthToken(response.data.token);
       }
-      
+
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Login failed';
@@ -174,10 +174,10 @@ export const userAPI = {
       // Call logout endpoint on backend
       console.log('Logging out user:', { userId, email });
       const response = await apiClient.post('/auth/logout', { userId, email });
-      
+
       // Clear token on logout
       clearAuthToken();
-      
+
       return response.data;
     } catch (error: any) {
       // Even if logout fails on backend, we can still clear local data
@@ -193,8 +193,8 @@ export const userAPI = {
    */
   sendPing: async (fromUserId: string, toUserId: string, fromUserName?: string): Promise<{ success: boolean; message: string }> => {
     try {
-      const response = await apiClient.post('/users/ping', { 
-        fromUserId, 
+      const response = await apiClient.post('/users/ping', {
+        fromUserId,
         toUserId,
         fromUserName: fromUserName || 'Unknown User'
       });
@@ -210,13 +210,26 @@ export const userAPI = {
    */
   updateLocation: async (userId: string, latitude: number, longitude: number): Promise<{ success: boolean; message: string }> => {
     try {
-      const response = await apiClient.post(`/users/${userId}/location`, { 
+      const response = await apiClient.post(`/users/${userId}/location`, {
         latitude,
         longitude
       });
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to update location';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Clear user's location (hide from other users)
+   */
+  clearLocation: async (userId: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await apiClient.delete(`/users/${userId}/location`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to clear location';
       throw new Error(errorMessage);
     }
   },
@@ -279,7 +292,7 @@ export const reminderAPI = {
   createReminder: async (userId: string, title: string, description: string, remindAt: Date, dogIds: string[]): Promise<{ success: boolean; message: string; reminder: any }> => {
     try {
       const url = `/users/${userId}/reminders`;
-      
+
       // Format the date as yyyy-MM-dd HH:mm for server
       const year = remindAt.getFullYear();
       const month = String(remindAt.getMonth() + 1).padStart(2, '0');
@@ -287,10 +300,10 @@ export const reminderAPI = {
       const hours = String(remindAt.getHours()).padStart(2, '0');
       const minutes = String(remindAt.getMinutes()).padStart(2, '0');
       const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}`;
-      
+
       console.log('Creating reminder with URL:', url);
       console.log('Request body:', { title, description, remindAt: formattedDate, dogIds });
-      
+
       const response = await apiClient.post(url, {
         title,
         description,

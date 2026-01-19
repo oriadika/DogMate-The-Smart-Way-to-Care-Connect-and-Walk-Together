@@ -509,6 +509,45 @@ public class UserController {
         }
     }
 
+    /**
+     * Clear user's location (hide from other users)
+     * DELETE /api/users/{userId}/location
+     */
+    @DeleteMapping("/{userId}/location")
+    public ResponseEntity<?> clearUserLocation(@PathVariable String userId) {
+        try {
+            // Validate inputs
+            if (userId == null || userId.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("User ID is required"));
+            }
+
+            // Parse UUID
+            UUID userUuid;
+            try {
+                userUuid = UUID.fromString(userId);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("Invalid user ID format"));
+            }
+
+            // Clear user location via service (set to null)
+            userService.clearUserLocation(userUuid);
+
+            // Create response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Location cleared successfully");
+            response.put("userId", userId);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to clear location: " + e.getMessage()));
+        }
+    }
+
     private Map<String, Object> createErrorResponse(String message) {
         Map<String, Object> error = new HashMap<>();
         error.put("success", false);

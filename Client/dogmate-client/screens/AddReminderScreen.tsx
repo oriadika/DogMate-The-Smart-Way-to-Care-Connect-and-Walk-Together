@@ -18,7 +18,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, userAPI, reminderAPI } from '../services/api';
+import { dogAPI, reminderAPI } from '../services/api';
 import { scheduleReminderNotification } from '../services/notifications';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
@@ -34,7 +34,10 @@ interface Dog {
   profileImageUrl?: string;
 }
 
-const AddReminderScreen = ({ navigation }: any) => {
+const AddReminderScreen = ({ navigation, route }: any) => {
+  // Get userId from route params (passed from HomeScreen)
+  const userIdFromParams = route?.params?.userId;
+  
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(new Date());
@@ -43,7 +46,7 @@ const AddReminderScreen = ({ navigation }: any) => {
   const [showTimePicker, setShowTimePicker] = useState(false);
   
   // Dog selection state
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(userIdFromParams || null);
   const [dogs, setDogs] = useState<Dog[]>([]);
   const [loadingDogs, setLoadingDogs] = useState(true);
   const [showDogModal, setShowDogModal] = useState(false);
@@ -95,30 +98,30 @@ const AddReminderScreen = ({ navigation }: any) => {
     }
   };
 
-  // Load user and dogs data - same logic as FoodIntakeScreen
+  // Load user and dogs data
   useFocusEffect(
     useCallback(() => {
-      loadUserAndDogs();
-    }, [])
+      if (userIdFromParams) {
+        loadDogsForUser(userIdFromParams);
+      } else {
+        Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
+        navigation.goBack();
+      }
+    }, [userIdFromParams])
   );
 
-  const loadUserAndDogs = async () => {
+  const loadDogsForUser = async (userIdToLoad: string) => {
     try {
       setLoadingDogs(true);
-      // Fetch current logged-in user
-      const userResponse = await userAPI.getLoggedUsers();
-      if (userResponse.success && userResponse.users && userResponse.users.length > 0) {
-        const currentUser = userResponse.users[0];
-        setUserId(currentUser.id);
+      setUserId(userIdToLoad);
 
-        // Fetch dogs for this user
-        const dogsResponse = await dogAPI.getDogsForUser(currentUser.id);
-        if (dogsResponse.success && dogsResponse.dogs) {
-          setDogs(dogsResponse.dogs);
-        }
+      // Fetch dogs for this user
+      const dogsResponse = await dogAPI.getDogsForUser(userIdToLoad);
+      if (dogsResponse.success && dogsResponse.dogs) {
+        setDogs(dogsResponse.dogs);
       }
     } catch (error: any) {
-      console.error('Error loading user/dogs:', error);
+      console.error('Error loading dogs:', error);
       Alert.alert('שגיאה', 'שגיאה בטעינת הנתונים');
     } finally {
       setLoadingDogs(false);
@@ -295,7 +298,9 @@ const AddReminderScreen = ({ navigation }: any) => {
                   style={styles.pickerInput}
                   onPress={async () => {
                     // Reload dogs before opening modal
-                    await loadUserAndDogs();
+                    if (userIdFromParams) {
+                      await loadDogsForUser(userIdFromParams);
+                    }
                     setShowDogModal(true);
                   }}
                   activeOpacity={0.7}
