@@ -10,10 +10,10 @@ import {
   Alert,
 } from 'react-native';
 import { userAPI } from '../services/api';
+import { useUsers } from '../contexts/UsersContext';
 
 const AdminScreen = ({ navigation, route }: any) => {
-  const [numberOfUsers, setNumberOfUsers] = useState(0);
-  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const { users, setUsers } = useUsers();
   const [loading, setLoading] = useState(true);
   const [loggedOut, setLoggedOut] = useState(false);
 
@@ -24,9 +24,16 @@ const AdminScreen = ({ navigation, route }: any) => {
 
         console.log('Admin users response:', allUsersResponse);
 
-        const users = allUsersResponse.users || allUsersResponse || [];
-        setAllUsers(users);
-        setNumberOfUsers(users.length);
+        const fetchedUsers =
+          Array.isArray(allUsersResponse)
+            ? allUsersResponse
+            : Array.isArray(allUsersResponse.users)
+            ? allUsersResponse.users
+            : Array.isArray(allUsersResponse.data)
+            ? allUsersResponse.data
+            : [];
+
+        setUsers(fetchedUsers);
       } catch (error) {
         console.error('Failed to fetch users:', error);
       } finally {
@@ -35,10 +42,10 @@ const AdminScreen = ({ navigation, route }: any) => {
     };
 
     fetchUsers();
-  }, []);
+  }, [setUsers]);
 
   const handleManageUsers = () => {
-    navigation.navigate('AdminManageUsers', { users: allUsers, email: route.params.email });
+    navigation.navigate('AdminManageUsers', { users, email: route.params.email });
   };
 
   const handleManageDogs = () => {
@@ -54,36 +61,29 @@ const AdminScreen = ({ navigation, route }: any) => {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-          'Log Out',
-          'Are you sure you want to sign out?',
-          [
-            {
-              text: 'Cancel',
-              onPress: () => { },
-              style: 'cancel',
-            },
-            {
-              text: 'Log Out',
-              onPress: async () => {
-                try {
-                  // Call logout API with userId and email
-                  await userAPI.logout(route?.params?.userId || '', route?.params?.email || '');
-    
-                  // Clear user data and navigate back to Start
-                  navigation.reset({
-                    index: 0,
-                    routes: [{ name: 'Start' }],
-                  });
-                } catch (error: any) {
-                  Alert.alert('Error', error.message || 'Failed to sign out');
-                  console.error('Sign out error:', error);
-                }
-              },
-              style: 'destructive',
-            },
-          ]
-        );
+    Alert.alert('Log Out', 'Are you sure you want to sign out?', [
+      {
+        text: 'Cancel',
+        onPress: () => {},
+        style: 'cancel',
+      },
+      {
+        text: 'Log Out',
+        onPress: async () => {
+          try {
+            await userAPI.logout(route?.params?.userId || '', route?.params?.email || '');
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Start' }],
+            });
+          } catch (error: any) {
+            Alert.alert('Error', error.message || 'Failed to sign out');
+            console.error('Sign out error:', error);
+          }
+        },
+        style: 'destructive',
+      },
+    ]);
   };
 
   if (loading) {
@@ -110,7 +110,7 @@ const AdminScreen = ({ navigation, route }: any) => {
 
           <View style={styles.statsContainer}>
             <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{numberOfUsers}</Text>
+              <Text style={styles.statNumber}>{users.length}</Text>
               <Text style={styles.statLabel}>Users</Text>
             </View>
 

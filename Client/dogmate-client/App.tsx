@@ -1,7 +1,7 @@
-// App.tsx
 import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { UsersProvider } from './contexts/UsersContext';
 
 import StartScreen from './screens/StartScreen';
 import SignUpScreen from './screens/SignUpScreen';
@@ -26,44 +26,38 @@ const Stack = createNativeStackNavigator();
 
 export default function App() {
   useEffect(() => {
-    // Initialize notifications
     const initializeNotifications = async () => {
       await requestNotificationPermissions();
     };
-
     initializeNotifications();
 
-    // Set up notification listeners
     const cleanup = setupNotificationListeners();
-
-    // Cleanup on unmount
     return cleanup;
   }, []);
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName="Start"
-        screenOptions={{ headerShown: false }}
-      >
-        <Stack.Screen name="Start" component={StartScreen} />
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="SignUp" component={SignUpScreen} />
-        <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-        <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="Profile" component={ProfileScreen} />
-        <Stack.Screen name="DogProfile" component={DogProfileScreen} />
-        <Stack.Screen name="AddDog" component={AddDogScreen} />
-        <Stack.Screen name="Settings" component={SettingsScreen} />
-        <Stack.Screen name="Health" component={HealthScreen} />
-        <Stack.Screen name="FoodInventoryHub" component={FoodInventoryHubScreen} />
-        <Stack.Screen name="FoodIntake" component={FoodIntakeScreen} />
-        <Stack.Screen name="AddReminder" component={AddReminderScreen} />
-        <Stack.Screen name="Emergency" component={SOSScreen} />
-        <Stack.Screen name="Admin" component={AdminScreen} />
-        <Stack.Screen name="AdminManageUsers" component={ManageUsersScreen} />
-        <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <UsersProvider>
+      <NavigationContainer>
+        <Stack.Navigator initialRouteName="Start" screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Start" component={StartScreen} />
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="SignUp" component={SignUpScreen} />
+          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+          <Stack.Screen name="Home" component={HomeScreen} />
+          <Stack.Screen name="Profile" component={ProfileScreen} />
+          <Stack.Screen name="DogProfile" component={DogProfileScreen} />
+          <Stack.Screen name="AddDog" component={AddDogScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="Health" component={HealthScreen} />
+          <Stack.Screen name="FoodInventoryHub" component={FoodInventoryHubScreen} />
+          <Stack.Screen name="FoodIntake" component={FoodIntakeScreen} />
+          <Stack.Screen name="AddReminder" component={AddReminderScreen} />
+          <Stack.Screen name="Emergency" component={SOSScreen} />
+          <Stack.Screen name="Admin" component={AdminScreen} />
+          <Stack.Screen name="AdminManageUsers" component={ManageUsersScreen} />
+          <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </UsersProvider>
   );
 }

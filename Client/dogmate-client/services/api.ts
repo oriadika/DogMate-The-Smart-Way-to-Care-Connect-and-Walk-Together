@@ -154,6 +154,19 @@ export const userAPI = {
   },
 
   /**
+   * delete a user by ID
+   */
+  deleteUser: async (userId: string) => {
+    try {
+      const response = await apiClient.delete(`/users/${userId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete user';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
    * Get all logged-in users
    */
   getLoggedUsers: async () => {
