@@ -34,15 +34,22 @@ const LoginScreen = ({ navigation }: any) => {
       });
 
       Alert.alert('התחברת בהצלחה', 'ברוך שובך ל-DogMate!');
-
-      navigation.navigate('Home', {
-        userId: response.userId,
-        email: response.email,
-        userFirstName: response.firstName || response.email,
-        userLastName: response.lastName || '',
-        userRole: response.userRole || 'owner',
-        phoneNumber: response.phoneNumber || '',
-      });
+      if (response.userRole === 'admin') {
+        navigation.navigate('Admin', {
+          email: response.email,
+          userId: response.userId,
+        });
+      }
+      else{
+        navigation.navigate('Home', {
+          userId: response.userId,
+          email: response.email,
+          userFirstName: response.firstName || response.email,
+          userLastName: response.lastName || '',
+          userRole: response.userRole || 'owner',
+          phoneNumber: response.phoneNumber || '',
+        });
+    }
     } catch (error: any) {
       Alert.alert('התחברות נכשלה', error.message || 'אירעה שגיאה בעת ההתחברות');
       console.error('Login error:', error);
