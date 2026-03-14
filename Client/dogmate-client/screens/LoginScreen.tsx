@@ -36,8 +36,8 @@ const LoginScreen = ({ navigation }: any) => {
       Alert.alert('התחברת בהצלחה', 'ברוך שובך ל-DogMate!');
       if (response.userRole === 'admin') {
         navigation.navigate('Admin', {
-          email: response.email,
           userId: response.userId,
+          email: response.email
         });
       }
       else{

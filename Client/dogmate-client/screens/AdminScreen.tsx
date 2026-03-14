@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -6,15 +6,39 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  ActivityIndicator,
   Alert,
 } from 'react-native';
 import { userAPI } from '../services/api';
 
-const AdminScreen = ({navigation, route}: any) => {
-  const adminName = 'Admin';
+const AdminScreen = ({ navigation, route }: any) => {
+  const [numberOfUsers, setNumberOfUsers] = useState(0);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loggedOut, setLoggedOut] = useState(false);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const allUsersResponse = await userAPI.getAllUsers();
+
+        console.log('Admin users response:', allUsersResponse);
+
+        const users = allUsersResponse.users || allUsersResponse || [];
+        setAllUsers(users);
+        setNumberOfUsers(users.length);
+      } catch (error) {
+        console.error('Failed to fetch users:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, []);
 
   const handleManageUsers = () => {
-    console.log('Navigate to Manage Users');
+    navigation.navigate('AdminManageUsers', { users: allUsers, email: route.params.email });
   };
 
   const handleManageDogs = () => {
@@ -29,9 +53,9 @@ const AdminScreen = ({navigation, route}: any) => {
     console.log('Navigate to Settings');
   };
 
-  const handleLogout = async () => {
-        Alert.alert(
-          'Sign Out',
+  const handleLogout = () => {
+    Alert.alert(
+          'Log Out',
           'Are you sure you want to sign out?',
           [
             {
@@ -40,7 +64,7 @@ const AdminScreen = ({navigation, route}: any) => {
               style: 'cancel',
             },
             {
-              text: 'Sign Out',
+              text: 'Log Out',
               onPress: async () => {
                 try {
                   // Call logout API with userId and email
@@ -54,31 +78,39 @@ const AdminScreen = ({navigation, route}: any) => {
                 } catch (error: any) {
                   Alert.alert('Error', error.message || 'Failed to sign out');
                   console.error('Sign out error:', error);
-                } 
+                }
               },
               style: 'destructive',
             },
           ]
         );
-      
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" />
+          <Text style={{ marginTop: 12 }}>Loading admin dashboard...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Admin Dashboard</Text>
-          <Text style={styles.subtitle}>Welcome back, {adminName}</Text>
+          <Text style={styles.subtitle}>Welcome back, Admin</Text>
         </View>
 
-        {/* Stats Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Overview</Text>
 
           <View style={styles.statsContainer}>
             <View style={styles.statCard}>
-              <Text style={styles.statNumber}>128</Text>
+              <Text style={styles.statNumber}>{numberOfUsers}</Text>
               <Text style={styles.statLabel}>Users</Text>
             </View>
 
@@ -99,7 +131,6 @@ const AdminScreen = ({navigation, route}: any) => {
           </View>
         </View>
 
-        {/* Quick Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
 
@@ -120,45 +151,6 @@ const AdminScreen = ({navigation, route}: any) => {
           </TouchableOpacity>
         </View>
 
-        {/* Recent Activity */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
-
-          <View style={styles.activityCard}>
-            <Text style={styles.activityText}>• New user registered: omry@example.com</Text>
-            <Text style={styles.activityText}>• Dog profile added: Rocky</Text>
-            <Text style={styles.activityText}>• Report submitted by user #204</Text>
-            <Text style={styles.activityText}>• Dog walker profile approved</Text>
-          </View>
-        </View>
-
-        {/* Management Summary */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Management Summary</Text>
-
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Users</Text>
-            <Text style={styles.summaryText}>
-              View all users, inspect profiles, block suspicious accounts, and manage user roles.
-            </Text>
-          </View>
-
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Dogs</Text>
-            <Text style={styles.summaryText}>
-              Review dog profiles, remove invalid data, and monitor dog-related activity.
-            </Text>
-          </View>
-
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Reports</Text>
-            <Text style={styles.summaryText}>
-              Track submitted reports, review incidents, and respond to user complaints.
-            </Text>
-          </View>
-        </View>
-
-        {/* Logout */}
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>

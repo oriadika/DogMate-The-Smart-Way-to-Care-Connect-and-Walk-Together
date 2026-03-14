@@ -207,7 +207,11 @@ public class UserService {
         if (!passwordMatches) {
             throw new IllegalArgumentException("Invalid credentials");
         }
-        
+
+        if (user.isLoggedIn()){
+            throw new IllegalArgumentException("User is already logged in");
+
+        }
         // Set logged in status to true
         user.setLoggedIn(true);
         System.out.println("Setting user " + email + " loggedIn to true");

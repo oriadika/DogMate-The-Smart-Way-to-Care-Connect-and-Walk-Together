@@ -19,6 +19,8 @@ import FoodInventoryHubScreen from './screens/Health/FoodInventoryHubScreen';
 import { setupNotificationListeners, requestNotificationPermissions } from './services/notifications';
 import SOSScreen from './screens/SOSScreen';
 import AdminScreen from './screens/AdminScreen';
+import ManageUsersScreen from './screens/ManageScreens/ManageUsersScreen';
+import UserDetailsScreen from './screens/ManageScreens/UserDetailsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -59,6 +61,8 @@ export default function App() {
         <Stack.Screen name="AddReminder" component={AddReminderScreen} />
         <Stack.Screen name="Emergency" component={SOSScreen} />
         <Stack.Screen name="Admin" component={AdminScreen} />
+        <Stack.Screen name="AdminManageUsers" component={ManageUsersScreen} />
+        <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
