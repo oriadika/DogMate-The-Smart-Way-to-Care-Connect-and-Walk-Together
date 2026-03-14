@@ -2,11 +2,8 @@ import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { BASE_URL } from './config';
 
-
-// Use ws:// protocol for WebSocket instead of http://
-const WEBSOCKET_URL = 'ws://192.168.1.105:8080/ws-ping';
-// Fallback SockJS endpoint
-const SOCKJS_URL = 'http://192.168.1.105:8080/ws-ping';
+// Use same backend host as REST API configuration.
+const SOCKJS_URL = `${BASE_URL}/ws-ping`;
 
 
 interface PingNotification {
@@ -58,7 +55,7 @@ class WebSocketService {
         webSocketFactory: () => {
           console.log('Creating SockJS connection to:', SOCKJS_URL);
           const socket = new SockJS(SOCKJS_URL, null, {
-            transport: ['websocket', 'xhr-streaming', 'xhr-polling']
+            transports: ['websocket', 'xhr-streaming', 'xhr-polling']
           });
           return socket;
         },

@@ -56,18 +56,37 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
         lastName,
       });
 
+      let registeredUserId = response?.userId;
+
+      // Fallback: if register response misses userId, login immediately to retrieve it.
+      if (!registeredUserId) {
+        const loginResponse = await userAPI.login({ email, password });
+        registeredUserId = loginResponse?.userId;
+      }
+
+      if (!registeredUserId) {
+        throw new Error('Registration succeeded, but failed to obtain user ID');
+      }
+
     Alert.alert(
       'החשבון נוצר בהצלחה',
       `ברוך הבא ל-DogMate, ${firstName} ${lastName}! (${role === 'owner' ? 'בעל כלב' : 'דוגווקר'})`
     );
 
-    navigation.navigate('Home', {
+    navigation.reset({
+      index: 0,
+      routes: [{
+        name: 'Home',
+        params: {
+        userId: registeredUserId,
         userFirstName: firstName,
         userLastName: lastName,
         email: email,
         userRole: role,          // 'owner' or 'walker'
         phoneNumber: phoneNumber
-      });
+        }
+      }],
+    });
     } catch (error: any) {
       Alert.alert('הרשמה נכשלה', error.message || 'אירעה שגיאה בעת ההרשמה');
       console.error('Sign up error:', error);

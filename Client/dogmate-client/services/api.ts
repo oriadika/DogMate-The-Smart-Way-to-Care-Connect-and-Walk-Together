@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { BASE_URL } from './config';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.105:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.107:8080/api';
 
 let authToken: string | null = null;
 
@@ -206,6 +206,32 @@ export const userAPI = {
   },
 
   /**
+   * Get pending unread pings for a user (fallback when WebSocket is disconnected)
+   */
+  getPendingPings: async (userId: string): Promise<{ success: boolean; pings: any[] }> => {
+    try {
+      const response = await apiClient.get(`/users/pings/pending/${userId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch pending pings';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Mark a ping as read
+   */
+  markPingAsRead: async (pingId: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await apiClient.post(`/users/pings/${pingId}/read`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to mark ping as read';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
    * Update user's current location
    */
   updateLocation: async (userId: string, latitude: number, longitude: number): Promise<{ success: boolean; message: string }> => {
@@ -235,8 +261,7 @@ export const userAPI = {
   },
 
   /**
-   * Note: Ping notifications are now received via WebSocket in real-time.
-   * No polling or marking as read needed.
+   * Ping notifications are delivered via WebSocket, with pending-pings fallback.
    */
 };
 

@@ -18,11 +18,32 @@ import websocketService from '../services/websocket';
 import locationService, { LocationService } from '../services/location';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
+const USERS_REFRESH_INTERVAL_MS = 5000;
+const LOCATION_PUSH_INTERVAL_MS = 5000;
+
+type ProfileCacheEntry = {
+  loggedUsers: any[];
+  signature: string;
+};
+
+const profileDataCache = new Map<string, ProfileCacheEntry>();
+const profileDirtyUsers = new Set<string>();
+
+const buildUsersSignature = (users: any[]): string => {
+  const usersPart = users
+    .map((u: any) => `${u?.id ?? ''}:${u?.latitude ?? ''}:${u?.longitude ?? ''}:${u?.name ?? ''}`)
+    .join('|');
+  return `${users.length}#${usersPart}`;
+};
 
 const ProfileScreen = ({ navigation, route }: any) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [loggedUsers, setLoggedUsers] = useState<any[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [currentUserDisplayName, setCurrentUserDisplayName] = useState<string>(
+    `${route?.params?.userFirstName || ''} ${route?.params?.userLastName || ''}`.trim()
+  );
+  const [currentUserRoleLabel, setCurrentUserRoleLabel] = useState<string>(route?.params?.role || '');
   const [wsConnected, setWsConnected] = useState(false);
   const [locationTracking, setLocationTracking] = useState(false);
   const [isLocationSharingEnabled, setIsLocationSharingEnabled] = useState(false); // Default: sharing disabled (location hidden)
@@ -32,15 +53,18 @@ const ProfileScreen = ({ navigation, route }: any) => {
   const [showRadiusFilter, setShowRadiusFilter] = useState<boolean>(true);
   const mapRef = useRef<MapView>(null);
 
-  // Filter users by radius (for the list)
+  // Radius filter for map visibility
   const usersInRadius = loggedUsers.filter((user: any) => {
-    if (!user.distance && !user.latitude) return false; // No distance and no location = skip
-    if (!user.distance) return true; // Has location but no distance yet - include them
+    if (user.latitude == null || user.longitude == null) return false; // No location = skip
+    if (user.distance == null) return true; // Distance not calculated yet - include them
     return user.distance <= radiusKm;
   });
 
-  // Users with location data (for the map - show all users with coordinates)
-  const usersWithLocation = loggedUsers.filter((user: any) => user.latitude && user.longitude);
+  // Ping list includes all logged users, even those hiding location.
+  const usersForPing = loggedUsers;
+
+  // Show same cohort on map and in list for consistent UX.
+  const usersWithLocation = usersInRadius.filter((user: any) => user.latitude != null && user.longitude != null);
 
   // Debug: Log users data
   useEffect(() => {
@@ -53,12 +77,23 @@ const ProfileScreen = ({ navigation, route }: any) => {
   }, [loggedUsers]);
 
   useEffect(() => {
-    fetchLoggedUsers();
+    const currentUserId = route?.params?.userId;
+    const cached = currentUserId ? profileDataCache.get(currentUserId) : null;
+    const shouldFetch = !cached || (currentUserId ? profileDirtyUsers.has(currentUserId) : true);
+
+    if (cached) {
+      setLoggedUsers(cached.loggedUsers || []);
+      setIsLoadingUsers(false);
+    }
+
+    if (shouldFetch) {
+      fetchLoggedUsers({ showLoader: !cached });
+    }
     
-    // Set up auto-refresh of logged-in users every 2 seconds for more responsive updates
+    // Always refresh in background so other users become visible without reopening screen.
     const refreshInterval = setInterval(() => {
-      fetchLoggedUsers();
-    }, 2000);
+      fetchLoggedUsers({ showLoader: false });
+    }, USERS_REFRESH_INTERVAL_MS);
     
     // Set up periodic location sending (every 5 seconds when sharing is enabled)
     let locationSendInterval: ReturnType<typeof setInterval> | null = null;
@@ -145,13 +180,13 @@ const ProfileScreen = ({ navigation, route }: any) => {
           .catch((error) => console.error('Failed to update location:', error));
       }
       
-      // Set up interval to send location every 2 seconds for better responsiveness
+      // Send location on a moderate interval to reduce backend load.
       locationInterval = setInterval(() => {
         if (userLocationRef.current) {
           userAPI.updateLocation(userId, userLocationRef.current.latitude, userLocationRef.current.longitude)
             .catch((error) => console.error('Failed to update location:', error));
         }
-      }, 2000);
+      }, LOCATION_PUSH_INTERVAL_MS);
     }
     
     return () => {
@@ -183,7 +218,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
   // Calculate map region to include all users
   useEffect(() => {
     if (userLocation) {
-      const usersWithLocation = loggedUsers.filter((user: any) => user.latitude && user.longitude);
+      const usersWithLocation = loggedUsers.filter((user: any) => user.latitude != null && user.longitude != null);
       
       if (usersWithLocation.length === 0) {
         // Only current user, center on their location with 500 meter radius
@@ -233,6 +268,11 @@ const ProfileScreen = ({ navigation, route }: any) => {
         console.error('Failed to clear location:', error);
       }
     }
+
+    if (userId) {
+      profileDirtyUsers.add(userId);
+      fetchLoggedUsers({ showLoader: false });
+    }
     
     console.log(`📍 Location sharing ${newState ? 'enabled' : 'disabled'}`);
   };
@@ -267,13 +307,70 @@ const ProfileScreen = ({ navigation, route }: any) => {
     });
   };
 
-  const fetchLoggedUsers = async () => {
+  const checkPendingPings = async () => {
+    const currentUserId = route?.params?.userId;
+    if (!currentUserId) return;
+
     try {
-      setIsLoadingUsers(true);
+      const response = await userAPI.getPendingPings(currentUserId);
+      if (response.success && response.pings && response.pings.length > 0) {
+        for (const ping of response.pings) {
+          Alert.alert(
+            'פינג חדש! 🐕',
+            `${ping.fromUserName || 'משתמש'} שלח לך פינג!`,
+            [{ text: 'בסדר' }]
+          );
+
+          if (ping.id) {
+            try {
+              await userAPI.markPingAsRead(ping.id);
+            } catch (markError) {
+              console.warn('Failed to mark ping as read:', markError);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Silent fallback polling: do not interrupt user.
+      console.log('Pending ping check failed:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (wsConnected) {
+      return;
+    }
+
+    checkPendingPings();
+    const pendingInterval = setInterval(() => {
+      checkPendingPings();
+    }, 5000);
+
+    return () => {
+      clearInterval(pendingInterval);
+    };
+  }, [wsConnected, route?.params?.userId]);
+
+  const fetchLoggedUsers = async (options?: { showLoader?: boolean }) => {
+    const shouldShowLoader = options?.showLoader ?? true;
+
+    try {
+      if (shouldShowLoader) {
+        setIsLoadingUsers(true);
+      }
       const data = await userAPI.getLoggedUsers();
       const currentUserId = route?.params?.userId;
       
       if (data.success && data.users) {
+        const currentUser = data.users.find((user: any) => user.id === currentUserId);
+        if (currentUser) {
+          const resolvedName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim();
+          setCurrentUserDisplayName(
+            resolvedName || currentUser.email?.split('@')[0] || route?.params?.userFirstName || 'משתמש'
+          );
+          setCurrentUserRoleLabel(currentUser.type === 'RegularUser' ? 'בעל כלב' : 'מנהל');
+        }
+
         // Format users for display and filter out current user
         const formattedUsers = data.users
           .filter((user: any) => user.id !== currentUserId) // Filter out current user
@@ -289,7 +386,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
           };
 
           // Add location data if available (only for RegularUser)
-          if (user.type === 'RegularUser' && user.latitude && user.longitude) {
+          if (user.type === 'RegularUser' && user.latitude != null && user.longitude != null) {
             userObj.latitude = user.latitude;
             userObj.longitude = user.longitude;
             
@@ -307,35 +404,52 @@ const ProfileScreen = ({ navigation, route }: any) => {
 
           return userObj;
         });
-        setLoggedUsers(formattedUsers);
+        const updatedUsersWithDistance = userLocation
+          ? formattedUsers.map((user: any) => {
+              if (user.latitude != null && user.longitude != null) {
+                const distance = LocationService.calculateDistance(
+                    userLocation.latitude,
+                    userLocation.longitude,
+                    user.latitude,
+                    user.longitude
+                );
+                return { ...user, distance };
+              }
+              return user;
+            })
+          : formattedUsers;
 
-        // Recalculate distances with current location when list is updated
-        if (userLocation && formattedUsers.length > 0) {
-          const updatedUsersWithDistance = formattedUsers.map((user: any) => {
-            if (user.latitude && user.longitude) {
-              const distance = LocationService.calculateDistance(
-                  userLocation.latitude,
-                  userLocation.longitude,
-                  user.latitude,
-                  user.longitude
-              );
-              return { ...user, distance };
-            }
-            return user;
-          });
+        const nextSignature = buildUsersSignature(updatedUsersWithDistance);
+        const cached = currentUserId ? profileDataCache.get(currentUserId) : null;
+        const hasChanged = !cached || cached.signature !== nextSignature;
+
+        if (hasChanged) {
           setLoggedUsers(updatedUsersWithDistance);
-        }      }
+        }
+
+        if (currentUserId) {
+          profileDataCache.set(currentUserId, {
+            loggedUsers: updatedUsersWithDistance,
+            signature: nextSignature,
+          });
+          profileDirtyUsers.delete(currentUserId);
+        }
+      }
     } catch (error) {
       console.error('Failed to fetch logged users:', error);
-      Alert.alert('שגיאה', 'טעינת המשתמשים נכשלה');
+      if (shouldShowLoader) {
+        Alert.alert('שגיאה', 'טעינת המשתמשים נכשלה');
+      }
     } finally {
-      setIsLoadingUsers(false);
+      if (shouldShowLoader) {
+        setIsLoadingUsers(false);
+      }
     }
   };
 
   // Function to focus map on a user's location
   const focusOnUser = (user: any) => {
-    if (user.latitude && user.longitude && mapRef.current) {
+    if (user.latitude != null && user.longitude != null && mapRef.current) {
       mapRef.current.animateToRegion({
         latitude: user.latitude,
         longitude: user.longitude,
@@ -454,7 +568,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
       </View>
 
       <FlatList
-        data={usersInRadius}
+        data={usersForPing}
         keyExtractor={(item) => item.id}
         renderItem={renderContact}
         contentContainerStyle={styles.listContent}
@@ -471,8 +585,8 @@ const ProfileScreen = ({ navigation, route }: any) => {
               </View>
 
               <View style={styles.profileTextBlock}>
-                <Text style={styles.profileName}>{route?.params?.userFirstName} {route?.params?.userLastName}</Text>
-                <Text style={styles.profileRole}>{route?.params?.role}</Text>
+                <Text style={styles.profileName}>{currentUserDisplayName || 'משתמש'}</Text>
+                <Text style={styles.profileRole}>{currentUserRoleLabel || route?.params?.role || 'בעל כלב'}</Text>
               </View>
             </View>
 
@@ -619,16 +733,14 @@ const ProfileScreen = ({ navigation, route }: any) => {
                     </View>
                   </Marker>
 
-                  {/* Other users markers - show ALL users with location on map */}
-                  {/* TEST MODE: Placing other users 10 meters from current user for testing */}
+                  {/* Other users markers */}
                   {usersWithLocation
-                    .map((user: any, index: number) => (
+                    .map((user: any) => (
                       <Marker
                         key={user.id}
                         coordinate={{
-                          // TEST: Place user 10 meters away from current user (offset varies by index)
-                          latitude: userLocation.latitude + (0.00009 * (index + 1)),
-                          longitude: userLocation.longitude + (0.00009 * (index + 1)),
+                          latitude: user.latitude,
+                          longitude: user.longitude,
                         }}
                         title={user.name}
                         description={user.distance ? `${LocationService.formatDistance(user.distance)} ממך` : ''}
@@ -649,7 +761,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
               )}
             </View>
 
-            <Text style={styles.sectionTitle}>משתמשים בטווח ({usersInRadius.length}):</Text>
+            <Text style={styles.sectionTitle}>משתמשים מחוברים ({usersForPing.length}):</Text>
             {isLoadingUsers && (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator color={PRIMARY_COLOR} size="large" />
