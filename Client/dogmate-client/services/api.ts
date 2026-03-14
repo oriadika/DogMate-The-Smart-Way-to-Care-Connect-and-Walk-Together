@@ -66,6 +66,7 @@ export interface LoginResponse {
   message: string;
   userId: string;
   email: string;
+  suspended?: boolean;
   firstName?: string;
   lastName?: string;
   userRole?: string;
@@ -162,6 +163,19 @@ export const userAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to delete user';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * suspend a user by ID
+   */
+  suspendUser: async (userId: string) => {
+    try {
+      const response = await apiClient.post(`/users/${userId}/suspend`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to suspend user';
       throw new Error(errorMessage);
     }
   },

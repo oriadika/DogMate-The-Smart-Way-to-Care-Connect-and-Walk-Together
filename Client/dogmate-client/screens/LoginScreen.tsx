@@ -19,6 +19,7 @@ const LoginScreen = ({ navigation }: any) => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+
   const handleLogin = async () => {
     if (!email.trim() || !password) {
       Alert.alert('שדות חסרים', 'אנא מלא את האימייל והסיסמה.');
@@ -32,14 +33,13 @@ const LoginScreen = ({ navigation }: any) => {
         email,
         password,
       });
-
       Alert.alert('התחברת בהצלחה', 'ברוך שובך ל-DogMate!');
       if (response.userRole === 'admin') {
-        navigation.navigate('Admin', {
-          userId: response.userId,
-          email: response.email
-        });
-      }
+          navigation.navigate('Admin', {
+            userId: response.userId,
+            email: response.email
+          });
+        }
       else{
         navigation.navigate('Home', {
           userId: response.userId,

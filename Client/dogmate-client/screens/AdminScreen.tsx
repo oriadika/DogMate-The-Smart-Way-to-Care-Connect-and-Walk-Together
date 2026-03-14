@@ -49,15 +49,15 @@ const AdminScreen = ({ navigation, route }: any) => {
   };
 
   const handleManageDogs = () => {
-    console.log('Navigate to Manage Dogs');
+    alert('Manage Dogs feature is not implemented yet');
   };
 
   const handleViewReports = () => {
-    console.log('Navigate to Reports');
+    alert('View Reports feature is not implemented yet');
   };
 
   const handleSystemSettings = () => {
-    console.log('Navigate to Settings');
+    alert('System Settings feature is not implemented yet');
   };
 
   const handleLogout = () => {

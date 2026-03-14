@@ -23,7 +23,7 @@ public class UserService {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.reminderRepository = reminderRepository;
-        createAdminUser("admin2@gmail.com","123456","sddd");
+//        createAdminUser("admin2@gmail.com","123456","sddd");
     }
 
     /**
@@ -203,6 +203,9 @@ public class UserService {
         
         // Verify password using domain method (all business logic is in domain)
         UserAccount user = userOpt.get();
+        if (user.isSuspended()){
+            throw new IllegalArgumentException("The user is suspended and cannot log in");
+        }
         boolean passwordMatches = user.verifyPassword(password, passwordEncoder::matches);
         
         if (!passwordMatches) {
@@ -236,6 +239,24 @@ public class UserService {
             return ((com.DogMate.Infrastructure.UserRepository) userRepository).findAll();
         }
         throw new IllegalStateException("UserRepository is not properly configured");
+    }
+
+    /**
+     * Suspend a user with userId
+     * @param userId
+     */
+    public void suspendUser(UUID userId){
+        UserAccount.validateUserId(userId);
+
+        boolean userExists = userRepository.findById(userId).isPresent();
+
+        UserAccount.validateUserExists(userExists, userId);
+
+        UserAccount user = userRepository.findById(userId).get();
+
+        user.setSuspended(true);
+
+        userRepository.save(user);
     }
 
     /**

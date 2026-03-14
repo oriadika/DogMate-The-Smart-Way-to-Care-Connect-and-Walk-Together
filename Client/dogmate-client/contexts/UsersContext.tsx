@@ -3,6 +3,7 @@ import React, { createContext, useContext, useMemo, useState } from 'react';
 export type UserType = {
   id: string;
   email: string;
+  suspended: boolean;
   type?: string;
   firstName?: string;
   lastName?: string;

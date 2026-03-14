@@ -21,6 +21,9 @@ const UserDetailsScreen = ({ navigation, route }: any) => {
       ? `${user.firstName} ${user.lastName}`
       : user.firstName || user.lastName || 'Unnamed User';
 
+  const isSuspended = user.suspended === true;
+  console.log('User suspended status:', user.suspended);
+
   const handleUserDelete = () => {
     userAPI
       .deleteUser(user.id)
@@ -34,6 +37,19 @@ const UserDetailsScreen = ({ navigation, route }: any) => {
       .catch((error) => {
         console.error('Failed to delete user:', error);
         alert('מחיקת המשתמש נכשלה, אנא נסה שוב מאוחר יותר');
+      });
+  };
+
+  const handleUserSuspend = () => {
+    userAPI
+      .suspendUser(user.id)
+      .then(() => {
+        alert('המשתמש נחסם בהצלחה');
+        navigation.goBack();
+      })
+      .catch((error) => {
+        console.error('Failed to suspend user:', error);
+        alert('חסימת המשתמש נכשלה, אנא נסה שוב מאוחר יותר');
       });
   };
 
@@ -83,12 +99,17 @@ const UserDetailsScreen = ({ navigation, route }: any) => {
             </View>
           ) : null}
 
-          <TouchableOpacity
-            style={styles.banButton}
-            onPress={() => alert('Ban user functionality not implemented yet')}
-          >
-            <Text style={styles.banButtonText}>Ban User</Text>
+          
+          {!isSuspended ? (
+            <TouchableOpacity style={styles.banButton} onPress={handleUserSuspend}>
+            <Text style={styles.banButtonText}>Suspend User</Text>
           </TouchableOpacity>
+          ) : (
+            <View style={styles.suspendedSection}>
+              <Text style={styles.suspendedText}>This user is currently suspended.</Text>
+            </View>
+          )}
+          
 
           <TouchableOpacity style={styles.banButton} onPress={handleUserDelete}>
             <Text style={styles.banButtonText}>Delete User</Text>
@@ -156,4 +177,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   banButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
+  suspendedSection: {
+  backgroundColor: '#FDECEA',      // light red background
+  borderRadius: 12,
+  paddingVertical: 14,
+  paddingHorizontal: 16,
+  marginTop: 10,
+  borderWidth: 1,
+  borderColor: '#F5C6CB',          // soft red border
+  alignItems: 'center',
+},
+
+suspendedText: {
+  color: '#C0392B',                // strong red text
+  fontSize: 15,
+  fontWeight: '600',
+  textAlign: 'center',
+},
 });
