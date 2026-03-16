@@ -154,6 +154,32 @@ export const userAPI = {
   },
 
   /**
+   * delete a user by ID
+   */
+  deleteUser: async (userId: string) => {
+    try {
+      const response = await apiClient.delete(`/users/${userId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete user';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * suspend a user by ID
+   */
+  suspendUser: async (userId: string) => {
+    try {
+      const response = await apiClient.post(`/users/${userId}/suspend`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to suspend user';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
    * Get all logged-in users
    */
   getLoggedUsers: async () => {
@@ -261,7 +287,8 @@ export const userAPI = {
   },
 
   /**
-   * Ping notifications are delivered via WebSocket, with pending-pings fallback.
+   * Note: Ping notifications are now received via WebSocket in real-time.
+   * No polling or marking as read needed.
    */
 };
 

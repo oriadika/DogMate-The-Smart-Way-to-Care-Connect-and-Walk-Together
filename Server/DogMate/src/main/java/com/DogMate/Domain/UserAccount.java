@@ -24,6 +24,9 @@ public class UserAccount {
     @Column(name = "logged_in", nullable = false, updatable = true, columnDefinition = "BOOLEAN DEFAULT false")
     private boolean loggedIn = false;
 
+    @Column(name = "suspended", nullable = false, updatable = true, columnDefinition = "BOOLEAN DEFAULT false")
+    private boolean suspended = false;
+
     // Default constructor required by JPA
     protected UserAccount() {
         // JPA requires a no-args constructor
@@ -154,4 +157,11 @@ public class UserAccount {
         this.loggedIn = loggedIn;
     }
 
+    public boolean isSuspended() {
+        return suspended;
+    }
+
+    public void setSuspended(boolean suspended) {
+        this.suspended = suspended;
+    }
 }

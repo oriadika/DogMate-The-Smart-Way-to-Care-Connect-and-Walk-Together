@@ -193,6 +193,48 @@ public class UserController {
     }
 
     /**
+     * Suspend a user by ID
+     * POST /api/users/{userId}
+     */
+    @PostMapping("/{userId}/suspend")
+    public ResponseEntity<?> suspendUser(@PathVariable String userId) {
+        try {
+            // Validate userId parameter
+            if (userId == null || userId.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(createErrorResponse("User ID is required"));
+            }
+
+            // Parse UUID
+            java.util.UUID userUuid;
+            try {
+                userUuid = java.util.UUID.fromString(userId);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                        .body(createErrorResponse("Invalid user ID format"));
+            }
+
+            // Suspend user
+            userService.suspendUser(userUuid);
+
+            // Create success response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "User suspended successfully");
+            response.put("userId", userId);
+
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest()
+                    .body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("Failed to suspend user: " + e.getMessage()));
+        }
+    }
+
+    /**
      * Delete a user by email
      * DELETE /api/users/email/{email}
      */
@@ -240,6 +282,7 @@ public class UserController {
                 userInfo.put("id", user.getId());
                 userInfo.put("email", user.getEmail());
                 userInfo.put("createdAt", user.getCreatedAt());
+                userInfo.put("suspended", user.isSuspended());
                 
                 if (user instanceof com.DogMate.Domain.RegularUser) {
                     com.DogMate.Domain.RegularUser regularUser = (com.DogMate.Domain.RegularUser) user;
@@ -288,6 +331,7 @@ public class UserController {
                 userInfo.put("id", user.getId());
                 userInfo.put("email", user.getEmail());
                 userInfo.put("createdAt", user.getCreatedAt());
+                userInfo.put("suspended", user.isSuspended());
                 
                 if (user instanceof com.DogMate.Domain.RegularUser) {
                     com.DogMate.Domain.RegularUser regularUser = (com.DogMate.Domain.RegularUser) user;

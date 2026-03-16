@@ -44,6 +44,7 @@ public class AuthController {
             response.put("message", "Login successful");
             response.put("userId", user.getId());
             response.put("email", user.getEmail());
+            response.put("suspended", user.isSuspended());
             
             // Add user type and specific details
             if (user instanceof com.DogMate.Domain.RegularUser) {
@@ -63,9 +64,10 @@ public class AuthController {
             
             return ResponseEntity.ok(response);
 
-        } catch (IllegalArgumentException e) {
+        }
+        catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(createErrorResponse("Invalid credentials"));
+                .body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(createErrorResponse("Failed to login: " + e.getMessage()));
