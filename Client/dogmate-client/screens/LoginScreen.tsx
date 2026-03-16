@@ -19,6 +19,7 @@ const LoginScreen = ({ navigation }: any) => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+
   const handleLogin = async () => {
     if (!email.trim() || !password) {
       Alert.alert('שדות חסרים', 'אנא מלא את האימייל והסיסמה.');
@@ -32,17 +33,23 @@ const LoginScreen = ({ navigation }: any) => {
         email,
         password,
       });
-
       Alert.alert('התחברת בהצלחה', 'ברוך שובך ל-DogMate!');
-
-      navigation.navigate('Home', {
-        userId: response.userId,
-        email: response.email,
-        userFirstName: response.firstName || response.email,
-        userLastName: response.lastName || '',
-        userRole: response.userRole || 'owner',
-        phoneNumber: response.phoneNumber || '',
-      });
+      if (response.userRole === 'admin') {
+          navigation.navigate('Admin', {
+            userId: response.userId,
+            email: response.email
+          });
+        }
+      else{
+        navigation.navigate('Home', {
+          userId: response.userId,
+          email: response.email,
+          userFirstName: response.firstName || response.email,
+          userLastName: response.lastName || '',
+          userRole: response.userRole || 'owner',
+          phoneNumber: response.phoneNumber || '',
+        });
+    }
     } catch (error: any) {
       Alert.alert('התחברות נכשלה', error.message || 'אירעה שגיאה בעת ההתחברות');
       console.error('Login error:', error);
