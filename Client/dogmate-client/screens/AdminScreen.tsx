@@ -12,6 +12,9 @@ import {
 import { userAPI } from '../services/api';
 import { useUsers } from '../contexts/UsersContext';
 
+const PRIMARY_COLOR = '#7FB069'; // matches HomeScreen (regular user)
+const DESTRUCTIVE_COLOR = '#E74C3C'; // matches HomeScreen delete
+
 const AdminScreen = ({ navigation, route }: any) => {
   const { users, setUsers } = useUsers();
   const [loading, setLoading] = useState(true);
@@ -49,26 +52,26 @@ const AdminScreen = ({ navigation, route }: any) => {
   };
 
   const handleManageDogs = () => {
-    alert('Manage Dogs feature is not implemented yet');
+    alert('ניהול כלבים עדיין לא זמין');
   };
 
   const handleViewReports = () => {
-    alert('View Reports feature is not implemented yet');
+    alert('צפייה בדוחות עדיין לא זמינה');
   };
 
   const handleSystemSettings = () => {
-    alert('System Settings feature is not implemented yet');
+    alert('הגדרות מערכת עדיין לא זמינות');
   };
 
   const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to sign out?', [
+    Alert.alert('התנתקות', 'בטוח שברצונך להתנתק?', [
       {
-        text: 'Cancel',
+        text: 'ביטול',
         onPress: () => {},
         style: 'cancel',
       },
       {
-        text: 'Log Out',
+        text: 'התנתקות',
         onPress: async () => {
           try {
             await userAPI.logout(route?.params?.userId || '', route?.params?.email || '');
@@ -77,7 +80,7 @@ const AdminScreen = ({ navigation, route }: any) => {
               routes: [{ name: 'Start' }],
             });
           } catch (error: any) {
-            Alert.alert('Error', error.message || 'Failed to sign out');
+            Alert.alert('שגיאה', error.message || 'ההתנתקות נכשלה');
             console.error('Sign out error:', error);
           }
         },
@@ -91,7 +94,7 @@ const AdminScreen = ({ navigation, route }: any) => {
       <SafeAreaView style={styles.safeArea}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" />
-          <Text style={{ marginTop: 12 }}>Loading admin dashboard...</Text>
+          <Text style={[styles.rtlText, { marginTop: 12 }]}>טוען לוח בקרה...</Text>
         </View>
       </SafeAreaView>
     );
@@ -101,58 +104,58 @@ const AdminScreen = ({ navigation, route }: any) => {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Admin Dashboard</Text>
-          <Text style={styles.subtitle}>Welcome back, Admin</Text>
+          <Text style={styles.title}>לוח בקרה למנהל</Text>
+          <Text style={styles.subtitle}>ברוך שובך, מנהל</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Overview</Text>
+          <Text style={styles.sectionTitle}>סקירה</Text>
 
           <View style={styles.statsContainer}>
             <View style={styles.statCard}>
               <Text style={styles.statNumber}>{users.length}</Text>
-              <Text style={styles.statLabel}>Users</Text>
+              <Text style={styles.statLabel}>משתמשים</Text>
             </View>
 
             <View style={styles.statCard}>
               <Text style={styles.statNumber}>84</Text>
-              <Text style={styles.statLabel}>Dogs</Text>
+              <Text style={styles.statLabel}>כלבים</Text>
             </View>
 
             <View style={styles.statCard}>
               <Text style={styles.statNumber}>16</Text>
-              <Text style={styles.statLabel}>Walkers</Text>
+              <Text style={styles.statLabel}>דוגווקרים</Text>
             </View>
 
             <View style={styles.statCard}>
               <Text style={styles.statNumber}>12</Text>
-              <Text style={styles.statLabel}>Reports</Text>
+              <Text style={styles.statLabel}>דוחות</Text>
             </View>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <Text style={styles.sectionTitle}>פעולות מהירות</Text>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleManageUsers}>
-            <Text style={styles.actionButtonText}>Manage Users</Text>
+            <Text style={styles.actionButtonText}>ניהול משתמשים</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleManageDogs}>
-            <Text style={styles.actionButtonText}>Manage Dogs</Text>
+            <Text style={styles.actionButtonText}>ניהול כלבים</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleViewReports}>
-            <Text style={styles.actionButtonText}>View Reports</Text>
+            <Text style={styles.actionButtonText}>צפייה בדוחות</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleSystemSettings}>
-            <Text style={styles.actionButtonText}>System Settings</Text>
+            <Text style={styles.actionButtonText}>הגדרות מערכת</Text>
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
+          <Text style={styles.logoutButtonText}>התנתקות</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -162,6 +165,10 @@ const AdminScreen = ({ navigation, route }: any) => {
 export default AdminScreen;
 
 const styles = StyleSheet.create({
+  rtlText: {
+    writingDirection: 'rtl',
+    textAlign: 'right',
+  },
   safeArea: {
     flex: 1,
     backgroundColor: '#f5e6d3',
@@ -177,11 +184,15 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: '#1E293B',
+    writingDirection: 'rtl',
+    textAlign: 'right',
   },
   subtitle: {
     marginTop: 6,
     fontSize: 16,
     color: '#64748B',
+    writingDirection: 'rtl',
+    textAlign: 'right',
   },
   section: {
     marginBottom: 24,
@@ -191,6 +202,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1E293B',
     marginBottom: 12,
+    writingDirection: 'rtl',
+    textAlign: 'right',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -213,18 +226,27 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#0F172A',
+    writingDirection: 'rtl',
+    textAlign: 'right',
   },
   statLabel: {
     marginTop: 6,
     fontSize: 14,
     color: '#64748B',
+    writingDirection: 'rtl',
+    textAlign: 'right',
   },
   actionButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: PRIMARY_COLOR,
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: 12,
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   actionButtonText: {
     color: '#FFFFFF',
@@ -270,10 +292,15 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   logoutButton: {
-    backgroundColor: '#DC2626',
+    backgroundColor: DESTRUCTIVE_COLOR,
     paddingVertical: 14,
     borderRadius: 12,
     marginTop: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   logoutButtonText: {
     color: '#FFFFFF',

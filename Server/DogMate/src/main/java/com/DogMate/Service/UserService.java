@@ -23,7 +23,7 @@ public class UserService {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.reminderRepository = reminderRepository;
-//        createAdminUser("admin2@gmail.com","123456","sddd");
+        // createAdminUser("admin2@gmail.com", "123456", "Admin");    
     }
 
     /**
