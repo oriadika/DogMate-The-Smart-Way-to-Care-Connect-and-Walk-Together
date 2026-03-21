@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { BASE_URL } from './config';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.15.204:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.119:8080/api';
 
 let authToken: string | null = null;
 
@@ -66,7 +66,6 @@ export interface LoginResponse {
   message: string;
   userId: string;
   email: string;
-  suspended?: boolean;
   firstName?: string;
   lastName?: string;
   userRole?: string;
@@ -228,6 +227,32 @@ export const userAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to send ping';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Get pending unread pings for a user (fallback when WebSocket is disconnected)
+   */
+  getPendingPings: async (userId: string): Promise<{ success: boolean; pings: any[] }> => {
+    try {
+      const response = await apiClient.get(`/users/pings/pending/${userId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch pending pings';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Mark a ping as read
+   */
+  markPingAsRead: async (pingId: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await apiClient.post(`/users/pings/${pingId}/read`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to mark ping as read';
       throw new Error(errorMessage);
     }
   },

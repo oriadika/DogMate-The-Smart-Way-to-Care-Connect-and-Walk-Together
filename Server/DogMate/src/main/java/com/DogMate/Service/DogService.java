@@ -5,6 +5,9 @@ import com.DogMate.DTO.DogMoodLogDTO;
 import com.DogMate.DTO.FoodStockDTO;
 import com.DogMate.Domain.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +54,7 @@ public class DogService {
      * @throws IllegalArgumentException if user not found or validation fails
      */
     @Transactional
+    @CacheEvict(cacheNames = "dogsByUser", key = "#userId")
     public Dog addDogToUser(UUID userId, String name, String breed, LocalDate birthdate,
                             char gender, String profileImageURL, RelationshipType relationshipType) {
         
@@ -105,6 +109,7 @@ public class DogService {
      * @param relationshipType The type of relationship (OWNER, WALKER, etc.)
      * @throws IllegalArgumentException if user or dog not found
      */
+    @CacheEvict(cacheNames = "dogsByUser", key = "#userId")
     public void connectDogToUser(UUID userId, UUID dogId, RelationshipType relationshipType) {
         
         // Find the user (orchestration)
@@ -145,6 +150,10 @@ public class DogService {
      * @param dogId The ID of the dog
      * @throws IllegalArgumentException if user or dog not found
      */
+    @Caching(evict = {
+        @CacheEvict(cacheNames = "dogsByUser", key = "#userId"),
+        @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
+    })
     public void removeDogFromUser(UUID userId, UUID dogId) {
         
         // Find the user (orchestration)
@@ -190,6 +199,10 @@ public class DogService {
      * Delete a dog
      * @param dogId The ID of the dog to delete
      */
+    @Caching(evict = {
+        @CacheEvict(cacheNames = "dogsByUser", allEntries = true),
+        @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
+    })
     public void deleteDog(UUID dogId) {
         Dog dog = dogRepository.findById(dogId)
                 .orElseThrow(() -> new IllegalArgumentException("Dog with ID " + dogId + " not found"));
@@ -290,6 +303,7 @@ public class DogService {
      * @param userId The ID of the user
      * @return List of dogs owned/associated with the user
      */
+    @Cacheable(cacheNames = "dogsByUser", key = "#userId")
     public List<Dog> getDogsForUser(UUID userId) {
         // Get all dogs from repository and filter by user relationships
         List<Dog> allDogs = dogRepository.findAll();

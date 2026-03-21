@@ -2,6 +2,8 @@ package com.DogMate.Service;
 
 import com.DogMate.Domain.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +39,7 @@ public class UserService {
      * @return The created RegularUser entity
      * @throws IllegalArgumentException if email already exists or validation fails
      */
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public RegularUser registerUser(String email, String password, 
                                      String firstName, String lastName 
                                      ) {
@@ -63,6 +66,7 @@ public class UserService {
      * @return The saved user account
      * @throws IllegalArgumentException if email already exists
      */
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public UserAccount createUser(UserAccount userAccount) {
         // Validate user account using domain method
         UserAccount.validateUserAccount(userAccount);
@@ -83,6 +87,11 @@ public class UserService {
      * @param userId The UUID of the user to delete
      * @throws IllegalArgumentException if user ID is null or user doesn't exist
      */
+    @Caching(evict = {
+        @CacheEvict(cacheNames = "loggedUsers", allEntries = true),
+        @CacheEvict(cacheNames = "dogsByUser", allEntries = true),
+        @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
+    })
     public void deleteUser(UUID userId) {
         // Validate user ID using domain method (business logic in domain)
         UserAccount.validateUserId(userId);
@@ -103,6 +112,11 @@ public class UserService {
      * @param email The email of the user to delete
      * @throws IllegalArgumentException if email is null/empty or user doesn't exist
      */
+    @Caching(evict = {
+        @CacheEvict(cacheNames = "loggedUsers", allEntries = true),
+        @CacheEvict(cacheNames = "dogsByUser", allEntries = true),
+        @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
+    })
     public void deleteUserByEmail(String email) {
         // Validate email using domain method (business logic in domain)
         UserAccount.validateEmail(email);
@@ -126,6 +140,7 @@ public class UserService {
      * @param newPassword The new password (will be hashed by domain)
      * @throws IllegalArgumentException if email is null/empty, user doesn't exist, or password is invalid
      */
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public void editPassword(String email, String newPassword) {
         // Validate email using domain method (business logic in domain)
         UserAccount.validateEmail(email);
@@ -163,6 +178,7 @@ public class UserService {
      * @return The created AdminUser entity
      * @throws IllegalArgumentException if email already exists or validation fails
      */
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public AdminUser createAdminUser(String email, String password, String permissionLevel) {
         // Check if email already exists (orchestration - getting data for domain)
         boolean emailExists = userRepository.existsByEmail(email);
@@ -188,6 +204,7 @@ public class UserService {
      * @throws IllegalArgumentException if credentials are invalid
      */
     @Transactional
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public UserAccount login(String email, String password) {
         // Validate email using domain method (business logic in domain)
         UserAccount.validateEmail(email);
@@ -266,6 +283,7 @@ public class UserService {
      * @throws IllegalArgumentException if user ID is null or user doesn't exist
      */
     @Transactional
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public void logout(UUID userId) {
         // Validate user ID using domain method (business logic in domain)
         UserAccount.validateUserId(userId);
@@ -300,6 +318,7 @@ public class UserService {
      * @throws IllegalArgumentException if email is null/empty or user doesn't exist
      */
     @Transactional
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public void logoutByEmail(String email) {
         // Validate email using domain method (business logic in domain)
         UserAccount.validateEmail(email);
@@ -331,6 +350,7 @@ public class UserService {
      * Updates the active status (isActive) of a user by ID.
      * Used by: UserController.logoutUserById
      */
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public void updateUserActiveStatus(UUID userId, boolean isActive) {
         UserAccount.validateUserId(userId);
 
@@ -355,6 +375,7 @@ public class UserService {
      * Updates the active status (isActive) of a user by email.
      * Used by: UserController.logoutUserByEmail
      */
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public void updateUserActiveStatusByEmail(String email, boolean isActive) {
         UserAccount.validateEmail(email);
 
@@ -385,6 +406,7 @@ public class UserService {
      * @param longitude The longitude coordinate
      * @throws IllegalArgumentException if user ID is null or user doesn't exist
      */
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public void updateUserLocation(UUID userId, Double latitude, Double longitude) {
         // Validate user ID using domain method (business logic in domain)
         UserAccount.validateUserId(userId);
@@ -424,6 +446,7 @@ public class UserService {
      * @throws IllegalArgumentException if user ID is null or user doesn't exist
      */
     @Transactional
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public void clearUserLocation(UUID userId) {
         // Validate user ID using domain method (business logic in domain)
         UserAccount.validateUserId(userId);
