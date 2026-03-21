@@ -4,6 +4,8 @@ import com.DogMate.Domain.*;
 import com.DogMate.Infrastructure.DogRepository;
 import com.DogMate.Infrastructure.ReminderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +28,7 @@ public class ReminderService {
         this.dogRepository = dogRepository;
     }
 
+    @CacheEvict(cacheNames = "remindersByUser", key = "#userId")
     public Reminder createReminder(UUID userId, LinkedList<UUID> dogIds, String title,
                                    LocalDateTime remindAt, String description) {
         if (userRepo.findById(userId).isEmpty()){
@@ -68,6 +71,7 @@ public class ReminderService {
         return reminderRepo.save(r);
     }
 
+    @CacheEvict(cacheNames = "remindersByUser", key = "#userId")
     public boolean removeReminder(UUID userId, UUID reminderId) {
         var reminderOpt = reminderRepo.findById(reminderId);
         if (reminderOpt.isEmpty()) return false;
@@ -79,6 +83,7 @@ public class ReminderService {
         return true;
     }
 
+    @Cacheable(cacheNames = "remindersByUser", key = "#userId")
     public List<Reminder> getRemindersForUser(UUID userId) {
         var userAcc = userRepo.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User with id " + userId + " not found"));
@@ -91,6 +96,7 @@ public class ReminderService {
         return reminderRepo.findByRegularUser(regularUser);
     }
 
+    @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
     public void removeDogFromAllReminders(UUID dogId) {
         List<Reminder> allReminders = reminderRepo.findAll();
         List<UUID> remindersToDelete = new ArrayList<>();

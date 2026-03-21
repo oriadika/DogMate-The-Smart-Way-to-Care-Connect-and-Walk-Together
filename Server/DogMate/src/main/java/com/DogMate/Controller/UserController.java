@@ -6,6 +6,7 @@ import com.DogMate.Service.UserService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -315,6 +316,7 @@ public class UserController {
      * GET /api/users
      */
     @GetMapping("/logged")
+    @Cacheable(cacheNames = "loggedUsers")
     public ResponseEntity<?> getAllLoggedUsers() {
         try {
             System.out.println("Fetching all logged in users");

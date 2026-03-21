@@ -23,6 +23,16 @@ const BORDER_COLOR = '#E0D5C7'; // Border color
 const WARNING_COLOR = '#f39c12'; // Orange for low stock warning
 const DANGER_COLOR = '#e74c3c'; // Red for critical stock
 
+type DogProfileCacheEntry = {
+  dogs: Dog[];
+  reminders: Reminder[];
+  foodStocks: FoodStock[];
+  signature: string;
+};
+
+const dogProfileCache = new Map<string, DogProfileCacheEntry>();
+const dogProfileDirtyUsers = new Set<string>();
+
 interface Dog {
   id: string;
   name: string;
@@ -50,6 +60,24 @@ interface Reminder {
   dogs: { id: string; name: string }[];
 }
 
+const buildDogProfileSignature = (
+  dogsData: Dog[],
+  remindersData: Reminder[],
+  foodStocksData: FoodStock[]
+): string => {
+  const dogsPart = dogsData
+    .map((d) => `${d?.id ?? ''}:${d?.name ?? ''}:${d?.breed ?? ''}`)
+    .join('|');
+  const remindersPart = remindersData
+    .map((r) => `${r?.id ?? ''}:${r?.title ?? ''}:${r?.remindAt ?? ''}`)
+    .join('|');
+  const foodPart = foodStocksData
+    .map((f) => `${f?.id ?? ''}:${f?.currentLevelInKg ?? ''}:${f?.dailyConsumptionInGram ?? ''}`)
+    .join('|');
+
+  return `${dogsData.length}#${remindersData.length}#${foodStocksData.length}#${dogsPart}#${remindersPart}#${foodPart}`;
+};
+
 const DogProfileScreen = ({ navigation, route }: any) => {
   const [dogs, setDogs] = useState<Dog[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -61,42 +89,79 @@ const DogProfileScreen = ({ navigation, route }: any) => {
   useFocusEffect(
     useCallback(() => {
       if (userId) {
-        loadData();
+        const cached = dogProfileCache.get(userId);
+        const shouldFetch = !cached || dogProfileDirtyUsers.has(userId);
+
+        if (cached) {
+          setDogs(cached.dogs || []);
+          setReminders(cached.reminders || []);
+          setFoodStocks(cached.foodStocks || []);
+          setLoading(false);
+        }
+
+        if (shouldFetch) {
+          loadData({ showLoader: !cached });
+        }
       }
     }, [userId])
   );
 
-  const loadData = async () => {
+  const loadData = async (options?: { showLoader?: boolean }) => {
+    const shouldShowLoader = options?.showLoader ?? false;
+
     try {
-      setLoading(true);
-
-      // Load dogs
-      const dogsResponse = await dogAPI.getDogsForUser(userId);
-      if (dogsResponse.success && dogsResponse.dogs) {
-        setDogs(dogsResponse.dogs);
+      if (shouldShowLoader) {
+        setLoading(true);
       }
 
-      // Load reminders
-      const remindersResponse = await reminderAPI.getRemindersForUser(userId);
-      if (remindersResponse.success && remindersResponse.reminders) {
-        setReminders(remindersResponse.reminders);
-      }
+      const [dogsResponse, remindersResponse] = await Promise.all([
+        dogAPI.getDogsForUser(userId),
+        reminderAPI.getRemindersForUser(userId),
+      ]);
 
-      // Load food stocks
+      const nextDogs: Dog[] = dogsResponse.success && dogsResponse.dogs ? dogsResponse.dogs : [];
+      const nextReminders: Reminder[] = remindersResponse.success && remindersResponse.reminders
+        ? remindersResponse.reminders
+        : [];
+
+      let nextFoodStocks: FoodStock[] = [];
       try {
         const foodStocksResponse = await foodStockAPI.getFoodStocksForUser(userId);
         if (foodStocksResponse.success && foodStocksResponse.foodStocks) {
-          setFoodStocks(foodStocksResponse.foodStocks);
+          nextFoodStocks = foodStocksResponse.foodStocks;
         }
       } catch (e) {
         console.log('No food stocks or error loading:', e);
       }
 
+      const nextSignature = buildDogProfileSignature(nextDogs, nextReminders, nextFoodStocks);
+      const cached = dogProfileCache.get(userId);
+      const hasChanged = !cached || cached.signature !== nextSignature;
+
+      if (hasChanged) {
+        setDogs(nextDogs);
+        setReminders(nextReminders);
+        setFoodStocks(nextFoodStocks);
+
+        dogProfileCache.set(userId, {
+          dogs: nextDogs,
+          reminders: nextReminders,
+          foodStocks: nextFoodStocks,
+          signature: nextSignature,
+        });
+      }
+
+      dogProfileDirtyUsers.delete(userId);
+
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert('שגיאה', 'אירעה שגיאה בטעינת הנתונים');
+      if (shouldShowLoader) {
+        Alert.alert('שגיאה', 'אירעה שגיאה בטעינת הנתונים');
+      }
     } finally {
-      setLoading(false);
+      if (shouldShowLoader) {
+        setLoading(false);
+      }
     }
   };
 
@@ -162,7 +227,10 @@ const DogProfileScreen = ({ navigation, route }: any) => {
           <Text style={styles.noDataText}>אין מלאי אוכל מוגדר</Text>
           <TouchableOpacity
             style={styles.addButton}
-            onPress={() => navigation.navigate('FoodIntake', { dogId })}
+            onPress={() => {
+              if (userId) dogProfileDirtyUsers.add(userId);
+              navigation.navigate('FoodIntake', { dogId });
+            }}
           >
             <Text style={styles.addButtonText}>הוסף מלאי אוכל</Text>
           </TouchableOpacity>
@@ -240,7 +308,10 @@ const DogProfileScreen = ({ navigation, route }: any) => {
             <Text style={styles.noDataText}>אין תזכורות</Text>
             <TouchableOpacity
               style={styles.addButton}
-              onPress={() => navigation.navigate('AddReminder', { userId, dogId })}
+              onPress={() => {
+                if (userId) dogProfileDirtyUsers.add(userId);
+                navigation.navigate('AddReminder', { userId, dogId });
+              }}
             >
               <Text style={styles.addButtonText}>הוסף תזכורת</Text>
             </TouchableOpacity>
@@ -363,7 +434,10 @@ const DogProfileScreen = ({ navigation, route }: any) => {
             <Text style={styles.emptyStateText}>הוסף את הכלב הראשון שלך</Text>
             <TouchableOpacity
               style={styles.addDogButton}
-              onPress={() => navigation.navigate('AddDog', { userId })}
+              onPress={() => {
+                if (userId) dogProfileDirtyUsers.add(userId);
+                navigation.navigate('AddDog', { userId });
+              }}
             >
               <Ionicons name="add" size={20} color="#fff" />
               <Text style={styles.addDogButtonText}>הוסף כלב</Text>
