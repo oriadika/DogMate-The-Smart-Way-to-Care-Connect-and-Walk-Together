@@ -12,6 +12,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { userAPI } from '../../services/api';
 import { useUsers } from '../../contexts/UsersContext';
 
+const PRIMARY_COLOR = '#7FB069'; // matches HomeScreen (regular user)
+
 const ManageUsersScreen = ({ navigation, route }: any) => {
   const { users, setUsers, removeUserById } = useUsers();
   const email = route?.params?.email ?? '';
@@ -67,7 +69,7 @@ const ManageUsersScreen = ({ navigation, route }: any) => {
     const fullName =
       item.firstName && item.lastName
         ? `${item.firstName} ${item.lastName}`
-        : 'Unnamed User';
+        : 'משתמש ללא שם';
     const type = item.type === 'AdminUser' ? 'מנהל' : 'משתמש רגיל';
     const permission = item.permissionLevel ? item.permissionLevel : '';
 
@@ -82,8 +84,15 @@ const ManageUsersScreen = ({ navigation, route }: any) => {
         </View>
 
         <View style={styles.userInfo}>
+          <TouchableOpacity
+            style={styles.viewDetailButton}
+            onPress={() => handleUserDetails(item)}
+          >
+            <Text style={styles.viewDetailButtonText}>צפייה בפרטים</Text>
+          </TouchableOpacity>
+
           <View style={styles.userText}>
-            {fullName !== 'Unnamed User' ? (
+            {fullName !== 'משתמש ללא שם' ? (
               <>
                 <Text style={styles.userName}>{fullName}</Text>
                 <Text style={styles.userEmail}>{item.email}</Text>
@@ -94,13 +103,6 @@ const ManageUsersScreen = ({ navigation, route }: any) => {
             <Text style={styles.userType}>{type}</Text>
             {permission ? <Text style={styles.userType}>{permission}</Text> : null}
           </View>
-
-          <TouchableOpacity
-            style={styles.viewDetailButton}
-            onPress={() => handleUserDetails(item)}
-          >
-            <Text style={styles.viewDetailButtonText}>View Details</Text>
-          </TouchableOpacity>
         </View>
       </View>
     );
@@ -117,15 +119,15 @@ const ManageUsersScreen = ({ navigation, route }: any) => {
         </TouchableOpacity>
 
         <View style={styles.header}>
-          <Text style={styles.title}>Manage Users</Text>
+          <Text style={styles.title}>ניהול משתמשים</Text>
           <Text style={styles.subtitle}>
-            View and manage all registered users in DogMate
+            צפייה וניהול של כל המשתמשים הרשומים ב־DogMate
           </Text>
         </View>
 
         <View style={styles.summaryCard}>
           <Text style={styles.summaryNumber}>{filteredUsers.length}</Text>
-          <Text style={styles.summaryLabel}>Users Found</Text>
+          <Text style={styles.summaryLabel}>משתמשים נמצאו</Text>
         </View>
 
         <FlatList
@@ -139,9 +141,9 @@ const ManageUsersScreen = ({ navigation, route }: any) => {
           }
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No users found</Text>
+              <Text style={styles.emptyTitle}>לא נמצאו משתמשים</Text>
               <Text style={styles.emptyText}>
-                There are no other users to display right now.
+                כרגע אין משתמשים נוספים להצגה.
               </Text>
             </View>
           }
@@ -154,6 +156,10 @@ const ManageUsersScreen = ({ navigation, route }: any) => {
 export default ManageUsersScreen;
 
 const styles = StyleSheet.create({
+  rtlText: {
+    writingDirection: 'rtl',
+    textAlign: 'right',
+  },
   safeArea: { flex: 1, backgroundColor: '#f5e6d3' },
   container: { flex: 1, paddingHorizontal: 20, paddingTop: 12 },
   backButton: {
@@ -169,8 +175,21 @@ const styles = StyleSheet.create({
   },
   backIcon: { color: '#5C4033', fontSize: 22, fontWeight: 'bold' },
   header: { marginBottom: 20 },
-  title: { fontSize: 30, fontWeight: '700', color: '#5C4033', marginBottom: 6 },
-  subtitle: { fontSize: 15, color: '#7a6a5a', lineHeight: 22 },
+  title: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#5C4033',
+    marginBottom: 6,
+    writingDirection: 'rtl',
+    textAlign: 'right',
+  },
+  subtitle: {
+    fontSize: 15,
+    color: '#7a6a5a',
+    lineHeight: 22,
+    writingDirection: 'rtl',
+    textAlign: 'right',
+  },
   summaryCard: {
     backgroundColor: '#7FB069',
     borderRadius: 18,
@@ -183,11 +202,24 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
-  summaryNumber: { fontSize: 30, fontWeight: '800', color: '#ffffff' },
-  summaryLabel: { marginTop: 4, fontSize: 15, color: '#f4f4f4', fontWeight: '600' },
+  summaryNumber: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: '#ffffff',
+    writingDirection: 'rtl',
+    textAlign: 'right',
+  },
+  summaryLabel: {
+    marginTop: 4,
+    fontSize: 15,
+    color: '#f4f4f4',
+    fontWeight: '600',
+    writingDirection: 'rtl',
+    textAlign: 'right',
+  },
   listContent: { paddingBottom: 24 },
   userCard: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     backgroundColor: '#fffaf5',
     borderRadius: 18,
@@ -208,7 +240,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#d9b99b',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginLeft: 14,
   },
   avatarText: { color: '#5C4033', fontSize: 20, fontWeight: '700' },
   userInfo: {
@@ -217,12 +249,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  userText: { flex: 1 },
-  userName: { fontSize: 17, fontWeight: '700', color: '#3e2d23', marginBottom: 4 },
-  userEmail: { fontSize: 14, color: '#7a6a5a' },
+  userText: { flex: 1, alignItems: 'center' },
+  userName: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#3e2d23',
+    marginBottom: 4,
+    writingDirection: 'rtl',
+    textAlign: 'center',
+  },
+  userEmail: { fontSize: 14, color: '#7a6a5a', writingDirection: 'rtl', textAlign: 'center' },
   userType: {
     marginTop: 6,
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: 12,
@@ -230,16 +269,31 @@ const styles = StyleSheet.create({
     color: '#5C4033',
     fontSize: 12,
     fontWeight: '700',
+    writingDirection: 'rtl',
+    textAlign: 'center',
   },
   viewDetailButton: {
     marginLeft: 12,
     paddingVertical: 6,
     paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: '#588bfa',
+    backgroundColor: PRIMARY_COLOR,
   },
   viewDetailButtonText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   emptyState: { marginTop: 50, alignItems: 'center', paddingHorizontal: 20 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#5C4033', marginBottom: 8 },
-  emptyText: { fontSize: 15, color: '#7a6a5a', textAlign: 'center', lineHeight: 22 },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#5C4033',
+    marginBottom: 8,
+    writingDirection: 'rtl',
+    textAlign: 'right',
+  },
+  emptyText: {
+    fontSize: 15,
+    color: '#7a6a5a',
+    textAlign: 'right',
+    lineHeight: 22,
+    writingDirection: 'rtl',
+  },
 });

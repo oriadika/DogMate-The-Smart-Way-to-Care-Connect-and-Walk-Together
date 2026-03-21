@@ -10,6 +10,9 @@ import {
 import { userAPI } from '../../services/api';
 import { useUsers } from '../../contexts/UsersContext';
 
+const PRIMARY_COLOR = '#7FB069'; // matches HomeScreen (regular user)
+const DESTRUCTIVE_COLOR = '#E74C3C'; // matches HomeScreen delete
+
 const UserDetailsScreen = ({ navigation, route }: any) => {
   const { removeUserById } = useUsers();
   const user = route?.params?.user ?? {};
@@ -19,7 +22,7 @@ const UserDetailsScreen = ({ navigation, route }: any) => {
   const fullName =
     user.firstName && user.lastName
       ? `${user.firstName} ${user.lastName}`
-      : user.firstName || user.lastName || 'Unnamed User';
+      : user.firstName || user.lastName || 'משתמש ללא שם';
 
   const isSuspended = user.suspended === true;
   console.log('User suspended status:', user.suspended);
@@ -64,37 +67,37 @@ const UserDetailsScreen = ({ navigation, route }: any) => {
         </TouchableOpacity>
 
         <ScrollView contentContainerStyle={styles.container}>
-          <Text style={styles.title}>User Details</Text>
+          <Text style={styles.title}>פרטי משתמש</Text>
 
-          {fullName !== 'Unnamed User' ? (
+          {fullName !== 'משתמש ללא שם' ? (
             <View style={styles.section}>
-              <Text style={styles.label}>Name</Text>
+              <Text style={styles.label}>שם</Text>
               <Text style={styles.value}>{fullName}</Text>
             </View>
           ) : null}
 
           <View style={styles.section}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>אימייל</Text>
             <Text style={styles.value}>{user.email ?? '—'}</Text>
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.label}>Role</Text>
+            <Text style={styles.label}>תפקיד</Text>
             <Text style={styles.value}>{isAdmin ? 'מנהל' : 'משתמש רגיל'}</Text>
           </View>
 
           {user.permissionLevel ? (
             <View style={styles.section}>
-              <Text style={styles.label}>Permission Level</Text>
+              <Text style={styles.label}>רמת הרשאה</Text>
               <Text style={styles.value}>{user.permissionLevel}</Text>
             </View>
           ) : null}
 
           {isAdmin ? (
             <View style={styles.adminSection}>
-              <Text style={styles.adminTitle}>Admin Info</Text>
+              <Text style={styles.adminTitle}>מידע למנהל</Text>
               <Text style={styles.adminText}>
-                This user has administrative privileges and can manage other users.
+                למשתמש זה יש הרשאות ניהול והוא יכול לנהל משתמשים אחרים.
               </Text>
             </View>
           ) : null}
@@ -102,17 +105,17 @@ const UserDetailsScreen = ({ navigation, route }: any) => {
           
           {!isSuspended ? (
             <TouchableOpacity style={styles.banButton} onPress={handleUserSuspend}>
-            <Text style={styles.banButtonText}>Suspend User</Text>
-          </TouchableOpacity>
+              <Text style={styles.banButtonText}>חסום משתמש</Text>
+            </TouchableOpacity>
           ) : (
             <View style={styles.suspendedSection}>
-              <Text style={styles.suspendedText}>This user is currently suspended.</Text>
+              <Text style={styles.suspendedText}>משתמש זה חסום כרגע.</Text>
             </View>
           )}
           
 
-          <TouchableOpacity style={styles.banButton} onPress={handleUserDelete}>
-            <Text style={styles.banButtonText}>Delete User</Text>
+          <TouchableOpacity style={[styles.banButton, styles.deleteButton]} onPress={handleUserDelete}>
+            <Text style={styles.banButtonText}>מחק משתמש</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -123,6 +126,10 @@ const UserDetailsScreen = ({ navigation, route }: any) => {
 export default UserDetailsScreen;
 
 const styles = StyleSheet.create({
+  rtlText: {
+    writingDirection: 'rtl',
+    textAlign: 'right',
+  },
   safeArea: { flex: 1, backgroundColor: '#f5e6d3' },
   headerWrapper: { flex: 1 },
   backButton: {
@@ -141,7 +148,14 @@ const styles = StyleSheet.create({
   },
   backIcon: { color: '#5C4033', fontSize: 22, fontWeight: 'bold' },
   container: { padding: 20, paddingTop: 80, paddingBottom: 40 },
-  title: { fontSize: 28, fontWeight: '700', color: '#5C4033', marginBottom: 18 },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#5C4033',
+    marginBottom: 18,
+    writingDirection: 'rtl',
+    textAlign: 'right',
+  },
   section: {
     marginBottom: 18,
     padding: 14,
@@ -154,10 +168,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#7a6a5a',
     marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    writingDirection: 'rtl',
+    textAlign: 'right',
   },
-  value: { fontSize: 16, color: '#3e2d23', fontWeight: '700' },
+  value: {
+    fontSize: 16,
+    color: '#3e2d23',
+    fontWeight: '700',
+    writingDirection: 'rtl',
+    textAlign: 'right',
+  },
   adminSection: {
     marginTop: 12,
     padding: 14,
@@ -166,17 +186,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#b6d4ff',
   },
-  adminTitle: { fontSize: 14, fontWeight: '700', color: '#2a4d82', marginBottom: 8 },
-  adminText: { fontSize: 14, color: '#2a4d82', lineHeight: 20 },
+  adminTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2a4d82',
+    marginBottom: 8,
+    writingDirection: 'rtl',
+    textAlign: 'right',
+  },
+  adminText: {
+    fontSize: 14,
+    color: '#2a4d82',
+    lineHeight: 20,
+    writingDirection: 'rtl',
+    textAlign: 'right',
+  },
   banButton: {
     marginTop: 24,
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 14,
-    backgroundColor: '#d64545',
+    backgroundColor: PRIMARY_COLOR,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   banButtonText: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
+  deleteButton: {
+    backgroundColor: DESTRUCTIVE_COLOR,
+  },
   suspendedSection: {
   backgroundColor: '#FDECEA',      // light red background
   borderRadius: 12,
@@ -192,6 +233,7 @@ suspendedText: {
   color: '#C0392B',                // strong red text
   fontSize: 15,
   fontWeight: '600',
+  writingDirection: 'rtl',
   textAlign: 'center',
 },
 });

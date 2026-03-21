@@ -66,6 +66,7 @@ export interface LoginResponse {
   message: string;
   userId: string;
   email: string;
+  suspended?: boolean;
   firstName?: string;
   lastName?: string;
   userRole?: string;
@@ -227,32 +228,6 @@ export const userAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to send ping';
-      throw new Error(errorMessage);
-    }
-  },
-
-  /**
-   * Get pending unread pings for a user (fallback when WebSocket is disconnected)
-   */
-  getPendingPings: async (userId: string): Promise<{ success: boolean; pings: any[] }> => {
-    try {
-      const response = await apiClient.get(`/users/pings/pending/${userId}`);
-      return response.data;
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch pending pings';
-      throw new Error(errorMessage);
-    }
-  },
-
-  /**
-   * Mark a ping as read
-   */
-  markPingAsRead: async (pingId: string): Promise<{ success: boolean; message: string }> => {
-    try {
-      const response = await apiClient.post(`/users/pings/${pingId}/read`);
-      return response.data;
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to mark ping as read';
       throw new Error(errorMessage);
     }
   },
