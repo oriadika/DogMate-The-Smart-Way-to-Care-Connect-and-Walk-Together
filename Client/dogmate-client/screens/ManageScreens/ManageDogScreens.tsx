@@ -39,7 +39,7 @@ const ManageDogScreens = ({navigation, route}: any) => {
       </View>
        <TouchableOpacity
             style={styles.viewDetailButton}
-            onPress={() => {}}
+            onPress={() => navigation.navigate('DogDetail', { dog: item })}
             >
             <Text style={styles.viewDetailButtonText}>צפייה בפרטים</Text>
         </TouchableOpacity>

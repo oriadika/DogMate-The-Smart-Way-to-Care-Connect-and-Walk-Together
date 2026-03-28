@@ -311,6 +311,20 @@ export const dogAPI = {
   },
 
   /**
+   * Delete a dog for a user
+   */
+  deleteDogForever: async (dogId: string) => {
+    try {
+      const response = await apiClient.delete(`/dogs/${dogId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete dog';
+      console.error("Failed to delete dog:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
    * Get all dogs
    */
   getAllDogs: async () => {

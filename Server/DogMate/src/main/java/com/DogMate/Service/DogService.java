@@ -218,7 +218,13 @@ public class DogService {
 
         List<UserAccount> allUsers = userRepository.findAll();
         for (UserAccount user: allUsers){
-            removeDogFromUser(user.getId(),dogId);
+            if (user instanceof RegularUser) {
+                if (((RegularUser) user).getDogRelationships().stream()
+                        .map(DogRelationship::getDogID)
+                        .toList().contains(dogId)) {
+                    removeDogFromUser(user.getId(),dogId);
+                }
+            }
         }
     }
 
