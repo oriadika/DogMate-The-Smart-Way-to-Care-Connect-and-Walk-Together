@@ -48,7 +48,6 @@ const AdminScreen = ({ navigation, route }: any) => {
     const fetchDogs = async () => {
       try {
         const allDogsResponse = await dogAPI.getAllDogs();
-        console.log('Admin dogs response:', allDogsResponse);
         setDogs(allDogsResponse.dogs || []);
       } catch (error) {
         console.error('Failed to fetch dogs:', error);

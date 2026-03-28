@@ -21,8 +21,8 @@ import SOSScreen from './screens/SOSScreen';
 import AdminScreen from './screens/AdminScreen';
 import ManageUsersScreen from './screens/ManageScreens/Users/ManageUsersScreen';
 import UserDetailsScreen from './screens/ManageScreens/Users/UserDetailsScreen';
-import ManageDogScreens from './screens/ManageScreens/ManageDogScreens';
-import DogDetailScreen from './screens/ManageScreens/DogDetailScreen';
+import ManageDogScreens from './screens/ManageScreens/Dogs/ManageDogScreens';
+import DogDetailScreen from './screens/ManageScreens/Dogs/DogDetailScreen';
 
 const Stack = createNativeStackNavigator();
 

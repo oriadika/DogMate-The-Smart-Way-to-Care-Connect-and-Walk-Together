@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   TouchableOpacity,
 } from "react-native";
-import { dogAPI } from "../../services/api";
 
 const ManageDogScreens = ({navigation, route}: any) => {
   const [dogs, setDogs] = useState<any[]>([]);

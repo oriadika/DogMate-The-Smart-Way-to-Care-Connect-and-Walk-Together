@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
-import { dogAPI } from '../../services/api';
+import { dogAPI } from '../../../services/api';
 
 const DogDetailScreen = ({ navigation, route }: any) => {
   const dog = route?.params?.dog;
