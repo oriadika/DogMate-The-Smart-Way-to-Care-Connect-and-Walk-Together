@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,6 +25,12 @@ public interface UserRepository extends JpaRepository<UserAccount, UUID>, IUserR
      * Checks if a user with the given email exists
      */
     boolean existsByEmail(String email);
+
+    /**
+     * Return all users in the
+     * @return users
+     */
+    List<UserAccount> findAll();
 
     /**
      * Reset all users on server startup:

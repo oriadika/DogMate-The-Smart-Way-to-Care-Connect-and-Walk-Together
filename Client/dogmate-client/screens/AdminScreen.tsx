@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { userAPI } from '../services/api';
+import { dogAPI, userAPI } from '../services/api';
 import { useUsers } from '../contexts/UsersContext';
 
 const PRIMARY_COLOR = '#7FB069'; // matches HomeScreen (regular user)
@@ -17,6 +17,7 @@ const DESTRUCTIVE_COLOR = '#E74C3C'; // matches HomeScreen delete
 
 const AdminScreen = ({ navigation, route }: any) => {
   const { users, setUsers } = useUsers();
+  const [dogs, setDogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loggedOut, setLoggedOut] = useState(false);
 
@@ -44,15 +45,27 @@ const AdminScreen = ({ navigation, route }: any) => {
       }
     };
 
+    const fetchDogs = async () => {
+      try {
+        const allDogsResponse = await dogAPI.getAllDogs();
+        console.log('Admin dogs response:', allDogsResponse);
+        setDogs(allDogsResponse.dogs || []);
+      } catch (error) {
+        console.error('Failed to fetch dogs:', error);
+      }
+    };
+
+
     fetchUsers();
-  }, [setUsers]);
+    fetchDogs();
+  }, [setUsers, setDogs]);
 
   const handleManageUsers = () => {
     navigation.navigate('AdminManageUsers', { users, email: route.params.email });
   };
 
   const handleManageDogs = () => {
-    alert('ניהול כלבים עדיין לא זמין');
+    navigation.navigate('AdminManageDogs', { dogs });
   };
 
   const handleViewReports = () => {
@@ -118,7 +131,7 @@ const AdminScreen = ({ navigation, route }: any) => {
             </View>
 
             <View style={styles.statCard}>
-              <Text style={styles.statNumber}>84</Text>
+              <Text style={styles.statNumber}>{dogs.length}</Text>
               <Text style={styles.statLabel}>כלבים</Text>
             </View>
 

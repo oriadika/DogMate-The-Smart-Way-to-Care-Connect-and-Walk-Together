@@ -32,6 +32,33 @@ public class DogController {
         this.dogService = dogService;
     }
 
+    @GetMapping
+    public ResponseEntity<?> getAllDogs(){
+        try {
+            // Get dogs for this user using DogService
+            List<Dog> dogs = dogService.getAllDogs();
+
+            java.util.List<Map<String, Object>> dogsResponse = new java.util.ArrayList<>();
+            for (Dog dog : dogs) {
+                dogsResponse.add(createDogResponse(dog));
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("count", dogsResponse.size());
+            response.put("dogs", dogsResponse);
+
+            System.out.println("Found " + dogsResponse.size() + " dogs");
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            System.err.println("Failed to get dogs: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("Failed to fetch dogs: " + e.getMessage()));
+        }
+    }
+
     /**
      * Add a new dog to a user
      * POST /api/dogs/add

@@ -1,6 +1,8 @@
 package com.DogMate.Service;
 
 import com.DogMate.Domain.UserAccount;
+
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -38,4 +40,10 @@ public interface IUserRepository {
      * @param id The UUID of the user to delete
      */
     void deleteById(UUID id);
+
+    /**
+     * Return all users in the
+     * @return users
+     */
+    List<UserAccount> findAll();
 }

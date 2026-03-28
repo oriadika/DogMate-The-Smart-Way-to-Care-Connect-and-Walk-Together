@@ -19,8 +19,9 @@ import FoodInventoryHubScreen from './screens/Health/FoodInventoryHubScreen';
 import { setupNotificationListeners, requestNotificationPermissions } from './services/notifications';
 import SOSScreen from './screens/SOSScreen';
 import AdminScreen from './screens/AdminScreen';
-import ManageUsersScreen from './screens/ManageScreens/ManageUsersScreen';
-import UserDetailsScreen from './screens/ManageScreens/UserDetailsScreen';
+import ManageUsersScreen from './screens/ManageScreens/Users/ManageUsersScreen';
+import UserDetailsScreen from './screens/ManageScreens/Users/UserDetailsScreen';
+import ManageDogScreens from './screens/ManageScreens/ManageDogScreens';
 
 const Stack = createNativeStackNavigator();
 
@@ -56,6 +57,7 @@ export default function App() {
           <Stack.Screen name="Admin" component={AdminScreen} />
           <Stack.Screen name="AdminManageUsers" component={ManageUsersScreen} />
           <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
+          <Stack.Screen name="AdminManageDogs" component={ManageDogScreens} />
         </Stack.Navigator>
       </NavigationContainer>
     </UsersProvider>

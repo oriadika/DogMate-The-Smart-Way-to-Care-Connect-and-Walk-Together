@@ -309,7 +309,21 @@ export const dogAPI = {
       throw new Error(errorMessage);
     }
   },
-};
+
+  /**
+   * Get all dogs
+   */
+  getAllDogs: async () => {
+    try {
+      const response = await apiClient.get('/dogs');
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch dogs';
+      console.error("Failed to get all dogs:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+}
 
 // Reminder API methods
 export const reminderAPI = {
