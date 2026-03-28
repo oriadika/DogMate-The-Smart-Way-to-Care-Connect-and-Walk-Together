@@ -4,10 +4,7 @@ import com.DogMate.DTO.AddFoodStockRequest;
 import com.DogMate.DTO.AddMoodLogRequest;
 import com.DogMate.DTO.DogMoodLogDTO;
 import com.DogMate.DTO.FoodStockDTO;
-import com.DogMate.Domain.Dog;
-import com.DogMate.Domain.DogMoodLog;
-import com.DogMate.Domain.FoodStock;
-import com.DogMate.Domain.RelationshipType;
+import com.DogMate.Domain.*;
 import com.DogMate.Service.DogService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,12 +37,15 @@ public class DogController {
 
             java.util.List<Map<String, Object>> dogsResponse = new java.util.ArrayList<>();
             for (Dog dog : dogs) {
-                dogsResponse.add(createDogResponse(dog));
+                Map<String, Object> dogResponse = createDogResponse(dog);
+                List<String> users_related = dog.getDogRelationships().stream().filter(dogRelationship ->
+                        dogRelationship.getDogID() == dog.getID()).map(dogRelationship -> dogRelationship.getRegularUser().getFirst_name() + " " + dogRelationship.getRegularUser().getLast_name()).toList();
+                dogResponse.put("users_related", users_related);
+                dogsResponse.add(dogResponse);
             }
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("count", dogsResponse.size());
             response.put("dogs", dogsResponse);
 
             System.out.println("Found " + dogsResponse.size() + " dogs");

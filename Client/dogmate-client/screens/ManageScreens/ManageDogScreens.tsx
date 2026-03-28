@@ -21,6 +21,10 @@ const ManageDogScreens = ({navigation, route}: any) => {
     setLoading(false);
     }, [route?.params?.dogs]);
 
+  const getUsersNames = (users: string[]) => {
+    if (!Array.isArray(users)) return "Couldn't fetch users";
+    return users.map((user) => user || 'משתמש ללא שם').join(', ');
+  }
   const renderDog = ({ item }: any) => (
     <View style={styles.card}>
         <View style={styles.dogInfo}>
@@ -31,6 +35,7 @@ const ManageDogScreens = ({navigation, route}: any) => {
       <Text style={styles.text}>
         תאריך לידה: {item.birthdate}
       </Text>
+      <Text style={styles.text}>{item.users_related.length > 0 ? `חברים: ${getUsersNames(item.users_related)}` : 'אין חברים'}</Text>
       </View>
        <TouchableOpacity
             style={styles.viewDetailButton}
