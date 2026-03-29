@@ -1,4 +1,9 @@
 package com.DogMate.Service;
 
-public interface IDogWalkerRepository {
+import com.DogMate.Domain.DogWalkerUser;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.UUID;
+
+public interface IDogWalkerRepository extends JpaRepository<DogWalkerUser, UUID> {
 }

@@ -6,6 +6,10 @@ import { UsersProvider } from './contexts/UsersContext';
 import StartScreen from './screens/StartScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import HomeScreen from './screens/HomeScreen';
+import WalkerHomeScreen from './screens/WalkerHomeScreen';
+import WalkerProfessionalProfileScreen from './screens/WalkerProfessionalProfileScreen';
+import WalkerWalkRequestsScreen from './screens/WalkerWalkRequestsScreen';
+import WalkerScheduleScreen from './screens/WalkerScheduleScreen';
 import LoginScreen from './screens/LoginScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -44,6 +48,10 @@ export default function App() {
           <Stack.Screen name="SignUp" component={SignUpScreen} />
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
           <Stack.Screen name="Home" component={HomeScreen} />
+          <Stack.Screen name="WalkerHome" component={WalkerHomeScreen} />
+          <Stack.Screen name="WalkerProfessionalProfile" component={WalkerProfessionalProfileScreen} />
+          <Stack.Screen name="WalkerWalkRequests" component={WalkerWalkRequestsScreen} />
+          <Stack.Screen name="WalkerSchedule" component={WalkerScheduleScreen} />
           <Stack.Screen name="Profile" component={ProfileScreen} />
           <Stack.Screen name="DogProfile" component={DogProfileScreen} />
           <Stack.Screen name="AddDog" component={AddDogScreen} />

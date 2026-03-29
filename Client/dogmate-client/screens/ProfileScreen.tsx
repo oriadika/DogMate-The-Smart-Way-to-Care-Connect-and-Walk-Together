@@ -1,5 +1,5 @@
 // screens/ProfileScreen.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   SafeAreaView,
   View,
@@ -44,6 +44,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
     `${route?.params?.userFirstName || ''} ${route?.params?.userLastName || ''}`.trim()
   );
   const [currentUserRoleLabel, setCurrentUserRoleLabel] = useState<string>(route?.params?.role || '');
+  const [serverAccountType, setServerAccountType] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
   const [locationTracking, setLocationTracking] = useState(false);
   const [isLocationSharingEnabled, setIsLocationSharingEnabled] = useState(false); // Default: sharing disabled (location hidden)
@@ -52,6 +53,17 @@ const ProfileScreen = ({ navigation, route }: any) => {
   const [radiusKm, setRadiusKm] = useState<number>(1); // Default 1km radius
   const [showRadiusFilter, setShowRadiusFilter] = useState<boolean>(true);
   const mapRef = useRef<MapView>(null);
+
+  const isWalkerProfile = useMemo(
+    () => route?.params?.userRole === 'walker' || serverAccountType === 'DogWalkerUser',
+    [route?.params?.userRole, serverAccountType]
+  );
+
+  useEffect(() => {
+    if (route?.params?.userRole === 'walker') {
+      setCurrentUserRoleLabel('דוגווקר');
+    }
+  }, [route?.params?.userRole]);
 
   // Radius filter for map visibility
   const usersInRadius = loggedUsers.filter((user: any) => {
@@ -130,8 +142,10 @@ const ProfileScreen = ({ navigation, route }: any) => {
       }
     };
 
-    initializeLocation();
-    
+    if (route?.params?.userRole !== 'walker') {
+      initializeLocation();
+    }
+
     // Connect to WebSocket for real-time ping notifications
     const userId = route?.params?.userId;
     if (userId) {
@@ -159,7 +173,16 @@ const ProfileScreen = ({ navigation, route }: any) => {
       console.log('📱 ProfileScreen unmounting, disconnecting WebSocket');
       websocketService.disconnect();
     };
-  }, [route?.params?.userId]);
+  }, [route?.params?.userId, route?.params?.userRole]);
+
+  useEffect(() => {
+    if (serverAccountType !== 'DogWalkerUser') {
+      return;
+    }
+    locationService.stopWatchingLocation();
+    setLocationTracking(false);
+    setIsLocationSharingEnabled(false);
+  }, [serverAccountType]);
 
   // Send location updates to server continuously when sharing is enabled
   // Use a ref to store the latest location to avoid recreating the interval
@@ -171,7 +194,11 @@ const ProfileScreen = ({ navigation, route }: any) => {
   useEffect(() => {
     const userId = route?.params?.userId;
     let locationInterval: ReturnType<typeof setInterval> | null = null;
-    
+
+    if (isWalkerProfile) {
+      return;
+    }
+
     if (userId && isLocationSharingEnabled) {
       // Send location immediately
       if (userLocationRef.current) {
@@ -194,7 +221,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
         clearInterval(locationInterval);
       }
     };
-  }, [isLocationSharingEnabled, route?.params?.userId]);
+  }, [isLocationSharingEnabled, route?.params?.userId, isWalkerProfile]);
 
   // Recalculate distances when userLocation changes
   useEffect(() => {
@@ -255,6 +282,9 @@ const ProfileScreen = ({ navigation, route }: any) => {
     }
   }, [userLocation, loggedUsers]);
   const toggleLocationSharing = async () => {
+    if (isWalkerProfile) {
+      return;
+    }
     const newState = !isLocationSharingEnabled;
     setIsLocationSharingEnabled(newState);
     
@@ -364,11 +394,18 @@ const ProfileScreen = ({ navigation, route }: any) => {
       if (data.success && data.users) {
         const currentUser = data.users.find((user: any) => user.id === currentUserId);
         if (currentUser) {
+          setServerAccountType(currentUser.type ?? null);
           const resolvedName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim();
           setCurrentUserDisplayName(
             resolvedName || currentUser.email?.split('@')[0] || route?.params?.userFirstName || 'משתמש'
           );
-          setCurrentUserRoleLabel(currentUser.type === 'RegularUser' ? 'בעל כלב' : 'מנהל');
+          setCurrentUserRoleLabel(
+            currentUser.type === 'RegularUser'
+              ? 'בעל כלב'
+              : currentUser.type === 'DogWalkerUser'
+                ? 'דוגווקר'
+                : 'מנהל'
+          );
         }
 
         // Format users for display and filter out current user
@@ -377,10 +414,16 @@ const ProfileScreen = ({ navigation, route }: any) => {
           .map((user: any) => {
           const userObj: any = {
             id: user.id,
-            name: user.type === 'RegularUser' 
-              ? `${user.firstName} ${user.lastName}` 
-              : `Admin: ${user.email}`,
-            role: user.type === 'RegularUser' ? 'בעל כלב' : `מנהל (רמה ${user.permissionLevel})`,
+            name:
+              user.type === 'RegularUser' || user.type === 'DogWalkerUser'
+                ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                : `Admin: ${user.email}`,
+            role:
+              user.type === 'RegularUser'
+                ? 'בעל כלב'
+                : user.type === 'DogWalkerUser'
+                  ? 'דוגווקר'
+                  : `מנהל (רמה ${user.permissionLevel})`,
             email: user.email,
             type: user.type,
           };
@@ -488,6 +531,8 @@ const ProfileScreen = ({ navigation, route }: any) => {
       <View style={styles.avatar}>
         {item.role === 'בעל כלב' ? (
           <MaterialCommunityIcons name="dog" size={24} color="#fff" />
+        ) : item.role === 'דוגווקר' ? (
+          <FontAwesome5 name="walking" size={20} color="#fff" />
         ) : (
           <FontAwesome5 name="user-shield" size={20} color="#fff" />
         )}
@@ -577,7 +622,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
             {/* PROFILE CARD */}
             <View style={styles.profileCard}>
               <View style={styles.profileAvatar}>
-                {route?.params?.role === 'Dog walker' ? (
+                {isWalkerProfile ? (
                   <FontAwesome5 name="walking" size={26} color="#fff" />
                 ) : (
                   <MaterialCommunityIcons name="dog" size={28} color="#fff" />
@@ -586,12 +631,26 @@ const ProfileScreen = ({ navigation, route }: any) => {
 
               <View style={styles.profileTextBlock}>
                 <Text style={styles.profileName}>{currentUserDisplayName || 'משתמש'}</Text>
-                <Text style={styles.profileRole}>{currentUserRoleLabel || route?.params?.role || 'בעל כלב'}</Text>
+                <Text style={styles.profileRole}>
+                  {currentUserRoleLabel ||
+                    (route?.params?.userRole === 'walker' ? 'דוגווקר' : route?.params?.role) ||
+                    'בעל כלב'}
+                </Text>
               </View>
             </View>
 
             {/* Location Display */}
-            {userLocation ? (
+            {isWalkerProfile ? (
+              <View style={styles.locationCard}>
+                <View style={styles.locationHeader}>
+                  <Ionicons name="location-outline" size={18} color="#8B7355" />
+                  <Text style={styles.locationTitle}>שיתוף מיקום</Text>
+                </View>
+                <Text style={styles.locationText}>
+                  שיתוף מיקום אינו זמין לחשבונות דוגווקר בשלב זה.
+                </Text>
+              </View>
+            ) : userLocation ? (
               <View style={styles.locationCard}>
                 <View style={styles.locationHeader}>
                   <Ionicons name="location" size={18} color={PRIMARY_COLOR} />

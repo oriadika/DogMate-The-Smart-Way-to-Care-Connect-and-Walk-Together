@@ -70,7 +70,12 @@ const ManageUsersScreen = ({ navigation, route }: any) => {
       item.firstName && item.lastName
         ? `${item.firstName} ${item.lastName}`
         : 'משתמש ללא שם';
-    const type = item.type === 'AdminUser' ? 'מנהל' : 'משתמש רגיל';
+    const type =
+      item.type === 'AdminUser'
+        ? 'מנהל'
+        : item.type === 'DogWalkerUser'
+          ? 'דוגווקר'
+          : 'משתמש רגיל';
     const permission = item.permissionLevel ? item.permissionLevel : '';
 
     return (

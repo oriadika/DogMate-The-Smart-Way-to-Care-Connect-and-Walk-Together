@@ -1,7 +1,12 @@
 package com.DogMate.Controller;
 
+import com.DogMate.Domain.DogWalkerUser;
 import com.DogMate.Domain.RegularUser;
+import com.DogMate.Domain.WalkRequest;
+import com.DogMate.Domain.WalkRequestStatus;
+import com.DogMate.Service.DogWalkerService;
 import com.DogMate.Service.UserService;
+import com.DogMate.Service.WalkRequestService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,8 +15,11 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
@@ -30,6 +38,15 @@ class UserControllerTest {
 
     @MockBean
     private UserService userService;
+
+    @MockBean
+    private DogWalkerService dogWalkerService;
+
+    @MockBean
+    private WalkRequestService walkRequestService;
+
+    @MockBean
+    private SimpMessagingTemplate messagingTemplate;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -73,11 +90,14 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("User registered successfully"))
                 .andExpect(jsonPath("$.userId").value(testUserId.toString()))
-                .andExpect(jsonPath("$.email").value(testEmail));
+                .andExpect(jsonPath("$.email").value(testEmail))
+                .andExpect(jsonPath("$.userRole").value("owner"));
 
         verify(userService, times(1)).registerUser(
             eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         );
+        verify(dogWalkerService, never()).registerDogWalker(
+            anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -105,11 +125,46 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("User registered successfully"))
                 .andExpect(jsonPath("$.userId").value(testUserId.toString()))
-                .andExpect(jsonPath("$.email").value(testEmail));
+                .andExpect(jsonPath("$.email").value(testEmail))
+                .andExpect(jsonPath("$.userRole").value("owner"));
 
         verify(userService, times(1)).registerUser(
             eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         );
+        verify(dogWalkerService, never()).registerDogWalker(
+            anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void GivenUserRoleWalker_WhenRegisterUser_ThenCallsDogWalkerServiceAndReturnsWalkerRole() throws Exception {
+        DogWalkerUser mockWalker = new DogWalkerUser(
+            testUserId, testEmail, "hashedPassword", testFirstName, testLastName
+        );
+        when(dogWalkerService.registerDogWalker(
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
+        )).thenReturn(mockWalker);
+
+        UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
+        request.setEmail(testEmail);
+        request.setPassword(testPassword);
+        request.setFirstName(testFirstName);
+        request.setLastName(testLastName);
+        request.setUserRole("walker");
+
+        mockMvc.perform(post("/api/users/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.userId").value(testUserId.toString()))
+                .andExpect(jsonPath("$.email").value(testEmail))
+                .andExpect(jsonPath("$.userRole").value("walker"));
+
+        verify(dogWalkerService, times(1)).registerDogWalker(
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
+        );
+        verify(userService, never()).registerUser(
+            anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -129,6 +184,8 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.error").value("Missing required fields"));
 
         verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString());
+        verify(dogWalkerService, never()).registerDogWalker(
+            anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -148,6 +205,8 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.error").value("Missing required fields"));
 
         verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString());
+        verify(dogWalkerService, never()).registerDogWalker(
+            anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -167,6 +226,8 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.error").value("Missing required fields"));
 
         verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString());
+        verify(dogWalkerService, never()).registerDogWalker(
+            anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -186,6 +247,8 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.error").value("Missing required fields"));
 
         verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString());
+        verify(dogWalkerService, never()).registerDogWalker(
+            anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -212,6 +275,8 @@ class UserControllerTest {
         verify(userService, times(1)).registerUser(
             eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         );
+        verify(dogWalkerService, never()).registerDogWalker(
+            anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -238,6 +303,8 @@ class UserControllerTest {
         verify(userService, times(1)).registerUser(
             eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         );
+        verify(dogWalkerService, never()).registerDogWalker(
+            anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -264,6 +331,8 @@ class UserControllerTest {
         verify(userService, times(1)).registerUser(
             eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName)
         );
+        verify(dogWalkerService, never()).registerDogWalker(
+            anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -372,5 +441,39 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.error", containsString("Failed to delete user")));
 
         verify(userService, times(1)).deleteUser(testUserId);
+    }
+
+    @Test
+    void GivenValidBody_WhenCreateWalkRequest_ThenReturnCreated() throws Exception {
+        UUID ownerId = UUID.randomUUID();
+        UUID walkerId = UUID.randomUUID();
+        DogWalkerUser walker = new DogWalkerUser(walkerId, "w@test.com", "h", "W", "L");
+        RegularUser owner = new RegularUser(ownerId, "o@test.com", "h", "O", "N");
+        WalkRequest created = new WalkRequest(
+                UUID.randomUUID(),
+                walker,
+                owner,
+                null,
+                Instant.parse("2026-07-01T12:00:00Z"),
+                Instant.parse("2026-07-01T13:00:00Z"),
+                WalkRequestStatus.PENDING,
+                false,
+                Instant.now(),
+                null);
+        when(walkRequestService.createForOwner(
+                        eq(ownerId), eq(walkerId), isNull(), any(Instant.class), any(Instant.class), isNull()))
+                .thenReturn(created);
+
+        Map<String, Object> body = Map.of(
+                "walkerId", walkerId.toString(),
+                "scheduledStart", "2026-07-01T12:00:00Z",
+                "scheduledEnd", "2026-07-01T13:00:00Z");
+
+        mockMvc.perform(post("/api/users/" + ownerId + "/walk-requests")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.walkerId").value(walkerId.toString()));
     }
 }

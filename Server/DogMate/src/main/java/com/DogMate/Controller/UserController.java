@@ -1,8 +1,12 @@
 package com.DogMate.Controller;
 
+import com.DogMate.Domain.DogWalkerUser;
 import com.DogMate.Domain.RegularUser;
 import com.DogMate.Domain.Ping;
+import com.DogMate.Domain.WalkRequest;
+import com.DogMate.Service.DogWalkerService;
 import com.DogMate.Service.UserService;
+import com.DogMate.Service.WalkRequestService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -23,14 +28,20 @@ import java.util.concurrent.ConcurrentHashMap;
 public class UserController {
     
     private final UserService userService;
+    private final DogWalkerService dogWalkerService;
+    private final WalkRequestService walkRequestService;
     private final SimpMessagingTemplate messagingTemplate;
     
     // In-memory ping storage: Map<toUserId, List<Ping>>
     private static final Map<String, List<Ping>> pingStorage = new ConcurrentHashMap<>();
 
     @Autowired
-    public UserController(UserService userService, SimpMessagingTemplate messagingTemplate) {
+    public UserController(UserService userService, DogWalkerService dogWalkerService,
+                          WalkRequestService walkRequestService,
+                          SimpMessagingTemplate messagingTemplate) {
         this.userService = userService;
+        this.dogWalkerService = dogWalkerService;
+        this.walkRequestService = walkRequestService;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -49,21 +60,34 @@ public class UserController {
                     .body(createErrorResponse("Missing required fields"));
             }
 
-            // Register user
-            RegularUser newUser = userService.registerUser(
-                request.getEmail(),
-                request.getPassword(),
-                request.getFirstName(),
-                request.getLastName()
-            );
+            String role = normalizeRegistrationRole(request.getUserRole());
 
-            // Create response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "User registered successfully");
-            response.put("userId", newUser.getId());
-            response.put("email", newUser.getEmail());
-            
+
+            if ("walker".equals(role)) {
+                DogWalkerUser newWalker = dogWalkerService.registerDogWalker(
+                    request.getEmail(),
+                    request.getPassword(),
+                    request.getFirstName(),
+                    request.getLastName()
+                );
+                response.put("userId", newWalker.getId());
+                response.put("email", newWalker.getEmail());
+                response.put("userRole", "walker");
+            } else {
+                RegularUser newUser = userService.registerUser(
+                    request.getEmail(),
+                    request.getPassword(),
+                    request.getFirstName(),
+                    request.getLastName()
+                );
+                response.put("userId", newUser.getId());
+                response.put("email", newUser.getEmail());
+                response.put("userRole", "owner");
+            }
+
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
         } catch (IllegalArgumentException e) {
@@ -289,6 +313,11 @@ public class UserController {
                     userInfo.put("type", "RegularUser");
                     userInfo.put("firstName", regularUser.getFirst_name());
                     userInfo.put("lastName", regularUser.getLast_name());
+                } else if (user instanceof com.DogMate.Domain.DogWalkerUser) {
+                    com.DogMate.Domain.DogWalkerUser walker = (com.DogMate.Domain.DogWalkerUser) user;
+                    userInfo.put("type", "DogWalkerUser");
+                    userInfo.put("firstName", walker.getFirst_name());
+                    userInfo.put("lastName", walker.getLast_name());
                 } else if (user instanceof com.DogMate.Domain.AdminUser) {
                     com.DogMate.Domain.AdminUser adminUser = (com.DogMate.Domain.AdminUser) user;
                     userInfo.put("type", "AdminUser");
@@ -311,9 +340,9 @@ public class UserController {
         }
     }
 
-        /**
-     * Get all users
-     * GET /api/users
+    /**
+     * Get all logged-in users
+     * GET /api/users/logged
      */
     @GetMapping("/logged")
     @Cacheable(cacheNames = "loggedUsers")
@@ -343,6 +372,11 @@ public class UserController {
                         userInfo.put("latitude", regularUser.getLatitude());
                         userInfo.put("longitude", regularUser.getLongitude());
                     }
+                } else if (user instanceof com.DogMate.Domain.DogWalkerUser) {
+                    com.DogMate.Domain.DogWalkerUser walker = (com.DogMate.Domain.DogWalkerUser) user;
+                    userInfo.put("type", "DogWalkerUser");
+                    userInfo.put("firstName", walker.getFirst_name());
+                    userInfo.put("lastName", walker.getLast_name());
                 } else if (user instanceof com.DogMate.Domain.AdminUser) {
                     com.DogMate.Domain.AdminUser adminUser = (com.DogMate.Domain.AdminUser) user;
                     userInfo.put("type", "AdminUser");
@@ -594,6 +628,60 @@ public class UserController {
         }
     }
 
+    /**
+     * Owner creates a walk request to a dog walker (minimal flow for tests / demos).
+     * POST /api/users/{ownerId}/walk-requests
+     */
+    @PostMapping("/{ownerId}/walk-requests")
+    public ResponseEntity<?> createWalkRequest(
+            @PathVariable String ownerId,
+            @RequestBody CreateWalkRequestBody body) {
+        try {
+            if (ownerId == null || ownerId.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(createErrorResponse("Owner user ID is required"));
+            }
+            UUID ownerUuid;
+            try {
+                ownerUuid = UUID.fromString(ownerId);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(createErrorResponse("Invalid owner user ID format"));
+            }
+            if (body == null || body.getWalkerId() == null) {
+                return ResponseEntity.badRequest().body(createErrorResponse("walkerId is required"));
+            }
+            if (body.getScheduledStart() == null || body.getScheduledEnd() == null) {
+                return ResponseEntity.badRequest()
+                        .body(createErrorResponse("scheduledStart and scheduledEnd are required (ISO-8601 instant)"));
+            }
+
+            WalkRequest created = walkRequestService.createForOwner(
+                    ownerUuid,
+                    body.getWalkerId(),
+                    body.getDogId(),
+                    body.getScheduledStart(),
+                    body.getScheduledEnd(),
+                    body.getNotes());
+
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(DogWalkerController.walkRequestToResponse(created));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("Failed to create walk request: " + e.getMessage()));
+        }
+    }
+
+    private static String normalizeRegistrationRole(String userRole) {
+        if (userRole == null || userRole.trim().isEmpty()) {
+            return "owner";
+        }
+        if ("walker".equalsIgnoreCase(userRole.trim())) {
+            return "walker";
+        }
+        return "owner";
+    }
+
     private Map<String, Object> createErrorResponse(String message) {
         Map<String, Object> error = new HashMap<>();
         error.put("success", false);
@@ -634,6 +722,8 @@ public class UserController {
         private String password;
         private String firstName;
         private String lastName;
+        /** "owner" (default) or "walker" */
+        private String userRole;
         private boolean isLoggedIn;
 
         // Default constructor for Jackson
@@ -673,12 +763,69 @@ public class UserController {
             this.lastName = lastName;
         }
 
+        public String getUserRole() {
+            return userRole;
+        }
+
+        public void setUserRole(String userRole) {
+            this.userRole = userRole;
+        }
+
         public boolean isLogggedIn() {
             return isLoggedIn;
         }
 
         public void setisActive(boolean isActive) {
             this.isLoggedIn = isActive;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class CreateWalkRequestBody {
+        private UUID walkerId;
+        private UUID dogId;
+        private Instant scheduledStart;
+        private Instant scheduledEnd;
+        private String notes;
+
+        public UUID getWalkerId() {
+            return walkerId;
+        }
+
+        public void setWalkerId(UUID walkerId) {
+            this.walkerId = walkerId;
+        }
+
+        public UUID getDogId() {
+            return dogId;
+        }
+
+        public void setDogId(UUID dogId) {
+            this.dogId = dogId;
+        }
+
+        public Instant getScheduledStart() {
+            return scheduledStart;
+        }
+
+        public void setScheduledStart(Instant scheduledStart) {
+            this.scheduledStart = scheduledStart;
+        }
+
+        public Instant getScheduledEnd() {
+            return scheduledEnd;
+        }
+
+        public void setScheduledEnd(Instant scheduledEnd) {
+            this.scheduledEnd = scheduledEnd;
+        }
+
+        public String getNotes() {
+            return notes;
+        }
+
+        public void setNotes(String notes) {
+            this.notes = notes;
         }
     }
 

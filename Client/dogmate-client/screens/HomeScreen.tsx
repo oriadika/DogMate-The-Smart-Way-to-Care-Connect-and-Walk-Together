@@ -745,6 +745,8 @@ const HomeScreen = ({ navigation, route }: any) => {
                 userId: currentUserId,
                 userFirstName: currentUserName,
                 userLastName: currentUserLastName,
+                userRole: route?.params?.userRole,
+                email: route?.params?.email,
               });
             }}
           >
