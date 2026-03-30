@@ -723,7 +723,7 @@ const HomeScreen = ({ navigation, route }: any) => {
               color={activeTab === 'profile' ? PRIMARY_COLOR : '#9CA3AF'}
             />
             <Text style={[styles.navLabel, activeTab === 'profile' && styles.navLabelActive]}>
-              פרופיל
+              דוגווקרים
             </Text>
           </TouchableOpacity>
 
