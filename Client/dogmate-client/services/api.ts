@@ -261,6 +261,16 @@ export const userAPI = {
     }
   },
 
+  searchUsers: async (query: string) => {
+    try {
+      const response = await apiClient.get(`/users/search?query=${query}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to search users';
+      throw new Error(errorMessage);
+    }
+  },
+
   /**
    * Note: Ping notifications are now received via WebSocket in real-time.
    * No polling or marking as read needed.

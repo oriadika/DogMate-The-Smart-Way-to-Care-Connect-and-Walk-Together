@@ -594,12 +594,45 @@ public class UserController {
         }
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<?> searchUsers(@RequestParam String query) {
+
+        List<com.DogMate.Domain.UserAccount> users = userService.searchUsers(query);
+
+        java.util.List<Map<String, Object>> usersList = new java.util.ArrayList<>();
+        for (com.DogMate.Domain.UserAccount user : users) {
+            Map<String, Object> userInfo = new HashMap<>();
+            userInfo.put("id", user.getId());
+            userInfo.put("email", user.getEmail());
+            userInfo.put("createdAt", user.getCreatedAt());
+            userInfo.put("suspended", user.isSuspended());
+
+            if (user instanceof RegularUser regularUser) {
+                userInfo.put("type", "RegularUser");
+                userInfo.put("firstName", regularUser.getFirst_name());
+                userInfo.put("lastName", regularUser.getLast_name());
+            } else if (user instanceof com.DogMate.Domain.AdminUser adminUser) {
+                userInfo.put("type", "AdminUser");
+                userInfo.put("permissionLevel", adminUser.getPermissionLevel());
+            }
+
+            usersList.add(userInfo);
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "users", usersList
+        ));
+    }
+
     private Map<String, Object> createErrorResponse(String message) {
         Map<String, Object> error = new HashMap<>();
         error.put("success", false);
         error.put("error", message);
         return error;
     }
+
+
 
     // Inner class for location update request DTO
     @JsonIgnoreProperties(ignoreUnknown = true)
