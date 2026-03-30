@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { BASE_URL } from './config';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.68.108:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.68.107:8080/api';
 
 let authToken: string | null = null;
 
@@ -124,29 +124,6 @@ export interface ProfessionalProfileUpdatePayload {
   cityOfferings: CityOffering[];
 }
 
-export interface WalkRequestDto {
-  requestId: string;
-  walkerId: string;
-  ownerId: string;
-  ownerFirstName: string;
-  ownerLastName: string;
-  dogId: string | null;
-  dogName: string | null;
-  scheduledStart: string;
-  scheduledEnd: string;
-  status: string;
-  charged: boolean;
-  notes: string | null;
-}
-
-export interface CreateWalkRequestPayload {
-  walkerId: string;
-  dogId?: string | null;
-  scheduledStart: string;
-  scheduledEnd: string;
-  notes?: string | null;
-}
-
 // API Methods
 export const userAPI = {
   /**
@@ -219,23 +196,6 @@ export const userAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Failed to suspend user';
-      throw new Error(errorMessage);
-    }
-  },
-
-  /**
-   * Owner creates a walk request to a dog walker (demo / full flow).
-   */
-  createWalkRequest: async (
-    ownerId: string,
-    payload: CreateWalkRequestPayload
-  ): Promise<WalkRequestDto> => {
-    try {
-      const response = await apiClient.post(`/users/${ownerId}/walk-requests`, payload);
-      return response.data;
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.error || error.message || 'Failed to create walk request';
       throw new Error(errorMessage);
     }
   },
@@ -395,57 +355,6 @@ export const dogWalkerAPI = {
       const errorMessage =
         error.response?.data?.error || error.message || 'Failed to update professional profile';
       console.error('updateProfessionalProfile failed:', errorMessage);
-      throw new Error(errorMessage);
-    }
-  },
-
-  getWalkerWalkRequests: async (walkerId: string): Promise<WalkRequestDto[]> => {
-    try {
-      const response = await apiClient.get(`/dog-walkers/${walkerId}/walk-requests`);
-      return response.data;
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.error || error.message || 'Failed to load walk requests';
-      throw new Error(errorMessage);
-    }
-  },
-
-  getWalkerWalkSchedule: async (walkerId: string): Promise<WalkRequestDto[]> => {
-    try {
-      const response = await apiClient.get(`/dog-walkers/${walkerId}/walk-schedule`);
-      return response.data;
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.error || error.message || 'Failed to load walk schedule';
-      throw new Error(errorMessage);
-    }
-  },
-
-  confirmWalkRequestCharge: async (
-    walkerId: string,
-    requestId: string
-  ): Promise<WalkRequestDto> => {
-    try {
-      const response = await apiClient.post(
-        `/dog-walkers/${walkerId}/walk-requests/${requestId}/confirm-charge`
-      );
-      return response.data;
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.error || error.message || 'Failed to confirm walk request';
-      throw new Error(errorMessage);
-    }
-  },
-
-  declineWalkRequest: async (walkerId: string, requestId: string): Promise<WalkRequestDto> => {
-    try {
-      const response = await apiClient.post(
-        `/dog-walkers/${walkerId}/walk-requests/${requestId}/decline`
-      );
-      return response.data;
-    } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.error || error.message || 'Failed to decline walk request';
       throw new Error(errorMessage);
     }
   },

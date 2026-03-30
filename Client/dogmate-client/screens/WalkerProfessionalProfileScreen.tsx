@@ -639,13 +639,9 @@ const WalkerProfessionalProfileScreen = ({ navigation, route }: Props) => {
             })
           }
         >
-          <Ionicons name="chevron-forward" size={26} color={TEXT_DARK} />
+          <Ionicons name="arrow-forward" size={26} color={TEXT_DARK} />
         </TouchableOpacity>
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            פרופיל מקצועי
-          </Text>
-        </View>
+        <Text style={styles.headerTitle}>פרופיל מקצועי</Text>
         <View style={styles.headerBtn} />
       </View>
 
@@ -762,8 +758,9 @@ const styles = StyleSheet.create({
     backgroundColor: BG_COLOR,
   },
   header: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -776,16 +773,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitleWrap: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: TEXT_DARK,
-    textAlign: 'center',
   },
   scroll: {
     flex: 1,

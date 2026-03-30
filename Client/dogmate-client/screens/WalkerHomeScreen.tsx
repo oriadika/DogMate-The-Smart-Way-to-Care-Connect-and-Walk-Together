@@ -95,18 +95,7 @@ const WalkerHomeScreen = ({ navigation, route }: any) => {
         <TouchableOpacity
           style={styles.placeholderCard}
           activeOpacity={0.85}
-          onPress={() => {
-            if (!currentUserId) {
-              Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
-              return;
-            }
-            navigation.navigate('WalkerWalkRequests', {
-              userId: currentUserId,
-              userFirstName: firstName,
-              userLastName: lastName,
-              email: route?.params?.email,
-            });
-          }}
+          onPress={() => Alert.alert('בקרוב', 'רשימת בקשות טיול תתווסף בהמשך.')}
         >
           <MaterialCommunityIcons name="clipboard-text-outline" size={26} color={PRIMARY_COLOR} />
           <Text style={styles.cardTitle}>בקשות טיול</Text>
@@ -116,22 +105,11 @@ const WalkerHomeScreen = ({ navigation, route }: any) => {
         <TouchableOpacity
           style={styles.placeholderCard}
           activeOpacity={0.85}
-          onPress={() => {
-            if (!currentUserId) {
-              Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
-              return;
-            }
-            navigation.navigate('WalkerSchedule', {
-              userId: currentUserId,
-              userFirstName: firstName,
-              userLastName: lastName,
-              email: route?.params?.email,
-            });
-          }}
+          onPress={() => Alert.alert('בקרוב', 'לוח זמנים יתווסף בהמשך.')}
         >
           <Ionicons name="calendar-outline" size={24} color={PRIMARY_COLOR} />
           <Text style={styles.cardTitle}>לוח זמנים</Text>
-          <Text style={styles.cardHint}>טיולים מאושרים ועתידיים</Text>
+          <Text style={styles.cardHint}>הגדר שעות זמינות</Text>
         </TouchableOpacity>
       </ScrollView>
 

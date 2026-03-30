@@ -2,11 +2,8 @@ package com.DogMate.Controller;
 
 import com.DogMate.Domain.DogWalkerUser;
 import com.DogMate.Domain.RegularUser;
-import com.DogMate.Domain.WalkRequest;
-import com.DogMate.Domain.WalkRequestStatus;
 import com.DogMate.Service.DogWalkerService;
 import com.DogMate.Service.UserService;
-import com.DogMate.Service.WalkRequestService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,8 +15,6 @@ import org.springframework.http.MediaType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.time.Instant;
-import java.util.Map;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
@@ -41,9 +36,6 @@ class UserControllerTest {
 
     @MockBean
     private DogWalkerService dogWalkerService;
-
-    @MockBean
-    private WalkRequestService walkRequestService;
 
     @MockBean
     private SimpMessagingTemplate messagingTemplate;
@@ -441,39 +433,5 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.error", containsString("Failed to delete user")));
 
         verify(userService, times(1)).deleteUser(testUserId);
-    }
-
-    @Test
-    void GivenValidBody_WhenCreateWalkRequest_ThenReturnCreated() throws Exception {
-        UUID ownerId = UUID.randomUUID();
-        UUID walkerId = UUID.randomUUID();
-        DogWalkerUser walker = new DogWalkerUser(walkerId, "w@test.com", "h", "W", "L");
-        RegularUser owner = new RegularUser(ownerId, "o@test.com", "h", "O", "N");
-        WalkRequest created = new WalkRequest(
-                UUID.randomUUID(),
-                walker,
-                owner,
-                null,
-                Instant.parse("2026-07-01T12:00:00Z"),
-                Instant.parse("2026-07-01T13:00:00Z"),
-                WalkRequestStatus.PENDING,
-                false,
-                Instant.now(),
-                null);
-        when(walkRequestService.createForOwner(
-                        eq(ownerId), eq(walkerId), isNull(), any(Instant.class), any(Instant.class), isNull()))
-                .thenReturn(created);
-
-        Map<String, Object> body = Map.of(
-                "walkerId", walkerId.toString(),
-                "scheduledStart", "2026-07-01T12:00:00Z",
-                "scheduledEnd", "2026-07-01T13:00:00Z");
-
-        mockMvc.perform(post("/api/users/" + ownerId + "/walk-requests")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("PENDING"))
-                .andExpect(jsonPath("$.walkerId").value(walkerId.toString()));
     }
 }

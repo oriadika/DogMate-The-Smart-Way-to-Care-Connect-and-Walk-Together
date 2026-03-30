@@ -3,10 +3,8 @@ package com.DogMate.Controller;
 import com.DogMate.Domain.DogWalkerUser;
 import com.DogMate.Domain.RegularUser;
 import com.DogMate.Domain.Ping;
-import com.DogMate.Domain.WalkRequest;
 import com.DogMate.Service.DogWalkerService;
 import com.DogMate.Service.UserService;
-import com.DogMate.Service.WalkRequestService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,7 +14,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -29,7 +26,6 @@ public class UserController {
     
     private final UserService userService;
     private final DogWalkerService dogWalkerService;
-    private final WalkRequestService walkRequestService;
     private final SimpMessagingTemplate messagingTemplate;
     
     // In-memory ping storage: Map<toUserId, List<Ping>>
@@ -37,11 +33,9 @@ public class UserController {
 
     @Autowired
     public UserController(UserService userService, DogWalkerService dogWalkerService,
-                          WalkRequestService walkRequestService,
                           SimpMessagingTemplate messagingTemplate) {
         this.userService = userService;
         this.dogWalkerService = dogWalkerService;
-        this.walkRequestService = walkRequestService;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -628,50 +622,6 @@ public class UserController {
         }
     }
 
-    /**
-     * Owner creates a walk request to a dog walker (minimal flow for tests / demos).
-     * POST /api/users/{ownerId}/walk-requests
-     */
-    @PostMapping("/{ownerId}/walk-requests")
-    public ResponseEntity<?> createWalkRequest(
-            @PathVariable String ownerId,
-            @RequestBody CreateWalkRequestBody body) {
-        try {
-            if (ownerId == null || ownerId.trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(createErrorResponse("Owner user ID is required"));
-            }
-            UUID ownerUuid;
-            try {
-                ownerUuid = UUID.fromString(ownerId);
-            } catch (IllegalArgumentException e) {
-                return ResponseEntity.badRequest().body(createErrorResponse("Invalid owner user ID format"));
-            }
-            if (body == null || body.getWalkerId() == null) {
-                return ResponseEntity.badRequest().body(createErrorResponse("walkerId is required"));
-            }
-            if (body.getScheduledStart() == null || body.getScheduledEnd() == null) {
-                return ResponseEntity.badRequest()
-                        .body(createErrorResponse("scheduledStart and scheduledEnd are required (ISO-8601 instant)"));
-            }
-
-            WalkRequest created = walkRequestService.createForOwner(
-                    ownerUuid,
-                    body.getWalkerId(),
-                    body.getDogId(),
-                    body.getScheduledStart(),
-                    body.getScheduledEnd(),
-                    body.getNotes());
-
-            return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(DogWalkerController.walkRequestToResponse(created));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Failed to create walk request: " + e.getMessage()));
-        }
-    }
-
     private static String normalizeRegistrationRole(String userRole) {
         if (userRole == null || userRole.trim().isEmpty()) {
             return "owner";
@@ -777,55 +727,6 @@ public class UserController {
 
         public void setisActive(boolean isActive) {
             this.isLoggedIn = isActive;
-        }
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class CreateWalkRequestBody {
-        private UUID walkerId;
-        private UUID dogId;
-        private Instant scheduledStart;
-        private Instant scheduledEnd;
-        private String notes;
-
-        public UUID getWalkerId() {
-            return walkerId;
-        }
-
-        public void setWalkerId(UUID walkerId) {
-            this.walkerId = walkerId;
-        }
-
-        public UUID getDogId() {
-            return dogId;
-        }
-
-        public void setDogId(UUID dogId) {
-            this.dogId = dogId;
-        }
-
-        public Instant getScheduledStart() {
-            return scheduledStart;
-        }
-
-        public void setScheduledStart(Instant scheduledStart) {
-            this.scheduledStart = scheduledStart;
-        }
-
-        public Instant getScheduledEnd() {
-            return scheduledEnd;
-        }
-
-        public void setScheduledEnd(Instant scheduledEnd) {
-            this.scheduledEnd = scheduledEnd;
-        }
-
-        public String getNotes() {
-            return notes;
-        }
-
-        public void setNotes(String notes) {
-            this.notes = notes;
         }
     }
 
