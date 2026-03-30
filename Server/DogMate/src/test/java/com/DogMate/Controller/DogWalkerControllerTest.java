@@ -56,6 +56,21 @@ class DogWalkerControllerTest {
     }
 
     @Test
+    void getWalkersWithProfessionalProfiles_returnsList() throws Exception {
+        UUID id = UUID.randomUUID();
+        DogWalkerUser walker = new DogWalkerUser(
+                id, "walker@test.com", "hash", "Jane", "Walker");
+        walker.getCityOfferings().add(new WalkerCityOffering("Haifa", "09:00-17:00", "80 ₪ לשעה"));
+        when(dogWalkerService.getWalkersWithProfessionalDetails()).thenReturn(List.of(walker));
+
+        mockMvc.perform(get("/api/dog-walkers/available-with-professional-profile"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].email").value("walker@test.com"))
+                .andExpect(jsonPath("$[0].firstName").value("Jane"))
+                .andExpect(jsonPath("$[0].cityOfferings[0].city").value("Haifa"));
+    }
+
+    @Test
     void putProfessionalProfile_returnsUpdated() throws Exception {
         UUID id = UUID.randomUUID();
         DogWalkerUser updated = new DogWalkerUser(

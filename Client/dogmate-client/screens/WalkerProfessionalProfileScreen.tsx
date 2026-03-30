@@ -295,7 +295,7 @@ function PriceRangeRow({
   const trimmedAmt = priceAmount.trim();
   const parsedAmt = trimmedAmt === '' ? NaN : parseInt(trimmedAmt.replace(/[^\d]/g, ''), 10);
   const hasPriceNum = trimmedAmt !== '' && Number.isFinite(parsedAmt);
-  const displayPrice = hasPriceNum ? `₪ ${parsedAmt}` : 'בחר';
+  const displayPrice = hasPriceNum ? `${parsedAmt} ₪` : 'בחר';
   const displayDuration = priceFor.trim().length > 0 ? priceFor : 'בחר';
 
   return (
@@ -333,7 +333,7 @@ function PriceRangeRow({
               {...(Platform.OS === 'ios' ? { itemStyle: styles.wheelPickerItem } : {})}
             >
               {PRICE_OPTIONS.map((p) => (
-                <Picker.Item key={`price-${p}`} label={`₪ ${p}`} value={p} />
+                <Picker.Item key={`price-${p}`} label={`${p} ₪`} value={p} />
               ))}
             </Picker>
             <TouchableOpacity style={styles.iosDoneBtn} onPress={applyPrice} activeOpacity={0.85}>
@@ -511,7 +511,7 @@ function formatPriceSummary(f: OfferingForm): string | null {
   if (f.priceAmount.trim() || f.priceFor.trim()) {
     const a = f.priceAmount.trim();
     const num = a ? parseInt(a.replace(/[^\d]/g, ''), 10) : NaN;
-    const pricePart = a && Number.isFinite(num) ? `₪ ${num}` : '—';
+    const pricePart = a && Number.isFinite(num) ? `${num} ₪` : '—';
     return `${pricePart} עבור טיול של ${f.priceFor.trim() || '—'}`;
   }
   return null;
@@ -889,7 +889,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontVariant: ['tabular-nums'],
   },
-  /** ₪ משמאל למספר גם כשהממשק RTL */
+  /** מספר ואז ₪ — סדר קריאה נכון בעברית (הסימן משמאל למספר) */
   priceShekelFirst: {
     writingDirection: 'ltr',
   },

@@ -57,6 +57,14 @@ public class DogWalkerService {
         return loadDogWalkerOrThrow(userId);
     }
 
+    /**
+     * All dog walkers who have at least one city offering stored (professional details filled).
+     */
+    @Transactional(readOnly = true)
+    public List<DogWalkerUser> getWalkersWithProfessionalDetails() {
+        return dogWalkerRepository.findAllWithNonEmptyCityOfferings();
+    }
+
     @Transactional
     public DogWalkerUser updateProfessionalProfile(UUID userId, List<WalkerCityOffering> cityOfferings) {
         DogWalkerUser walker = loadDogWalkerOrThrow(userId);

@@ -23,6 +23,21 @@ public class DogWalkerController {
         this.dogWalkerService = dogWalkerService;
     }
 
+    /**
+     * List all dog walkers who have saved professional profile rows (non-empty city offerings).
+     */
+    @GetMapping("/available-with-professional-profile")
+    public ResponseEntity<?> getWalkersWithProfessionalProfiles() {
+        try {
+            List<DogWalkerUser> walkers = dogWalkerService.getWalkersWithProfessionalDetails();
+            List<ProfessionalProfileResponse> list = walkers.stream().map(this::toResponse).toList();
+            return ResponseEntity.ok(list);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("Failed to load available dog walkers: " + e.getMessage()));
+        }
+    }
+
     @GetMapping("/{userId}/professional-profile")
     public ResponseEntity<?> getProfessionalProfile(@PathVariable UUID userId) {
         try {

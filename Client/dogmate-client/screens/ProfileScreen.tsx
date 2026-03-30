@@ -1,5 +1,5 @@
 // screens/ProfileScreen.tsx
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   SafeAreaView,
   View,
@@ -13,7 +13,8 @@ import {
 import { FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Circle } from 'react-native-maps';
 import Slider from '@react-native-community/slider';
-import { userAPI } from '../services/api';
+import { userAPI, dogWalkerAPI, type ProfessionalProfileResponse } from '../services/api';
+import { displayAvailabilityFromStored, displayPricingFromStored } from '../utils/walkerOfferingDisplay';
 import websocketService from '../services/websocket';
 import locationService, { LocationService } from '../services/location';
 
@@ -54,6 +55,40 @@ const ProfileScreen = ({ navigation, route }: any) => {
   const [showRadiusFilter, setShowRadiusFilter] = useState<boolean>(true);
   const mapRef = useRef<MapView>(null);
 
+  /** Owner: פרופיל → רשימת דוגווקרים עם פרטים מקצועיים מהשרת */
+  const walkerListMode = route?.params?.walkerListMode === true;
+  const [availableWalkers, setAvailableWalkers] = useState<ProfessionalProfileResponse[]>([]);
+  const [loadingWalkers, setLoadingWalkers] = useState(true);
+
+  const fetchAvailableWalkers = useCallback(
+    async (options?: { showLoader?: boolean }) => {
+      const shouldShowLoader = options?.showLoader ?? true;
+      const currentUserId = route?.params?.userId;
+      try {
+        if (shouldShowLoader) setLoadingWalkers(true);
+        const data = await dogWalkerAPI.getWalkersWithProfessionalProfiles();
+        const list = Array.isArray(data) ? data : [];
+        const filtered = list.filter((w) => String(w.userId) !== String(currentUserId));
+        setAvailableWalkers(filtered);
+      } catch (error) {
+        console.error('Failed to fetch available walkers:', error);
+        if (shouldShowLoader) {
+          Alert.alert('שגיאה', 'טעינת רשימת הדוגווקרים נכשלה');
+        }
+      } finally {
+        if (shouldShowLoader) setLoadingWalkers(false);
+      }
+    },
+    [route?.params?.userId]
+  );
+
+  useEffect(() => {
+    if (!walkerListMode) return;
+    fetchAvailableWalkers();
+    const interval = setInterval(() => fetchAvailableWalkers({ showLoader: false }), 10000);
+    return () => clearInterval(interval);
+  }, [walkerListMode, fetchAvailableWalkers]);
+
   const isWalkerProfile = useMemo(
     () => route?.params?.userRole === 'walker' || serverAccountType === 'DogWalkerUser',
     [route?.params?.userRole, serverAccountType]
@@ -80,15 +115,17 @@ const ProfileScreen = ({ navigation, route }: any) => {
 
   // Debug: Log users data
   useEffect(() => {
+    if (walkerListMode) return;
     console.log('📊 Total logged users:', loggedUsers.length);
     console.log('📊 Users with location:', usersWithLocation.length);
     console.log('📊 Users in radius:', usersInRadius.length);
     if (loggedUsers.length > 0) {
       console.log('📊 First user data:', JSON.stringify(loggedUsers[0]));
     }
-  }, [loggedUsers]);
+  }, [loggedUsers, walkerListMode, usersWithLocation.length, usersInRadius.length]);
 
   useEffect(() => {
+    if (walkerListMode) return;
     const currentUserId = route?.params?.userId;
     const cached = currentUserId ? profileDataCache.get(currentUserId) : null;
     const shouldFetch = !cached || (currentUserId ? profileDirtyUsers.has(currentUserId) : true);
@@ -173,16 +210,17 @@ const ProfileScreen = ({ navigation, route }: any) => {
       console.log('📱 ProfileScreen unmounting, disconnecting WebSocket');
       websocketService.disconnect();
     };
-  }, [route?.params?.userId, route?.params?.userRole]);
+  }, [route?.params?.userId, route?.params?.userRole, walkerListMode]);
 
   useEffect(() => {
+    if (walkerListMode) return;
     if (serverAccountType !== 'DogWalkerUser') {
       return;
     }
     locationService.stopWatchingLocation();
     setLocationTracking(false);
     setIsLocationSharingEnabled(false);
-  }, [serverAccountType]);
+  }, [serverAccountType, walkerListMode]);
 
   // Send location updates to server continuously when sharing is enabled
   // Use a ref to store the latest location to avoid recreating the interval
@@ -192,6 +230,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
   }, [userLocation]);
 
   useEffect(() => {
+    if (walkerListMode) return;
     const userId = route?.params?.userId;
     let locationInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -221,10 +260,11 @@ const ProfileScreen = ({ navigation, route }: any) => {
         clearInterval(locationInterval);
       }
     };
-  }, [isLocationSharingEnabled, route?.params?.userId, isWalkerProfile]);
+  }, [isLocationSharingEnabled, route?.params?.userId, isWalkerProfile, walkerListMode]);
 
   // Recalculate distances when userLocation changes
   useEffect(() => {
+    if (walkerListMode) return;
     if (userLocation && loggedUsers.length > 0) {
       const updatedUsers = loggedUsers.map((user: any) => {
         if (user.latitude && user.longitude) {
@@ -240,10 +280,11 @@ const ProfileScreen = ({ navigation, route }: any) => {
       });
       setLoggedUsers(updatedUsers);
     }
-  }, [userLocation]);
+  }, [userLocation, walkerListMode]);
 
   // Calculate map region to include all users
   useEffect(() => {
+    if (walkerListMode) return;
     if (userLocation) {
       const usersWithLocation = loggedUsers.filter((user: any) => user.latitude != null && user.longitude != null);
       
@@ -280,7 +321,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
         });
       }
     }
-  }, [userLocation, loggedUsers]);
+  }, [userLocation, loggedUsers, walkerListMode]);
   const toggleLocationSharing = async () => {
     if (isWalkerProfile) {
       return;
@@ -367,6 +408,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
   };
 
   useEffect(() => {
+    if (walkerListMode) return;
     if (wsConnected) {
       return;
     }
@@ -379,7 +421,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
     return () => {
       clearInterval(pendingInterval);
     };
-  }, [wsConnected, route?.params?.userId]);
+  }, [wsConnected, route?.params?.userId, walkerListMode]);
 
   const fetchLoggedUsers = async (options?: { showLoader?: boolean }) => {
     const shouldShowLoader = options?.showLoader ?? true;
@@ -522,6 +564,45 @@ const ProfileScreen = ({ navigation, route }: any) => {
     }
   };
 
+  const renderWalkerProfessionalCard = ({ item }: { item: ProfessionalProfileResponse }) => {
+    const displayName = `${item.firstName || ''} ${item.lastName || ''}`.trim() || item.email || 'דוגווקר';
+    return (
+      <View style={styles.walkerProfessionalCard}>
+        <View style={styles.walkerCardHeader}>
+          <View style={styles.avatar}>
+            <FontAwesome5 name="walking" size={20} color="#fff" />
+          </View>
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>{displayName}</Text>
+            <Text style={styles.userMeta}>דוגווקר</Text>
+          </View>
+        </View>
+        {item.cityOfferings?.map((offering, idx) => (
+          <View key={`${item.userId}-${idx}`} style={styles.offeringBlock}>
+            <View style={styles.offeringRow}>
+              <Text style={styles.offeringLabel}>עיר:</Text>
+              <Text style={[styles.offeringValue, styles.offeringValueRtl]} numberOfLines={3}>
+                {offering.city || '—'}
+              </Text>
+            </View>
+            <View style={styles.offeringRow}>
+              <Text style={styles.offeringLabel}>זמינות:</Text>
+              <Text style={[styles.offeringValue, styles.offeringValueRtl]} numberOfLines={4}>
+                {displayAvailabilityFromStored(offering.availability)}
+              </Text>
+            </View>
+            <View style={styles.offeringRow}>
+              <Text style={styles.offeringLabel}>תעריף:</Text>
+              <Text style={[styles.offeringValue, styles.offeringValueRtl]} numberOfLines={4}>
+                {displayPricingFromStored(offering.pricing)}
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
   const renderContact = ({ item }: any) => (
     <TouchableOpacity 
       style={styles.userCard}
@@ -598,6 +679,39 @@ const ProfileScreen = ({ navigation, route }: any) => {
       ]
     );
   };
+
+  if (walkerListMode) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-forward" size={28} color="#5C4033" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>דוגווקרים זמינים</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <FlatList
+          data={availableWalkers}
+          keyExtractor={(item) => String(item.userId)}
+          renderItem={renderWalkerProfessionalCard}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            loadingWalkers ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator color={PRIMARY_COLOR} size="large" />
+                <Text style={styles.loadingText}>טוען דוגווקרים...</Text>
+              </View>
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>אין דוגווקרים עם פרטים מקצועיים עדיין</Text>
+              </View>
+            )
+          }
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1118,6 +1232,60 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#8B7355',
     textAlign: 'center',
+  },
+
+  walkerProfessionalCard: {
+    backgroundColor: '#faf0e6',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0D5C7',
+  },
+
+  walkerCardHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+
+  offeringBlock: {
+    marginTop: 8,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E0D5C7',
+  },
+
+  /** תווית מימין, ערך משמאל — סדר קריאה נכון בעברית */
+  offeringRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    width: '100%',
+    marginTop: 6,
+    gap: 6,
+    rowGap: 4,
+  },
+
+  offeringLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5C4033',
+    textAlign: 'right',
+    flexShrink: 0,
+  },
+
+  offeringValue: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 14,
+    color: '#5C4033',
+  },
+
+  /** טקסט עברי / מחירים עם ₪ ומילים */
+  offeringValueRtl: {
+    writingDirection: 'rtl',
+    textAlign: 'right',
   },
 
   mapContainer: {

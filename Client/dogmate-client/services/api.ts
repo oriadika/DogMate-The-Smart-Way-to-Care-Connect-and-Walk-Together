@@ -332,6 +332,21 @@ export const dogAPI = {
 };
 
 export const dogWalkerAPI = {
+  /**
+   * Dog walkers who saved at least one professional offering (city, availability, pricing).
+   */
+  getWalkersWithProfessionalProfiles: async (): Promise<ProfessionalProfileResponse[]> => {
+    try {
+      const response = await apiClient.get('/dog-walkers/available-with-professional-profile');
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.error || error.message || 'Failed to load available dog walkers';
+      console.error('getWalkersWithProfessionalProfiles failed:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
   getProfessionalProfile: async (userId: string): Promise<ProfessionalProfileResponse> => {
     try {
       const response = await apiClient.get(`/dog-walkers/${userId}/professional-profile`);

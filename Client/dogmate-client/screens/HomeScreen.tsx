@@ -707,7 +707,14 @@ const HomeScreen = ({ navigation, route }: any) => {
             style={[styles.navItem, activeTab === 'profile' && styles.navItemActive]}
             onPress={() => {
               setActiveTab('profile');
-              navigation.navigate('DogProfile', { userId: currentUserId });
+              navigation.navigate('Profile', {
+                userId: currentUserId,
+                userFirstName: currentUserName,
+                userLastName: currentUserLastName,
+                userRole: route?.params?.userRole,
+                email: route?.params?.email,
+                walkerListMode: true,
+              });
             }}
           >
             <FontAwesome5
@@ -747,6 +754,7 @@ const HomeScreen = ({ navigation, route }: any) => {
                 userLastName: currentUserLastName,
                 userRole: route?.params?.userRole,
                 email: route?.params?.email,
+                walkerListMode: false,
               });
             }}
           >

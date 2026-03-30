@@ -39,6 +39,7 @@ const WalkerHomeScreen = ({ navigation, route }: any) => {
       userLastName: lastName,
       userRole: 'walker',
       email: route?.params?.email,
+      walkerListMode: false,
     });
   };
 
