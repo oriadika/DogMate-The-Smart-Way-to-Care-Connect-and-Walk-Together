@@ -150,7 +150,7 @@ const ManageUsersScreen = ({ navigation, route }: any) => {
             צפייה וניהול של כל המשתמשים הרשומים ב־DogMate
           </Text>
           <TextInput
-            placeholder="חפש משתמש..."
+            placeholder="חפש שם משתמש/אימייל"
             value={searchText}
             onChangeText={setSearchText}
             style={styles.searchInput}

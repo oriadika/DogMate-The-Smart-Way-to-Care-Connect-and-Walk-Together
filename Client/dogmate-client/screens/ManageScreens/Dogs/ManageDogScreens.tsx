@@ -7,11 +7,35 @@ import {
   SafeAreaView,
   ActivityIndicator,
   TouchableOpacity,
+  TextInput,
 } from "react-native";
+import { dogAPI } from "../../../services/api";
 
 const ManageDogScreens = ({navigation, route}: any) => {
   const [dogs, setDogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchText, setSearchText] = useState('');
+
+  useEffect(() => {
+    const delay = setTimeout(async () => {
+      try {
+        if (searchText.trim().length === 0) {
+          // load all users again
+          const res = await dogAPI.getAllDogs();
+          setDogs(res.dogs || []);
+          return;
+        }
+  
+        setLoading(true);
+        const res = await dogAPI.searchDogs(searchText);
+        setDogs(res.dogs || []);
+      } catch (err) {
+        console.error('Search failed:', err);
+      } finally {
+        setLoading(false);
+      }
+    }, 400);
+  }, [searchText]);
 
   useEffect(() => {
     if (route?.params?.dogs) {
@@ -54,7 +78,12 @@ const ManageDogScreens = ({navigation, route}: any) => {
                   <Text style={styles.backIcon}>←</Text>
                 </TouchableOpacity>
       <Text style={styles.title}>All Dogs</Text>
-
+      <TextInput
+        placeholder="חפש שם כלב/גזע"
+        value={searchText}
+        onChangeText={setSearchText}
+        style={styles.searchInput}
+      />
       {loading ? (
         <ActivityIndicator size="large" />
       ) : (
@@ -138,5 +167,15 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     marginLeft: 12,
   },
-  backIcon: { color: '#5C4033', fontSize: 22, fontWeight: 'bold' }
+  backIcon: { color: '#5C4033', fontSize: 22, fontWeight: 'bold' },
+  searchInput: {
+  backgroundColor: '#fff',
+  borderRadius: 12,
+  paddingHorizontal: 16,
+  paddingVertical: 10,
+  marginBottom: 12,
+  borderWidth: 1,
+  borderColor: '#ddd',
+  textAlign: 'right',
+  }
 });

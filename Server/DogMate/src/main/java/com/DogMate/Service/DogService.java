@@ -446,4 +446,8 @@ public class DogService {
 
         dogRepository.save(dog);
     }
+
+    public List<Dog> searchDogs(String text){
+        return dogRepository.searchDogs(text.trim());
+    }
 }
