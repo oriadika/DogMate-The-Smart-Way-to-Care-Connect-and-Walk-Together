@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { BASE_URL } from './config';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.68.107:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.68.103:8080/api';
 
 let authToken: string | null = null;
 
@@ -118,10 +118,41 @@ export interface ProfessionalProfileResponse {
   firstName: string;
   lastName: string;
   cityOfferings: CityOffering[];
+  averageRating: number;
+  ratingsCount: number;
+  alreadyRatedByCurrentOwner: boolean;
+  reviews: WalkerReview[];
 }
 
 export interface ProfessionalProfileUpdatePayload {
   cityOfferings: CityOffering[];
+}
+
+export interface WalkerReview {
+  ratingId: string;
+  reviewerId: string;
+  stars: number;
+  comment: string;
+  reviewerName: string;
+  createdAt: string | null;
+}
+
+export interface CreateWalkerRatingPayload {
+  ownerId: string;
+  stars: number;
+  comment: string;
+}
+
+export interface CreateWalkerRatingResponse {
+  success: boolean;
+  message: string;
+  ratingId: string;
+}
+
+export interface DeleteWalkerRatingResponse {
+  success: boolean;
+  message: string;
+  ratingId: string;
 }
 
 // API Methods
@@ -335,14 +366,67 @@ export const dogWalkerAPI = {
   /**
    * Dog walkers who saved at least one professional offering (city, availability, pricing).
    */
-  getWalkersWithProfessionalProfiles: async (): Promise<ProfessionalProfileResponse[]> => {
+  getWalkersWithProfessionalProfiles: async (ownerId?: string): Promise<ProfessionalProfileResponse[]> => {
     try {
-      const response = await apiClient.get('/dog-walkers/available-with-professional-profile');
+      const response = await apiClient.get('/dog-walkers/available-with-professional-profile', {
+        params: ownerId ? { ownerId } : undefined,
+      });
       return Array.isArray(response.data) ? response.data : [];
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.error || error.message || 'Failed to load available dog walkers';
       console.error('getWalkersWithProfessionalProfiles failed:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  createWalkerRating: async (
+    walkerId: string,
+    payload: CreateWalkerRatingPayload
+  ): Promise<CreateWalkerRatingResponse> => {
+    try {
+      const response = await apiClient.post(`/dog-walkers/${walkerId}/ratings`, payload);
+      return response.data;
+    } catch (error: any) {
+      const responseData = error?.response?.data;
+      const errorMessage =
+        responseData?.error ||
+        responseData?.message ||
+        responseData?.detail ||
+        error.message ||
+        'Failed to create rating';
+      console.error('createWalkerRating failed', {
+        url: `${error?.config?.baseURL || API_BASE_URL}${error?.config?.url || ''}`,
+        status: error?.response?.status,
+        data: responseData,
+      });
+      throw new Error(errorMessage);
+    }
+  },
+
+  deleteWalkerRating: async (
+    walkerId: string,
+    ratingId: string,
+    ownerId: string
+  ): Promise<DeleteWalkerRatingResponse> => {
+    try {
+      const response = await apiClient.delete(`/dog-walkers/${walkerId}/ratings/${ratingId}`, {
+        params: { ownerId },
+      });
+      return response.data;
+    } catch (error: any) {
+      const responseData = error?.response?.data;
+      const errorMessage =
+        responseData?.error ||
+        responseData?.message ||
+        responseData?.detail ||
+        error.message ||
+        'Failed to delete rating';
+      console.error('deleteWalkerRating failed', {
+        url: `${error?.config?.baseURL || API_BASE_URL}${error?.config?.url || ''}`,
+        status: error?.response?.status,
+        data: responseData,
+      });
       throw new Error(errorMessage);
     }
   },

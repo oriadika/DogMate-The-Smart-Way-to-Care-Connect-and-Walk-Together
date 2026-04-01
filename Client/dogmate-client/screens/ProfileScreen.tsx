@@ -9,6 +9,11 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Circle } from 'react-native-maps';
@@ -37,6 +42,16 @@ const buildUsersSignature = (users: any[]): string => {
   return `${users.length}#${usersPart}`;
 };
 
+const formatReviewDate = (rawDate: string | null | undefined): string => {
+  if (!rawDate) return '';
+  const parsed = new Date(rawDate);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const day = String(parsed.getDate()).padStart(2, '0');
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const year = String(parsed.getFullYear());
+  return `${day}/${month}/${year}`;
+};
+
 const ProfileScreen = ({ navigation, route }: any) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [loggedUsers, setLoggedUsers] = useState<any[]>([]);
@@ -59,6 +74,13 @@ const ProfileScreen = ({ navigation, route }: any) => {
   const walkerListMode = route?.params?.walkerListMode === true;
   const [availableWalkers, setAvailableWalkers] = useState<ProfessionalProfileResponse[]>([]);
   const [loadingWalkers, setLoadingWalkers] = useState(true);
+  const [ratingModalVisible, setRatingModalVisible] = useState(false);
+  const [selectedWalker, setSelectedWalker] = useState<ProfessionalProfileResponse | null>(null);
+  const [selectedStars, setSelectedStars] = useState<number>(5);
+  const [ratingComment, setRatingComment] = useState('');
+  const [submittingRating, setSubmittingRating] = useState(false);
+  const [deletingRatingId, setDeletingRatingId] = useState<string | null>(null);
+  const [expandedReviewsByWalker, setExpandedReviewsByWalker] = useState<Record<string, boolean>>({});
 
   const fetchAvailableWalkers = useCallback(
     async (options?: { showLoader?: boolean }) => {
@@ -66,7 +88,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
       const currentUserId = route?.params?.userId;
       try {
         if (shouldShowLoader) setLoadingWalkers(true);
-        const data = await dogWalkerAPI.getWalkersWithProfessionalProfiles();
+        const data = await dogWalkerAPI.getWalkersWithProfessionalProfiles(currentUserId);
         const list = Array.isArray(data) ? data : [];
         const filtered = list.filter((w) => String(w.userId) !== String(currentUserId));
         setAvailableWalkers(filtered);
@@ -566,6 +588,11 @@ const ProfileScreen = ({ navigation, route }: any) => {
 
   const renderWalkerProfessionalCard = ({ item }: { item: ProfessionalProfileResponse }) => {
     const displayName = `${item.firstName || ''} ${item.lastName || ''}`.trim() || item.email || 'דוגווקר';
+    const avgRating = item.ratingsCount > 0 ? Number(item.averageRating || 0).toFixed(1) : '—';
+    const walkerKey = String(item.userId);
+    const isReviewsExpanded = expandedReviewsByWalker[walkerKey] === true;
+    const currentOwnerId = String(route?.params?.userId || '');
+
     return (
       <View style={styles.walkerProfessionalCard}>
         <View style={styles.walkerCardHeader}>
@@ -575,7 +602,30 @@ const ProfileScreen = ({ navigation, route }: any) => {
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{displayName}</Text>
             <Text style={styles.userMeta}>דוגווקר</Text>
+            <Text style={styles.ratingSummaryText}>
+              דירוג:{' '}
+              <Text style={styles.ratingNumberHighlight}>{avgRating}</Text>{' '}
+              <Text style={styles.goldStarText}>★</Text> ({item.ratingsCount || 0})
+            </Text>
           </View>
+          {item.alreadyRatedByCurrentOwner ? (
+            <View style={styles.ratedBadge}>
+              <Text style={styles.ratedBadgeText}>כבר דירגת</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.addRatingButton}
+              onPress={() => {
+                setSelectedWalker(item);
+                setSelectedStars(5);
+                setRatingComment('');
+                setRatingModalVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.addRatingButtonText}>הוספת דירוג</Text>
+            </TouchableOpacity>
+          )}
         </View>
         {item.cityOfferings?.map((offering, idx) => (
           <View key={`${item.userId}-${idx}`} style={styles.offeringBlock}>
@@ -599,8 +649,112 @@ const ProfileScreen = ({ navigation, route }: any) => {
             </View>
           </View>
         ))}
+        <View style={styles.reviewsSection}>
+          <View style={styles.reviewsHeaderRow}>
+            <TouchableOpacity
+              style={styles.reviewsToggleButton}
+              onPress={() =>
+                setExpandedReviewsByWalker((prev) => ({ ...prev, [walkerKey]: !isReviewsExpanded }))
+              }
+              activeOpacity={0.8}
+            >
+              <Text style={styles.reviewsToggleButtonText}>
+                {isReviewsExpanded ? 'מזער -' : 'פתח +'}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.reviewsTitle}>ביקורות ({item.reviews?.length || 0})</Text>
+          </View>
+          {isReviewsExpanded ? (
+            item.reviews && item.reviews.length > 0 ? (
+              item.reviews.slice(0, 5).map((review) => (
+                <View key={review.ratingId} style={styles.reviewItem}>
+                  <View style={styles.reviewHeaderRow}>
+                    <View style={styles.reviewLeftColumn}>
+                      <Text style={styles.reviewDateText}>{formatReviewDate(review.createdAt)}</Text>
+                    </View>
+                    <View style={styles.reviewHeaderRight}>
+                      <Text style={styles.reviewHeader}>
+                        <Text style={styles.reviewAuthorText}>{review.reviewerName || 'בעל כלב'}</Text>
+                        {' · '}
+                        <Text style={styles.reviewStarsText}>{review.stars}</Text>
+                        <Text style={styles.goldStarText}>★</Text>
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.reviewComment}>
+                    {review.comment?.trim() ? review.comment : 'ללא מלל'}
+                  </Text>
+                  {currentOwnerId && String(review.reviewerId) === currentOwnerId ? (
+                    <View style={styles.deleteReviewRow}>
+                      <TouchableOpacity
+                        style={styles.deleteReviewButton}
+                        disabled={deletingRatingId === review.ratingId}
+                        onPress={() => {
+                          Alert.alert('מחיקת תגובה', 'למחוק את התגובה שלך?', [
+                            { text: 'ביטול', style: 'cancel' },
+                            {
+                              text: 'מחק',
+                              style: 'destructive',
+                              onPress: async () => {
+                                try {
+                                  setDeletingRatingId(review.ratingId);
+                                  const resp = await dogWalkerAPI.deleteWalkerRating(
+                                    walkerKey,
+                                    review.ratingId,
+                                    currentOwnerId
+                                  );
+                                  Alert.alert('הצלחה', resp?.message || 'התגובה נמחקה');
+                                  await fetchAvailableWalkers({ showLoader: false });
+                                } catch (error: any) {
+                                  Alert.alert('שגיאה', error?.message || 'מחיקת התגובה נכשלה');
+                                } finally {
+                                  setDeletingRatingId(null);
+                                }
+                              },
+                            },
+                          ]);
+                        }}
+                      >
+                        <Text style={styles.deleteReviewButtonText}>
+                          {deletingRatingId === review.ratingId ? 'מוחק...' : 'מחק'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                </View>
+              ))
+            ) : (
+              <Text style={styles.noReviewsText}>עדיין אין תגובות</Text>
+            )
+          ) : null}
+        </View>
       </View>
     );
+  };
+
+  const submitWalkerRating = async () => {
+    const ownerId = route?.params?.userId;
+    if (!ownerId || !selectedWalker) {
+      Alert.alert('שגיאה', 'לא ניתן לשלוח דירוג כרגע');
+      return;
+    }
+    try {
+      setSubmittingRating(true);
+      const response = await dogWalkerAPI.createWalkerRating(String(selectedWalker.userId), {
+        ownerId: String(ownerId),
+        stars: selectedStars,
+        comment: ratingComment.trim(),
+      });
+      setRatingModalVisible(false);
+      setSelectedWalker(null);
+      setRatingComment('');
+      Alert.alert('הצלחה', response?.message || 'הדירוג נשמר');
+      await fetchAvailableWalkers({ showLoader: false });
+    } catch (error: any) {
+      Alert.alert('שגיאה', error?.message || 'שמירת הדירוג נכשלה');
+    } finally {
+      setSubmittingRating(false);
+    }
   };
 
   const renderContact = ({ item }: any) => (
@@ -709,6 +863,75 @@ const ProfileScreen = ({ navigation, route }: any) => {
             )
           }
         />
+
+        <Modal
+          visible={ratingModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setRatingModalVisible(false)}
+        >
+          <KeyboardAvoidingView
+            style={styles.modalKeyboardRoot}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
+          >
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              contentContainerStyle={styles.ratingModalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.ratingModalCard}>
+                <Text style={styles.ratingModalTitle}>
+                  דירוג עבור{' '}
+                  {selectedWalker
+                    ? `${selectedWalker.firstName} ${selectedWalker.lastName}`.trim()
+                    : 'דוגווקר'}
+                </Text>
+
+                <View style={styles.starsRow}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <TouchableOpacity key={star} onPress={() => setSelectedStars(star)} activeOpacity={0.8}>
+                      <Ionicons
+                        name={star <= selectedStars ? 'star' : 'star-outline'}
+                        size={30}
+                        color={star <= selectedStars ? '#F5B301' : '#8B7355'}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TextInput
+                  style={styles.ratingCommentInput}
+                  multiline
+                  textAlignVertical="top"
+                  textAlign="right"
+                  placeholder="הוסף/י תגובה חופשית..."
+                  value={ratingComment}
+                  onChangeText={setRatingComment}
+                  maxLength={400}
+                />
+
+                <View style={styles.ratingModalActions}>
+                  <TouchableOpacity
+                    style={styles.ratingCancelButton}
+                    onPress={() => setRatingModalVisible(false)}
+                    disabled={submittingRating}
+                  >
+                    <Text style={styles.ratingCancelText}>ביטול</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.ratingSubmitButton}
+                    onPress={submitWalkerRating}
+                    disabled={submittingRating}
+                  >
+                    <Text style={styles.ratingSubmitText}>{submittingRating ? 'שומר...' : 'שליחה'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -1249,6 +1472,51 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
+  ratingSummaryText: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#8B7355',
+    textAlign: 'right',
+  },
+
+  ratingNumberHighlight: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  goldStarText: {
+    color: '#F5B301',
+    fontWeight: '700',
+  },
+
+  addRatingButton: {
+    backgroundColor: PRIMARY_COLOR,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+
+  addRatingButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  ratedBadge: {
+    backgroundColor: '#E0D5C7',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+
+  ratedBadgeText: {
+    color: '#5C4033',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
   offeringBlock: {
     marginTop: 8,
     paddingTop: 10,
@@ -1286,6 +1554,206 @@ const styles = StyleSheet.create({
   offeringValueRtl: {
     writingDirection: 'rtl',
     textAlign: 'right',
+  },
+
+  reviewsSection: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E0D5C7',
+    paddingTop: 10,
+  },
+
+  reviewsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#5C4033',
+    textAlign: 'right',
+  },
+
+  reviewsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+
+  reviewsToggleButton: {
+    minHeight: 30,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#E0D5C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  reviewsToggleButtonText: {
+    color: '#5C4033',
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: '700',
+  },
+
+  reviewItem: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E0D5C7',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 6,
+  },
+
+  reviewHeader: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#5C4033',
+    textAlign: 'right',
+  },
+
+  reviewAuthorText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  reviewStarsText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  reviewHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+
+  reviewHeaderRight: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  reviewLeftColumn: {
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+  },
+
+  reviewDateText: {
+    fontSize: 12,
+    color: '#8B7355',
+    textAlign: 'left',
+  },
+
+  deleteReviewButton: {
+    backgroundColor: '#FDE8E8',
+    borderWidth: 1,
+    borderColor: '#E57373',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+
+  deleteReviewRow: {
+    marginTop: 4,
+    alignItems: 'flex-start',
+  },
+
+  deleteReviewButtonText: {
+    color: '#B71C1C',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+
+  reviewComment: {
+    marginTop: 2,
+    fontSize: 14,
+    color: '#5C4033',
+    textAlign: 'right',
+  },
+
+  noReviewsText: {
+    fontSize: 13,
+    color: '#8B7355',
+    textAlign: 'right',
+  },
+
+  modalKeyboardRoot: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+
+  ratingModalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+
+  ratingModalCard: {
+    backgroundColor: '#faf0e6',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E0D5C7',
+  },
+
+  ratingModalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#5C4033',
+    textAlign: 'right',
+    marginBottom: 12,
+  },
+
+  starsRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 8,
+  },
+
+  ratingCommentInput: {
+    minHeight: 90,
+    borderWidth: 1,
+    borderColor: '#E0D5C7',
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: '#5C4033',
+  },
+
+  ratingModalActions: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    gap: 8,
+  },
+
+  ratingCancelButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#8B7355',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+
+  ratingCancelText: {
+    color: '#5C4033',
+    fontWeight: '700',
+  },
+
+  ratingSubmitButton: {
+    flex: 1,
+    backgroundColor: PRIMARY_COLOR,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+
+  ratingSubmitText: {
+    color: '#fff',
+    fontWeight: '700',
   },
 
   mapContainer: {

@@ -1,9 +1,11 @@
 package com.DogMate.Controller;
 
 import com.DogMate.Domain.DogWalkerUser;
+import com.DogMate.Domain.DogWalkerRating;
 import com.DogMate.Domain.WalkerCityOffering;
 import com.DogMate.Service.DogWalkerService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,14 +29,66 @@ public class DogWalkerController {
      * List all dog walkers who have saved professional profile rows (non-empty city offerings).
      */
     @GetMapping("/available-with-professional-profile")
-    public ResponseEntity<?> getWalkersWithProfessionalProfiles() {
+    public ResponseEntity<?> getWalkersWithProfessionalProfiles(
+            @RequestParam(name = "ownerId", required = false) UUID ownerId) {
         try {
             List<DogWalkerUser> walkers = dogWalkerService.getWalkersWithProfessionalDetails();
-            List<ProfessionalProfileResponse> list = walkers.stream().map(this::toResponse).toList();
+            List<ProfessionalProfileResponse> list = walkers.stream()
+                    .map(w -> toResponse(w, ownerId))
+                    .toList();
             return ResponseEntity.ok(list);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(createErrorResponse("Failed to load available dog walkers: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{walkerId}/ratings")
+    public ResponseEntity<?> createRating(
+            @PathVariable UUID walkerId,
+            @RequestBody CreateRatingRequest body) {
+        try {
+            if (body == null || body.getOwnerId() == null || body.getStars() == null) {
+                return ResponseEntity.badRequest().body(createErrorResponse("ownerId and stars are required"));
+            }
+            DogWalkerRating saved = dogWalkerService.createRating(
+                    walkerId,
+                    body.getOwnerId(),
+                    body.getStars(),
+                    body.getComment()
+            );
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                    "success", true,
+                    "message", "Rating saved successfully",
+                    "ratingId", saved.getId().toString()
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("Failed to create rating: " + e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/{walkerId}/ratings/{ratingId}")
+    public ResponseEntity<?> deleteRating(
+            @PathVariable UUID walkerId,
+            @PathVariable UUID ratingId,
+            @RequestParam(name = "ownerId") UUID ownerId) {
+        try {
+            dogWalkerService.deleteRating(walkerId, ratingId, ownerId);
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Rating deleted successfully",
+                    "ratingId", ratingId.toString()
+            ));
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(createErrorResponse(e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("Failed to delete rating: " + e.getMessage()));
         }
     }
 
@@ -81,17 +135,37 @@ public class DogWalkerController {
     }
 
     private ProfessionalProfileResponse toResponse(DogWalkerUser walker) {
+        return toResponse(walker, null);
+    }
+
+    private ProfessionalProfileResponse toResponse(DogWalkerUser walker, UUID ownerId) {
         List<CityOfferingDto> offerings = walker.getCityOfferings() != null
                 ? walker.getCityOfferings().stream()
                 .map(o -> new CityOfferingDto(o.getCity(), o.getAvailability(), o.getPricing()))
                 .toList()
                 : List.of();
+        DogWalkerService.WalkerRatingSummary ratingSummary =
+                dogWalkerService.getRatingSummaryForWalker(walker.getId(), ownerId);
         return new ProfessionalProfileResponse(
                 walker.getId(),
                 walker.getEmail(),
                 walker.getFirst_name(),
                 walker.getLast_name(),
-                offerings);
+                offerings,
+                ratingSummary.averageRating(),
+                ratingSummary.ratingsCount(),
+                ratingSummary.alreadyRatedByCurrentOwner(),
+                ratingSummary.reviews().stream()
+                        .map(r -> new WalkerReviewDto(
+                                r.ratingId(),
+                                r.reviewerId(),
+                                r.stars(),
+                                r.comment(),
+                                r.reviewerName(),
+                                r.createdAt() != null ? r.createdAt().toString() : null
+                        ))
+                        .toList()
+        );
     }
 
     private Map<String, Object> createErrorResponse(String message) {
@@ -113,9 +187,22 @@ public class DogWalkerController {
             String email,
             String firstName,
             String lastName,
-            List<CityOfferingDto> cityOfferings
+            List<CityOfferingDto> cityOfferings,
+            Double averageRating,
+            Integer ratingsCount,
+            boolean alreadyRatedByCurrentOwner,
+            List<WalkerReviewDto> reviews
     ) {
     }
+
+    public record WalkerReviewDto(
+            UUID ratingId,
+            UUID reviewerId,
+            Integer stars,
+            String comment,
+            String reviewerName,
+            String createdAt
+    ) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class ProfessionalProfileUpdateRequest {
@@ -127,6 +214,37 @@ public class DogWalkerController {
 
         public void setCityOfferings(List<CityOfferingDto> cityOfferings) {
             this.cityOfferings = cityOfferings;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class CreateRatingRequest {
+        private UUID ownerId;
+        private Integer stars;
+        private String comment;
+
+        public UUID getOwnerId() {
+            return ownerId;
+        }
+
+        public void setOwnerId(UUID ownerId) {
+            this.ownerId = ownerId;
+        }
+
+        public Integer getStars() {
+            return stars;
+        }
+
+        public void setStars(Integer stars) {
+            this.stars = stars;
+        }
+
+        public String getComment() {
+            return comment;
+        }
+
+        public void setComment(String comment) {
+            this.comment = comment;
         }
     }
 }
