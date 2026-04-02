@@ -15,10 +15,19 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
+import HebrewAsciiParensText from '../components/HebrewAsciiParensText';
+import WalkerLocationPicker from '../components/WalkerLocationPicker';
 import { CityOffering, dogWalkerAPI } from '../services/api';
+import {
+  formatLocationLine,
+  parseLocationFromCityField,
+  serializeLocationToCityField,
+  type LocationType,
+} from '../utils/locationFieldCodec';
+import { getPricingDisplayLinesFromStored } from '../utils/walkerOfferingDisplay';
 
 const PRIMARY_COLOR = '#7FB069';
-const BG_COLOR = '#FAEFDD';
+const BG_COLOR = '#f5e6d3';
 const TEXT_DARK = '#5C4033';
 const CARD_BG = '#faf0e6';
 const DAY_SELECTED_BG = '#7FB069';
@@ -68,10 +77,16 @@ function nearestPriceOption(amountStr: string): number {
 
 type Props = { navigation: any; route: any };
 
-type OfferingForm = {
-  city: string;
+type PriceTier = {
   priceAmount: string;
   priceFor: string;
+};
+
+type OfferingForm = {
+  locationType: LocationType;
+  locationValue: string;
+  /** מספר תעריפים לאותה זמינות (למשל 15 דק׳ / 30 דק׳) */
+  priceTiers: PriceTier[];
   days: number[];
   startTime: string;
   endTime: string;
@@ -81,9 +96,9 @@ type OfferingForm = {
 };
 
 const emptyForm = (): OfferingForm => ({
-  city: '',
-  priceAmount: '',
-  priceFor: '',
+  locationType: 'city',
+  locationValue: '',
+  priceTiers: [{ priceAmount: '', priceFor: '' }],
   days: [],
   startTime: '',
   endTime: '',
@@ -120,44 +135,62 @@ function encodeStructuredAvailability(days: number[], start: string, end: string
   });
 }
 
-function encodeStructuredPricing(amount: string, forWhat: string): string {
-  return JSON.stringify({
-    __pm: 1,
-    a: amount || '',
-    f: forWhat || '',
-  });
+/** תאימות לאחור: __pm:1 תעריף יחיד, __pm:2 מערך תעריפים */
+function encodeStructuredPricingTiers(tiers: PriceTier[]): string {
+  const cleaned = tiers
+    .filter((t) => t.priceAmount.trim() || t.priceFor.trim())
+    .map((t) => ({ a: t.priceAmount.trim(), f: t.priceFor.trim() }));
+  if (cleaned.length === 0) return '';
+  if (cleaned.length === 1) {
+    return JSON.stringify({ __pm: 1, a: cleaned[0].a, f: cleaned[0].f });
+  }
+  return JSON.stringify({ __pm: 2, tiers: cleaned });
 }
 
-function parsePricingField(raw: string): Pick<OfferingForm, 'priceAmount' | 'priceFor' | 'fallbackPricingText'> {
+function parsePricingField(raw: string): Pick<OfferingForm, 'priceTiers' | 'fallbackPricingText'> {
   const t = raw.trim();
   if (!t) {
-    return { priceAmount: '', priceFor: '' };
+    return { priceTiers: [{ priceAmount: '', priceFor: '' }] };
   }
   try {
     const p = JSON.parse(t);
+    if (p && p.__pm === 2 && Array.isArray(p.tiers)) {
+      const tiers = p.tiers
+        .map((x: any) => ({
+          priceAmount: typeof x.a === 'string' ? x.a : '',
+          priceFor: typeof x.f === 'string' ? x.f : '',
+        }))
+        .filter((x: PriceTier) => x.priceAmount.trim() || x.priceFor.trim());
+      if (tiers.length > 0) return { priceTiers: tiers };
+    }
     if (p && p.__pm === 1) {
       return {
-        priceAmount: typeof p.a === 'string' ? p.a : '',
-        priceFor: typeof p.f === 'string' ? p.f : '',
+        priceTiers: [
+          {
+            priceAmount: typeof p.a === 'string' ? p.a : '',
+            priceFor: typeof p.f === 'string' ? p.f : '',
+          },
+        ],
       };
     }
   } catch {
     /* legacy */
   }
-  return { priceAmount: '', priceFor: '', fallbackPricingText: t };
+  return { priceTiers: [{ priceAmount: '', priceFor: '' }], fallbackPricingText: t };
 }
 
 function fromCityOffering(o: CityOffering): OfferingForm {
+  const loc = parseLocationFromCityField(o.city ?? '');
   const pricingParts = parsePricingField(o.pricing ?? '');
   const raw = (o.availability ?? '').trim();
   if (!raw) {
     return {
-      city: o.city ?? '',
+      locationType: loc.type,
+      locationValue: loc.value,
       days: [],
       startTime: '',
       endTime: '',
-      priceAmount: pricingParts.priceAmount,
-      priceFor: pricingParts.priceFor,
+      priceTiers: pricingParts.priceTiers,
       fallbackPricingText: pricingParts.fallbackPricingText,
     };
   }
@@ -165,12 +198,12 @@ function fromCityOffering(o: CityOffering): OfferingForm {
     const parsed = JSON.parse(raw);
     if (parsed && parsed.__dm === 1 && Array.isArray(parsed.d)) {
       return {
-        city: o.city ?? '',
+        locationType: loc.type,
+        locationValue: loc.value,
         days: parsed.d.filter((n: unknown) => typeof n === 'number' && n >= 0 && n <= 6),
         startTime: typeof parsed.s === 'string' ? parsed.s : '',
         endTime: typeof parsed.e === 'string' ? parsed.e : '',
-        priceAmount: pricingParts.priceAmount,
-        priceFor: pricingParts.priceFor,
+        priceTiers: pricingParts.priceTiers,
         fallbackPricingText: pricingParts.fallbackPricingText,
       };
     }
@@ -178,13 +211,13 @@ function fromCityOffering(o: CityOffering): OfferingForm {
     /* legacy text */
   }
   return {
-    city: o.city ?? '',
+    locationType: loc.type,
+    locationValue: loc.value,
     days: [],
     startTime: '',
     endTime: '',
     fallbackAvailabilityText: raw,
-    priceAmount: pricingParts.priceAmount,
-    priceFor: pricingParts.priceFor,
+    priceTiers: pricingParts.priceTiers,
     fallbackPricingText: pricingParts.fallbackPricingText,
   };
 }
@@ -198,15 +231,15 @@ function toCityOffering(f: OfferingForm): CityOffering {
   } else if (f.fallbackAvailabilityText) {
     availability = f.fallbackAvailabilityText;
   }
-  const hasPrice = f.priceAmount.trim().length > 0 || f.priceFor.trim().length > 0;
+  const hasPrice = f.priceTiers.some((t) => t.priceAmount.trim() || t.priceFor.trim());
   let pricing = '';
   if (hasPrice) {
-    pricing = encodeStructuredPricing(f.priceAmount.trim(), f.priceFor.trim());
+    pricing = encodeStructuredPricingTiers(f.priceTiers);
   } else if (f.fallbackPricingText) {
     pricing = f.fallbackPricingText;
   }
   return {
-    city: f.city.trim(),
+    city: serializeLocationToCityField(f.locationType, f.locationValue).trim(),
     pricing,
     availability,
   };
@@ -472,9 +505,13 @@ function AvailabilityBlock({
 }) {
   return (
     <View style={styles.availabilityBlock}>
-      <Text style={styles.fieldLabel}>ימים בשבוע</Text>
+      <Text style={styles.fieldLabel}>
+        ימים בשבוע <Text style={styles.requiredStar}>*</Text>
+      </Text>
       <DayRow selected={days} onToggle={(id) => onDaysChange(toggleDay(days, id))} />
-      <Text style={[styles.fieldLabel, styles.timeSectionLabel]}>שעות זמינות</Text>
+      <Text style={[styles.fieldLabel, styles.timeSectionLabel]}>
+        שעות זמינות <Text style={styles.requiredStar}>*</Text>
+      </Text>
       <TimeRangeRow
         startTime={startTime}
         endTime={endTime}
@@ -505,14 +542,79 @@ function formatOfferingSummary(f: OfferingForm): string | null {
 }
 
 function formatPriceSummary(f: OfferingForm): string | null {
-  if (f.fallbackPricingText && !f.priceAmount.trim() && !f.priceFor.trim()) {
+  const hasTier = f.priceTiers.some((t) => t.priceAmount.trim() || t.priceFor.trim());
+  if (f.fallbackPricingText && !hasTier) {
     return f.fallbackPricingText;
   }
-  if (f.priceAmount.trim() || f.priceFor.trim()) {
-    const a = f.priceAmount.trim();
+  const items: { key: number; line: string }[] = [];
+  for (const tier of f.priceTiers) {
+    if (!tier.priceAmount.trim() && !tier.priceFor.trim()) continue;
+    const a = tier.priceAmount.trim();
     const num = a ? parseInt(a.replace(/[^\d]/g, ''), 10) : NaN;
     const pricePart = a && Number.isFinite(num) ? `${num} ₪` : '—';
-    return `${pricePart} עבור טיול של ${f.priceFor.trim() || '—'}`;
+    const line = `${pricePart} עבור טיול של ${tier.priceFor.trim() || '—'}`;
+    const key = Number.isFinite(num) ? num : Number.POSITIVE_INFINITY;
+    items.push({ key, line });
+  }
+  items.sort((x, y) => x.key - y.key);
+  return items.length ? items.map((x) => x.line).join(' · ') : null;
+}
+
+const TIME_RE = /^(\d{1,2}):(\d{2})$/;
+
+/** כל שדות השורה (מיקום — עיר או אזור, זמינות מובנית, תעריף מובנה) חובה לפני שמירה */
+function validateOfferingRow(f: OfferingForm): string | null {
+  if (!f.locationValue.trim()) {
+    return 'נא לבחור עיר או אזור.';
+  }
+  if (f.days.length === 0) {
+    if (f.fallbackAvailabilityText?.trim()) {
+      return 'נא לעדכן את הזמינות לפורמט המלא (ימים ושעות), או למחוק את השורה ולהוסיף מחדש.';
+    }
+    return 'נא לבחור לפחות יום אחד בשבוע.';
+  }
+  const st = f.startTime.trim();
+  const et = f.endTime.trim();
+  if (!st || !TIME_RE.test(st)) {
+    return 'נא לבחור שעת התחלה.';
+  }
+  if (!et || !TIME_RE.test(et)) {
+    return 'נא לבחור שעת סיום.';
+  }
+  const startM = parseHm(st).h * 60 + parseHm(st).m;
+  const endM = parseHm(et).h * 60 + parseHm(et).m;
+  if (endM <= startM) {
+    return 'שעת הסיום חייבת להיות אחרי שעת ההתחלה.';
+  }
+
+  const hasStructuredPrice = f.priceTiers.some(
+    (t) => t.priceAmount.trim() || t.priceFor.trim(),
+  );
+  if (!hasStructuredPrice) {
+    if (f.fallbackPricingText?.trim()) {
+      return 'נא לעדכן את התעריף לפורמט המלא (סכום ומשך טיול), או למחוק את השורה ולהוסיף מחדש.';
+    }
+    return 'נא לבחור לפחות תעריף אחד (סכום ומשך טיול).';
+  }
+  for (let i = 0; i < f.priceTiers.length; i++) {
+    const tier = f.priceTiers[i];
+    const priceNum = parseInt(tier.priceAmount.replace(/[^\d]/g, ''), 10);
+    if (!tier.priceAmount.trim() || !Number.isFinite(priceNum)) {
+      if (f.fallbackPricingText?.trim()) {
+        return 'נא לעדכן את התעריף לפורמט המלא (סכום ומשך טיול), או למחוק את השורה ולהוסיף מחדש.';
+      }
+      return f.priceTiers.length > 1
+        ? `תעריף ${i + 1}: נא לבחור סכום (₪).`
+        : 'נא לבחור תעריף (₪).';
+    }
+    if (!tier.priceFor.trim()) {
+      if (f.fallbackPricingText?.trim()) {
+        return 'נא לעדכן את התעריף לפורמט המלא (סכום ומשך טיול), או למחוק את השורה ולהוסיף מחדש.';
+      }
+      return f.priceTiers.length > 1
+        ? `תעריף ${i + 1}: נא לבחור משך טיול.`
+        : 'נא לבחור משך טיול.';
+    }
   }
   return null;
 }
@@ -545,40 +647,69 @@ const WalkerProfessionalProfileScreen = ({ navigation, route }: Props) => {
     load();
   }, [load]);
 
-  const addOffering = () => {
-    const next = { ...draft };
-    const hasAny =
-      next.city.trim() ||
-      next.priceAmount.trim() ||
-      next.priceFor.trim() ||
-      next.days.length > 0 ||
-      next.startTime ||
-      next.endTime ||
-      next.fallbackAvailabilityText ||
-      next.fallbackPricingText;
-    if (!hasAny) return;
-    setOfferings((prev) => [...prev, next]);
-    setDraft(emptyForm());
-  };
-
-  const removeOffering = (index: number) => {
-    setOfferings((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const save = async () => {
+  const addOfferingAndSave = async () => {
     if (!userId) {
       Alert.alert('שגיאה', 'חסר מזהה משתמש');
       return;
     }
+    const draftRow = { ...draft };
+    const hasAny =
+      draftRow.locationValue.trim() ||
+      draftRow.priceTiers.some((t) => t.priceAmount.trim() || t.priceFor.trim()) ||
+      draftRow.days.length > 0 ||
+      draftRow.startTime ||
+      draftRow.endTime ||
+      draftRow.fallbackAvailabilityText ||
+      draftRow.fallbackPricingText;
+
+    if (hasAny) {
+      const err = validateOfferingRow(draftRow);
+      if (err) {
+        Alert.alert('חסרים פרטים', err);
+        return;
+      }
+    } else if (offerings.length > 0) {
+      for (let i = 0; i < offerings.length; i++) {
+        const err = validateOfferingRow(offerings[i]);
+        if (err) {
+          Alert.alert('חסרים פרטים', `שורה ${i + 1}: ${err}`);
+          return;
+        }
+      }
+    }
+
+    const nextOfferings = hasAny ? [...offerings, draftRow] : offerings;
+    if (hasAny) {
+      setOfferings(nextOfferings);
+      setDraft(emptyForm());
+    }
+
     setSaving(true);
     try {
-      const cityOfferings: CityOffering[] = offerings.map(toCityOffering);
+      const cityOfferings: CityOffering[] = nextOfferings.map(toCityOffering);
       await dogWalkerAPI.updateProfessionalProfile(userId, {
         cityOfferings,
       });
       Alert.alert('נשמר', 'הפרופיל המקצועי עודכן');
     } catch (e: any) {
       Alert.alert('שגיאה', e?.message || 'השמירה נכשלה');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeOffering = async (index: number) => {
+    if (!userId) return;
+    const nextOfferings = offerings.filter((_, i) => i !== index);
+    setOfferings(nextOfferings);
+    setSaving(true);
+    try {
+      await dogWalkerAPI.updateProfessionalProfile(userId, {
+        cityOfferings: nextOfferings.map(toCityOffering),
+      });
+    } catch (e: any) {
+      Alert.alert('שגיאה', e?.message || 'השמירה נכשלה');
+      load();
     } finally {
       setSaving(false);
     }
@@ -592,12 +723,32 @@ const WalkerProfessionalProfileScreen = ({ navigation, route }: Props) => {
           next.fallbackAvailabilityText = undefined;
         }
       }
-      if (patch.priceAmount !== undefined || patch.priceFor !== undefined) {
-        if (next.priceAmount.trim() || next.priceFor.trim()) {
-          next.fallbackPricingText = undefined;
-        }
+      return next;
+    });
+  }, []);
+
+  const updateDraftTier = useCallback((index: number, patch: Partial<PriceTier>) => {
+    setDraft((d) => {
+      const priceTiers = d.priceTiers.map((t, i) => (i === index ? { ...t, ...patch } : t));
+      const next = { ...d, priceTiers };
+      if (priceTiers.some((t) => t.priceAmount.trim() || t.priceFor.trim())) {
+        next.fallbackPricingText = undefined;
       }
       return next;
+    });
+  }, []);
+
+  const addDraftPriceTier = useCallback(() => {
+    setDraft((d) => ({
+      ...d,
+      priceTiers: [...d.priceTiers, { priceAmount: '', priceFor: '' }],
+    }));
+  }, []);
+
+  const removeDraftPriceTier = useCallback((index: number) => {
+    setDraft((d) => {
+      if (d.priceTiers.length <= 1) return d;
+      return { ...d, priceTiers: d.priceTiers.filter((_, i) => i !== index) };
     });
   }, []);
 
@@ -628,6 +779,8 @@ const WalkerProfessionalProfileScreen = ({ navigation, route }: Props) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
+        <View style={styles.headerBtn} />
+        <Text style={styles.headerTitle}>פרופיל מקצועי</Text>
         <TouchableOpacity
           style={styles.headerBtn}
           onPress={() =>
@@ -641,8 +794,6 @@ const WalkerProfessionalProfileScreen = ({ navigation, route }: Props) => {
         >
           <Ionicons name="arrow-forward" size={26} color={TEXT_DARK} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>פרופיל מקצועי</Text>
-        <View style={styles.headerBtn} />
       </View>
 
       <ScrollView
@@ -652,19 +803,20 @@ const WalkerProfessionalProfileScreen = ({ navigation, route }: Props) => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>ערים, זמינות ותעריף</Text>
+          <Text style={styles.sectionTitle}>מיקום, זמינות ותעריף</Text>
           <Text style={styles.sectionHint}>
-            מלאו עיר, זמינות ותעריף לכל הצעה, הוסיפו שורה ולחצו שמור.
+            כל השדות חובה: מיקום (עיר או אזור), ימים, שעות התחלה וסיום, ותעריף (ניתן להוסיף כמה תעריפים
+            לאותה זמינות). לחצו הוסף ושמור. הסרת שורה נשמרת אוטומטית.
           </Text>
 
-          <Text style={styles.fieldLabel}>עיר</Text>
-          <TextInput
-            style={styles.textInput}
-            placeholder="למשל: תל אביב"
-            placeholderTextColor="#8B7355"
-            value={draft.city}
-            onChangeText={(v) => updateDraft({ city: v })}
-            textAlign="right"
+          <Text style={styles.fieldLabel}>
+            מיקום <Text style={styles.requiredStar}>*</Text>
+          </Text>
+          <WalkerLocationPicker
+            locationType={draft.locationType}
+            locationValue={draft.locationValue}
+            onChange={({ locationType, locationValue }) => updateDraft({ locationType, locationValue })}
+            disabled={saving}
           />
 
           <AvailabilityBlock
@@ -677,26 +829,68 @@ const WalkerProfessionalProfileScreen = ({ navigation, route }: Props) => {
             onEndChange={(endTime) => updateDraft({ endTime })}
           />
 
-          <Text style={styles.fieldLabel}>תעריף</Text>
-          <PriceRangeRow
-            priceAmount={draft.priceAmount}
-            priceFor={draft.priceFor}
-            onAmountChange={(priceAmount) => updateDraft({ priceAmount })}
-            onForChange={(priceFor) => updateDraft({ priceFor })}
-          />
+          <Text style={styles.fieldLabel}>
+            תעריף <Text style={styles.requiredStar}>*</Text>
+          </Text>
+          {draft.priceTiers.map((tier, idx) => (
+            <View key={`draft-tier-${idx}`} style={styles.priceTierBlock}>
+              {draft.priceTiers.length > 1 ? (
+                <View style={styles.priceTierTitleRow}>
+                  <TouchableOpacity
+                    onPress={() => removeDraftPriceTier(idx)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close-circle" size={22} color="#C45C5C" />
+                  </TouchableOpacity>
+                  <Text style={styles.priceTierTitle}>תעריף {idx + 1}</Text>
+                </View>
+              ) : null}
+              <PriceRangeRow
+                priceAmount={tier.priceAmount}
+                priceFor={tier.priceFor}
+                onAmountChange={(priceAmount) => updateDraftTier(idx, { priceAmount })}
+                onForChange={(priceFor) => updateDraftTier(idx, { priceFor })}
+              />
+            </View>
+          ))}
+          {draft.priceTiers.some((t) => t.priceAmount.trim() && t.priceFor.trim()) ? (
+            <TouchableOpacity
+              style={styles.addTierButton}
+              onPress={addDraftPriceTier}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.addTierButtonText}>+ הוסף תעריף נוסף</Text>
+            </TouchableOpacity>
+          ) : null}
           {draft.fallbackPricingText ? (
             <Text style={styles.legacyHint}>
               תעריף ישן (טקסט חופשי): {draft.fallbackPricingText}
             </Text>
           ) : null}
-          <TouchableOpacity style={styles.addButtonWide} onPress={addOffering} activeOpacity={0.85}>
-            <Text style={styles.addButtonText}>הוסף שורה</Text>
+          <TouchableOpacity
+            style={[styles.addButtonWide, saving && styles.saveButtonDisabled]}
+            onPress={addOfferingAndSave}
+            disabled={saving}
+            activeOpacity={0.85}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.addButtonText}>הוסף ושמור</Text>
+            )}
           </TouchableOpacity>
+          <Text style={styles.requiredFieldLegend}>
+            <Text style={styles.requiredStar}>*</Text> שדה חובה
+          </Text>
         </View>
 
         {offerings.map((row, index) => {
           const summary = formatOfferingSummary(row);
           const priceLine = formatPriceSummary(row);
+          const priceDisplayLines = priceLine
+            ? getPricingDisplayLinesFromStored(toCityOffering(row).pricing)
+            : [];
+          const locLine = formatLocationLine(row.locationType, row.locationValue);
           return (
             <View key={`offering-${index}`} style={styles.card}>
               <View style={styles.rowHeader}>
@@ -708,10 +902,16 @@ const WalkerProfessionalProfileScreen = ({ navigation, route }: Props) => {
                 </TouchableOpacity>
                 <Text style={styles.rowTitle}>שורה {index + 1}</Text>
               </View>
-              {row.city ? (
+              {locLine.value !== '—' ? (
                 <Text style={styles.lineText}>
-                  <Text style={styles.lineBold}>עיר: </Text>
-                  {row.city}
+                  <Text style={styles.lineBold}>{locLine.label}: </Text>
+                  {row.locationType === 'city' ? (
+                    <HebrewAsciiParensText style={[styles.lineText, styles.lineTextInlineValue]}>
+                      {locLine.value}
+                    </HebrewAsciiParensText>
+                  ) : (
+                    locLine.value
+                  )}
                 </Text>
               ) : null}
               {summary ? (
@@ -721,30 +921,29 @@ const WalkerProfessionalProfileScreen = ({ navigation, route }: Props) => {
                 </Text>
               ) : null}
               {priceLine ? (
-                <Text style={styles.lineText}>
-                  <Text style={styles.lineBold}>תעריף: </Text>
-                  {priceLine}
-                </Text>
+                <View style={styles.savedPriceBlock}>
+                  <Text style={styles.lineText}>
+                    <Text style={styles.lineBold}>תעריף:</Text>
+                  </Text>
+                  {priceDisplayLines.map((line, i) => (
+                    <Text
+                      key={`${index}-p-${i}`}
+                      style={[
+                        styles.lineText,
+                        i === 0 ? styles.savedPriceLineFirst : styles.savedPriceLineNext,
+                      ]}
+                    >
+                      {line}
+                    </Text>
+                  ))}
+                </View>
               ) : null}
-              {!row.city && !summary && !priceLine ? (
+              {locLine.value === '—' && !summary && !priceLine ? (
                 <Text style={styles.lineMuted}>(ריק)</Text>
               ) : null}
             </View>
           );
         })}
-
-        <TouchableOpacity
-          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-          onPress={save}
-          disabled={saving}
-          activeOpacity={0.85}
-        >
-          {saving ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.saveButtonText}>שמור</Text>
-          )}
-        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -760,7 +959,6 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -774,9 +972,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
+    flex: 1,
     fontSize: 18,
     fontWeight: '700',
     color: TEXT_DARK,
+    textAlign: 'center',
   },
   scroll: {
     flex: 1,
@@ -813,6 +1013,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: TEXT_DARK,
+    textAlign: 'right',
+    alignSelf: 'stretch',
+  },
+  requiredStar: {
+    color: '#D32F2F',
+    fontWeight: '700',
+  },
+  requiredFieldLegend: {
+    marginTop: 10,
+    fontSize: 12,
+    color: '#8B7355',
     textAlign: 'right',
     alignSelf: 'stretch',
   },
@@ -997,6 +1208,38 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#E0D5C7',
   },
+  priceTierBlock: {
+    marginTop: 8,
+  },
+  priceTierTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginBottom: 6,
+    gap: 10,
+  },
+  priceTierTitle: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: TEXT_DARK,
+    textAlign: 'right',
+  },
+  addTierButton: {
+    marginTop: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: PRIMARY_COLOR,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  addTierButtonText: {
+    color: PRIMARY_COLOR,
+    fontWeight: '700',
+    fontSize: 15,
+  },
   addButtonWide: {
     marginTop: 16,
     backgroundColor: PRIMARY_COLOR,
@@ -1028,6 +1271,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: TEXT_DARK,
     textAlign: 'right',
+  },
+  /** ערך בשורה אחת עם התווית — בלי margin כפול */
+  lineTextInlineValue: {
+    marginTop: 0,
+  },
+  savedPriceBlock: {
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  savedPriceLineFirst: {
+    marginTop: 4,
+  },
+  savedPriceLineNext: {
+    marginTop: 6,
   },
   lineBold: {
     fontWeight: '700',

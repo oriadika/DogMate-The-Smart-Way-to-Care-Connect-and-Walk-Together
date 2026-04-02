@@ -133,7 +133,7 @@ class DogWalkerControllerTest {
                         .content(objectMapper.writeValueAsString(body)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Rating saved successfully"))
+                .andExpect(jsonPath("$.message").value("הדירוג נשמר בהצלחה"))
                 .andExpect(jsonPath("$.ratingId").value(rating.getId().toString()));
     }
 

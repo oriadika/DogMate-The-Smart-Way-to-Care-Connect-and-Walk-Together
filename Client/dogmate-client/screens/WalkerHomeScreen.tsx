@@ -12,7 +12,7 @@ import {
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 
 const PRIMARY_COLOR = '#7FB069';
-const BG_COLOR = '#FAEFDD';
+const BG_COLOR = '#f5e6d3';
 const TEXT_DARK = '#5C4033';
 const CARD_BG = '#faf0e6';
 
@@ -39,7 +39,6 @@ const WalkerHomeScreen = ({ navigation, route }: any) => {
       userLastName: lastName,
       userRole: 'walker',
       email: route?.params?.email,
-      walkerListMode: false,
     });
   };
 
@@ -96,17 +95,39 @@ const WalkerHomeScreen = ({ navigation, route }: any) => {
         <TouchableOpacity
           style={styles.placeholderCard}
           activeOpacity={0.85}
-          onPress={() => Alert.alert('בקרוב', 'רשימת בקשות טיול תתווסף בהמשך.')}
+          onPress={() => {
+            if (!currentUserId) {
+              Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
+              return;
+            }
+            navigation.navigate('WalkerReviews', {
+              userId: currentUserId,
+              userFirstName: firstName,
+              userLastName: lastName,
+              email: route?.params?.email,
+            });
+          }}
         >
-          <MaterialCommunityIcons name="clipboard-text-outline" size={26} color={PRIMARY_COLOR} />
-          <Text style={styles.cardTitle}>בקשות טיול</Text>
-          <Text style={styles.cardHint}>צפה בבקשות חדשות מבעלי כלבים</Text>
+          <Ionicons name="star-outline" size={26} color={PRIMARY_COLOR} />
+          <Text style={styles.cardTitle}>ביקורות</Text>
+          <Text style={styles.cardHint}>כל הביקורות והדירוגים מבעלי כלבים</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.placeholderCard}
           activeOpacity={0.85}
-          onPress={() => Alert.alert('בקרוב', 'לוח זמנים יתווסף בהמשך.')}
+          onPress={() => {
+            if (!currentUserId) {
+              Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
+              return;
+            }
+            navigation.navigate('WalkerSchedulePlaceholder', {
+              userId: currentUserId,
+              userFirstName: firstName,
+              userLastName: lastName,
+              email: route?.params?.email,
+            });
+          }}
         >
           <Ionicons name="calendar-outline" size={24} color={PRIMARY_COLOR} />
           <Text style={styles.cardTitle}>לוח זמנים</Text>

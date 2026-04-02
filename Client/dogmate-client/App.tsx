@@ -8,9 +8,12 @@ import SignUpScreen from './screens/SignUpScreen';
 import HomeScreen from './screens/HomeScreen';
 import WalkerHomeScreen from './screens/WalkerHomeScreen';
 import WalkerProfessionalProfileScreen from './screens/WalkerProfessionalProfileScreen';
+import WalkerReviewsScreen from './screens/WalkerReviewsScreen';
+import WalkerSchedulePlaceholderScreen from './screens/WalkerSchedulePlaceholderScreen';
 import LoginScreen from './screens/LoginScreen';
 import ForgotPasswordScreen from './screens/ForgotPasswordScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import OwnerWalkersScreen from './screens/OwnerWalkersScreen';
 import DogProfileScreen from './screens/DogProfileScreen';
 import AddDogScreen from './screens/AddDogScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -48,7 +51,10 @@ export default function App() {
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="WalkerHome" component={WalkerHomeScreen} />
           <Stack.Screen name="WalkerProfessionalProfile" component={WalkerProfessionalProfileScreen} />
+          <Stack.Screen name="WalkerReviews" component={WalkerReviewsScreen} />
+          <Stack.Screen name="WalkerSchedulePlaceholder" component={WalkerSchedulePlaceholderScreen} />
           <Stack.Screen name="Profile" component={ProfileScreen} />
+          <Stack.Screen name="OwnerWalkers" component={OwnerWalkersScreen} />
           <Stack.Screen name="DogProfile" component={DogProfileScreen} />
           <Stack.Screen name="AddDog" component={AddDogScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />

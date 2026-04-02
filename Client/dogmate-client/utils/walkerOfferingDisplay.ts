@@ -3,6 +3,7 @@
  * (אותו פורמט כמו ב-WalkerProfessionalProfileScreen).
  */
 import type { CityOffering } from '../services/api';
+import { parseLocationFromCityField, type LocationType } from './locationFieldCodec';
 
 /** ימי השבוע מימין לשמאל: א׳ = ראשון — חייב להיות זהה למסך הפרופיל המקצועי */
 const WEEKDAYS: { id: number; label: string }[] = [
@@ -15,10 +16,12 @@ const WEEKDAYS: { id: number; label: string }[] = [
   { id: 6, label: 'ש׳' },
 ];
 
+type PriceTier = { priceAmount: string; priceFor: string };
+
 type OfferingForm = {
-  city: string;
-  priceAmount: string;
-  priceFor: string;
+  locationType: LocationType;
+  locationValue: string;
+  priceTiers: PriceTier[];
   days: number[];
   startTime: string;
   endTime: string;
@@ -26,36 +29,53 @@ type OfferingForm = {
   fallbackPricingText?: string;
 };
 
-function parsePricingField(raw: string): Pick<OfferingForm, 'priceAmount' | 'priceFor' | 'fallbackPricingText'> {
+export type WalkerOfferingForm = OfferingForm;
+
+function parsePricingField(raw: string): Pick<OfferingForm, 'priceTiers' | 'fallbackPricingText'> {
   const t = raw.trim();
   if (!t) {
-    return { priceAmount: '', priceFor: '' };
+    return { priceTiers: [{ priceAmount: '', priceFor: '' }] };
   }
   try {
     const p = JSON.parse(t);
+    if (p && p.__pm === 2 && Array.isArray(p.tiers)) {
+      const tiers = p.tiers
+        .map((x: any) => ({
+          priceAmount: typeof x.a === 'string' ? x.a : '',
+          priceFor: typeof x.f === 'string' ? x.f : '',
+        }))
+        .filter((x: PriceTier) => x.priceAmount.trim() || x.priceFor.trim());
+      if (tiers.length > 0) return { priceTiers: tiers };
+    }
     if (p && p.__pm === 1) {
       return {
-        priceAmount: typeof p.a === 'string' ? p.a : '',
-        priceFor: typeof p.f === 'string' ? p.f : '',
+        priceTiers: [
+          {
+            priceAmount: typeof p.a === 'string' ? p.a : '',
+            priceFor: typeof p.f === 'string' ? p.f : '',
+          },
+        ],
       };
     }
   } catch {
     /* legacy */
   }
-  return { priceAmount: '', priceFor: '', fallbackPricingText: t };
+  return { priceTiers: [{ priceAmount: '', priceFor: '' }], fallbackPricingText: t };
 }
 
-function fromCityOffering(o: CityOffering): OfferingForm {
+/** פענוח הצעה לטופס פנימי — לסינון/מיון ברשימת דוגווקרים */
+export function parseWalkerCityOffering(o: CityOffering): OfferingForm {
+  const loc = parseLocationFromCityField(o.city ?? '');
   const pricingParts = parsePricingField(o.pricing ?? '');
   const raw = (o.availability ?? '').trim();
   if (!raw) {
     return {
-      city: o.city ?? '',
+      locationType: loc.type,
+      locationValue: loc.value,
       days: [],
       startTime: '',
       endTime: '',
-      priceAmount: pricingParts.priceAmount,
-      priceFor: pricingParts.priceFor,
+      priceTiers: pricingParts.priceTiers,
       fallbackPricingText: pricingParts.fallbackPricingText,
     };
   }
@@ -63,12 +83,12 @@ function fromCityOffering(o: CityOffering): OfferingForm {
     const parsed = JSON.parse(raw);
     if (parsed && parsed.__dm === 1 && Array.isArray(parsed.d)) {
       return {
-        city: o.city ?? '',
+        locationType: loc.type,
+        locationValue: loc.value,
         days: parsed.d.filter((n: unknown) => typeof n === 'number' && n >= 0 && n <= 6),
         startTime: typeof parsed.s === 'string' ? parsed.s : '',
         endTime: typeof parsed.e === 'string' ? parsed.e : '',
-        priceAmount: pricingParts.priceAmount,
-        priceFor: pricingParts.priceFor,
+        priceTiers: pricingParts.priceTiers,
         fallbackPricingText: pricingParts.fallbackPricingText,
       };
     }
@@ -76,13 +96,13 @@ function fromCityOffering(o: CityOffering): OfferingForm {
     /* legacy text */
   }
   return {
-    city: o.city ?? '',
+    locationType: loc.type,
+    locationValue: loc.value,
     days: [],
     startTime: '',
     endTime: '',
     fallbackAvailabilityText: raw,
-    priceAmount: pricingParts.priceAmount,
-    priceFor: pricingParts.priceFor,
+    priceTiers: pricingParts.priceTiers,
     fallbackPricingText: pricingParts.fallbackPricingText,
   };
 }
@@ -101,33 +121,54 @@ function formatOfferingSummary(f: OfferingForm): string | null {
   return parts.length ? parts.join(' · ') : null;
 }
 
-function formatPriceSummary(f: OfferingForm): string | null {
-  if (f.fallbackPricingText && !f.priceAmount.trim() && !f.priceFor.trim()) {
-    return f.fallbackPricingText;
+function tierSortKey(tier: PriceTier): number {
+  const a = tier.priceAmount.trim();
+  const num = a ? parseInt(a.replace(/[^\d]/g, ''), 10) : NaN;
+  return Number.isFinite(num) ? num : Number.POSITIVE_INFINITY;
+}
+
+/** שורות תצוגה לתעריף, מהזול ליקר */
+function formatPriceLinesSorted(f: OfferingForm): string[] {
+  const hasTier = f.priceTiers.some((t) => t.priceAmount.trim() || t.priceFor.trim());
+  if (f.fallbackPricingText && !hasTier) {
+    return [f.fallbackPricingText.trim()];
   }
-  if (f.priceAmount.trim() || f.priceFor.trim()) {
-    const a = f.priceAmount.trim();
+  const items: { key: number; line: string }[] = [];
+  for (const tier of f.priceTiers) {
+    if (!tier.priceAmount.trim() && !tier.priceFor.trim()) continue;
+    const a = tier.priceAmount.trim();
     const num = a ? parseInt(a.replace(/[^\d]/g, ''), 10) : NaN;
     const pricePart = a && Number.isFinite(num) ? `${num} ₪` : '—';
-    return `${pricePart} עבור טיול של ${f.priceFor.trim() || '—'}`;
+    const line = `${pricePart} עבור טיול של ${tier.priceFor.trim() || '—'}`;
+    items.push({ key: tierSortKey(tier), line });
   }
-  return null;
+  items.sort((x, y) => x.key - y.key);
+  return items.map((x) => x.line);
 }
 
 /** מחרוזת availability כפי שנשמרה ב-DB → טקסט קריא בעברית */
 export function displayAvailabilityFromStored(raw: string | undefined | null): string {
-  const form = fromCityOffering({ city: '', availability: raw ?? '', pricing: '' });
+  const form = parseWalkerCityOffering({ city: '', availability: raw ?? '', pricing: '' });
   const s = formatOfferingSummary(form);
   if (s) return s;
   if (form.fallbackAvailabilityText?.trim()) return form.fallbackAvailabilityText.trim();
   return '—';
 }
 
-/** מחרוזת pricing כפי שנשמרה ב-DB → טקסט קריא בעברית */
+/** מחרוזת pricing כפי שנשמרה ב-DB → טקסט קריא בעברית (שורה אחת, ממוין לפי מחיר) */
 export function displayPricingFromStored(raw: string | undefined | null): string {
-  const form = fromCityOffering({ city: '', availability: '', pricing: raw ?? '' });
-  const s = formatPriceSummary(form);
-  if (s) return s;
+  const form = parseWalkerCityOffering({ city: '', availability: '', pricing: raw ?? '' });
+  const lines = formatPriceLinesSorted(form);
+  if (lines.length > 0) return lines.join(' · ');
   if (form.fallbackPricingText?.trim()) return form.fallbackPricingText.trim();
   return '—';
+}
+
+/** שורות תעריף נפרדות, מהזול ליקר — לתצוגה אנכית */
+export function getPricingDisplayLinesFromStored(raw: string | undefined | null): string[] {
+  const form = parseWalkerCityOffering({ city: '', availability: '', pricing: raw ?? '' });
+  const lines = formatPriceLinesSorted(form);
+  if (lines.length > 0) return lines;
+  if (form.fallbackPricingText?.trim()) return [form.fallbackPricingText.trim()];
+  return ['—'];
 }

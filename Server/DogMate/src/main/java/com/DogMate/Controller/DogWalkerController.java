@@ -59,7 +59,7 @@ public class DogWalkerController {
             );
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                     "success", true,
-                    "message", "Rating saved successfully",
+                    "message", "הדירוג נשמר בהצלחה",
                     "ratingId", saved.getId().toString()
             ));
         } catch (IllegalArgumentException e) {
@@ -79,7 +79,7 @@ public class DogWalkerController {
             dogWalkerService.deleteRating(walkerId, ratingId, ownerId);
             return ResponseEntity.ok(Map.of(
                     "success", true,
-                    "message", "Rating deleted successfully",
+                    "message", "הביקורת נמחקה בהצלחה",
                     "ratingId", ratingId.toString()
             ));
         } catch (AccessDeniedException e) {
