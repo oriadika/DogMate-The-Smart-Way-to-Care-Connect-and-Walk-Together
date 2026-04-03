@@ -1,33 +1,13 @@
-import React, { useMemo } from 'react';
-import {
-  Dimensions,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { Dropdown } from 'react-native-element-dropdown';
-import { ISRAEL_REGION_OPTIONS } from '../constants/israelRegions';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { LocationType } from '../utils/locationFieldCodec';
 import IsraelCityPicker from './IsraelCityPicker';
+import RegionSubAreaPicker from './RegionSubAreaPicker';
 
 const PRIMARY_COLOR = '#7FB069';
 const TEXT_DARK = '#5C4033';
 const BORDER_COLOR = '#E0D5C7';
 const BG_CARD = '#fff';
-const MUTED = '#8B7355';
-
-function listPanelWidth(): number {
-  const w = Dimensions.get('window').width;
-  return Math.min(360, Math.max(260, Math.round(w * 0.88)));
-}
-
-const LIST_MAX_HEIGHT = 220;
-const MODAL_PANEL_TOP_INSET = 36;
-
-function panelMaxHeightRegion(): number {
-  return LIST_MAX_HEIGHT + 48;
-}
 
 type Props = {
   locationType: LocationType;
@@ -42,16 +22,6 @@ export default function WalkerLocationPicker({
   onChange,
   disabled = false,
 }: Props) {
-  const regionData = useMemo(() => {
-    const v = locationValue?.trim();
-    if (!v) return ISRAEL_REGION_OPTIONS;
-    if (ISRAEL_REGION_OPTIONS.some((d) => d.value === v)) return ISRAEL_REGION_OPTIONS;
-    return [{ label: v, value: v }, ...ISRAEL_REGION_OPTIONS];
-  }, [locationValue]);
-
-  const panelW = listPanelWidth();
-  const panelH = panelMaxHeightRegion();
-
   const setTab = (next: LocationType) => {
     if (next === locationType) return;
     onChange({ locationType: next, locationValue: '' });
@@ -86,41 +56,12 @@ export default function WalkerLocationPicker({
           disabled={disabled}
         />
       ) : (
-        <View style={styles.pickerRoot}>
-          <Dropdown
-            style={styles.dropdown}
-            containerStyle={[
-              styles.dropdownListPanel,
-              {
-                width: panelW,
-                maxWidth: panelW,
-                maxHeight: panelH,
-                flexGrow: 0,
-                marginTop: MODAL_PANEL_TOP_INSET,
-              },
-            ]}
-            placeholderStyle={styles.placeholderStyle}
-            selectedTextStyle={styles.selectedTextStyle}
-            itemTextStyle={styles.itemTextStyle}
-            iconStyle={styles.iconStyle}
-            data={regionData}
-            search={false}
-            maxHeight={LIST_MAX_HEIGHT}
-            labelField="label"
-            valueField="value"
-            placeholder="בחר אזור"
-            value={locationValue ? locationValue : null}
-            onChange={(item) => onChange({ locationType: 'region', locationValue: item.value })}
-            disable={disabled}
-            inverted={false}
-            keyboardAvoiding
-            mode="modal"
-            backgroundColor="rgba(0,0,0,0.35)"
-            flatListProps={{
-              style: { maxHeight: LIST_MAX_HEIGHT, width: panelW },
-            }}
-          />
-        </View>
+        <RegionSubAreaPicker
+          value={locationValue}
+          onChange={(v) => onChange({ locationType: 'region', locationValue: v })}
+          placeholder="בחר אזור"
+          disabled={disabled}
+        />
       )}
     </View>
   );
@@ -160,49 +101,5 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: '#fff',
-  },
-  pickerRoot: {
-    width: '100%',
-    alignSelf: 'stretch',
-  },
-  dropdownListPanel: {
-    alignSelf: 'center',
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER_COLOR,
-    overflow: 'hidden',
-    flexShrink: 1,
-  },
-  dropdown: {
-    width: '100%',
-    minHeight: 50,
-    backgroundColor: BG_CARD,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: BORDER_COLOR,
-  },
-  placeholderStyle: {
-    fontSize: 16,
-    color: MUTED,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  selectedTextStyle: {
-    fontSize: 16,
-    color: TEXT_DARK,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  itemTextStyle: {
-    fontSize: 16,
-    color: TEXT_DARK,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  iconStyle: {
-    width: 20,
-    height: 20,
   },
 });

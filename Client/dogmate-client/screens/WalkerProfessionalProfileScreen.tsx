@@ -51,8 +51,8 @@ const DURATION_OPTIONS: string[] = [
   '15 דקות',
   '30 דקות',
   '45 דקות',
-  '60 דקות',
   'שעה',
+  'שעה וחצי',
   'שעתיים',
 ];
 
@@ -690,7 +690,7 @@ const WalkerProfessionalProfileScreen = ({ navigation, route }: Props) => {
       await dogWalkerAPI.updateProfessionalProfile(userId, {
         cityOfferings,
       });
-      Alert.alert('נשמר', 'הפרופיל המקצועי עודכן');
+      Alert.alert('נשמר', 'ניהול השירות שלך עודכן');
     } catch (e: any) {
       Alert.alert('שגיאה', e?.message || 'השמירה נכשלה');
     } finally {
@@ -780,7 +780,7 @@ const WalkerProfessionalProfileScreen = ({ navigation, route }: Props) => {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <View style={styles.headerBtn} />
-        <Text style={styles.headerTitle}>פרופיל מקצועי</Text>
+        <Text style={styles.headerTitle}>ניהול השירות שלי</Text>
         <TouchableOpacity
           style={styles.headerBtn}
           onPress={() =>

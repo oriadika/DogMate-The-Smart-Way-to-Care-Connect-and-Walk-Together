@@ -189,7 +189,7 @@ const WalkerReviewsScreen = ({ navigation, route }: any) => {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <View style={styles.headerBtn} />
-        <Text style={styles.headerTitle}>ביקורות</Text>
+        <Text style={styles.headerTitle}>הביקורות שלי</Text>
         <TouchableOpacity
           style={styles.headerBtn}
           onPress={() =>

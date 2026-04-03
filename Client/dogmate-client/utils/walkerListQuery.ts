@@ -2,12 +2,15 @@
  * סינון ומיון לרשימת דוג-ווקרים (לוגיקה טהורה).
  */
 import type { CityOffering, ProfessionalProfileResponse } from '../services/api';
+import { getRegionByCity } from './cityToDistrictMap';
 import { parseLocationFromCityField } from './locationFieldCodec';
 import { parseWalkerCityOffering } from './walkerOfferingDisplay';
 
 export type WalkerListFilters = {
   /** ריק = כל הערים */
   cityName: string;
+  /** ריק = כל האזורים — קוד אזור (למשל south_district) כפי שנשמר בפרופיל */
+  regionName: string;
   minPrice: number | null;
   maxPrice: number | null;
   availableNowOnly: boolean;
@@ -17,6 +20,7 @@ export type WalkerListFilters = {
 
 export const DEFAULT_WALKER_LIST_FILTERS: WalkerListFilters = {
   cityName: '',
+  regionName: '',
   minPrice: null,
   maxPrice: null,
   availableNowOnly: false,
@@ -77,11 +81,24 @@ export function getMinPriceNisFromProfile(w: ProfessionalProfileResponse): numbe
 }
 
 function profileMatchesCity(w: ProfessionalProfileResponse, cityName: string): boolean {
-  const t = cityName.trim();
+  const t = cityName.replace(/\s+/g, ' ').trim();
+  if (!t) return true;
+  const district = getRegionByCity(cityName);
+  for (const o of w.cityOfferings ?? []) {
+    const loc = parseLocationFromCityField(o.city ?? '');
+    const v = loc.value.replace(/\s+/g, ' ').trim();
+    if (loc.type === 'city' && v === t) return true;
+    if (district != null && loc.type === 'region' && loc.value.trim() === district) return true;
+  }
+  return false;
+}
+
+function profileMatchesRegion(w: ProfessionalProfileResponse, regionName: string): boolean {
+  const t = regionName.trim();
   if (!t) return true;
   for (const o of w.cityOfferings ?? []) {
     const loc = parseLocationFromCityField(o.city ?? '');
-    if (loc.type === 'city' && loc.value.trim() === t) return true;
+    if (loc.type === 'region' && loc.value.trim() === t) return true;
   }
   return false;
 }
@@ -135,6 +152,7 @@ export function applyWalkerListFilters(
 ): ProfessionalProfileResponse[] {
   return walkers.filter((w) => {
     if (!profileMatchesCity(w, f.cityName)) return false;
+    if (!profileMatchesRegion(w, f.regionName)) return false;
     if (!profileMatchesPriceRange(w, f.minPrice, f.maxPrice)) return false;
     if (!profileMatchesWeekdays(w, f.selectedWeekdays)) return false;
     if (f.availableNowOnly) {
@@ -189,6 +207,7 @@ export function buildWalkerListView(
 export function hasActiveFilters(f: WalkerListFilters): boolean {
   return (
     f.cityName.trim().length > 0 ||
+    f.regionName.trim().length > 0 ||
     f.minPrice != null ||
     f.maxPrice != null ||
     f.availableNowOnly ||

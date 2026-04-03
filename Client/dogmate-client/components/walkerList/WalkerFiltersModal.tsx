@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import IsraelCityPicker from '../IsraelCityPicker';
+import RegionSubAreaPicker from '../RegionSubAreaPicker';
 import { DEFAULT_WALKER_LIST_FILTERS, type WalkerListFilters } from '../../utils/walkerListQuery';
 
 const PRIMARY = '#7FB069';
@@ -92,8 +93,39 @@ export default function WalkerFiltersModal({ visible, onClose, value, onApply }:
               <Text style={styles.hint}>השאר ריק לכל הערים</Text>
               <IsraelCityPicker
                 value={draft.cityName}
-                onChange={(city) => setDraft((d) => ({ ...d, cityName: city }))}
+                onChange={(city) =>
+                  setDraft((d) => ({
+                    ...d,
+                    cityName: city,
+                    regionName: city.trim() ? '' : d.regionName,
+                  }))
+                }
                 placeholder="כל הערים"
+              />
+              <Text style={styles.hint}>
+                כשבוחרים עיר, יוצגו גם דוגווקרים שסימנו את המחוז האזורי של העיר (לפי מיפוי מערכת).
+              </Text>
+
+              <View style={[styles.cityRow, styles.sectionSpaced]}>
+                <Text style={styles.sectionLabel}>אזור</Text>
+                {draft.regionName.trim() ? (
+                  <TouchableOpacity onPress={() => setDraft((d) => ({ ...d, regionName: '' }))}>
+                    <Text style={styles.clearCity}>נקה</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              <Text style={styles.hint}>השאר ריק לכל האזורים. בחירת עיר או אזור — אחד בלבד</Text>
+              <RegionSubAreaPicker
+                variant="inline"
+                value={draft.regionName}
+                placeholder="כל האזורים"
+                onChange={(region) =>
+                  setDraft((d) => ({
+                    ...d,
+                    regionName: region,
+                    cityName: region.trim() ? '' : d.cityName,
+                  }))
+                }
               />
 
               <Text style={[styles.sectionLabel, styles.sectionSpaced, styles.priceSectionTitle]}>

@@ -1,7 +1,9 @@
 /**
  * קידוד מיקום דוגווקר בשדה city יחיד (ללא migration בשרת):
- * עיר — הטקסט כפי שהוא; אזור — קידומת "אזור: " + שם האזור.
+ * עיר — הטקסט כפי שהוא; אזור — קידומת "אזור: " + קוד אזור (למשל south_district).
  */
+
+import { formatDistrictValueForDisplay } from '../constants/israelRegions';
 
 export type LocationType = 'city' | 'region';
 
@@ -33,7 +35,7 @@ export function serializeLocationToCityField(type: LocationType, value: string):
 export function formatLocationLine(type: LocationType, value: string): { label: string; value: string } {
   const v = value.trim();
   if (!v) return { label: 'מיקום', value: '—' };
-  if (type === 'region') return { label: 'אזור', value: v };
+  if (type === 'region') return { label: 'אזור', value: formatDistrictValueForDisplay(v) };
   return { label: 'עיר', value: v };
 }
 

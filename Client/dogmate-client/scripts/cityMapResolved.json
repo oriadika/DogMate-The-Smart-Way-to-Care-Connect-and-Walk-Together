@@ -1,0 +1,353 @@
+{
+  "resolved": {
+    "אבו גוש": "jerusalem_district",
+    "אביחיל": "sharon_district",
+    "אופקים": "south_district",
+    "אור יהודה": "gush_dan_district",
+    "אור עקיבא": "sharon_district",
+    "אזור": "center_district",
+    "אילת": "south_district",
+    "אלומות": "north_district",
+    "אלפי מנשה": "yosh_district",
+    "אריאל": "yosh_district",
+    "אשדוד": "south_district",
+    "אשקלון": "south_district",
+    "באר גנים": "south_district",
+    "באר טוביה": "center_district",
+    "באר יעקב": "center_district",
+    "באר שבע": "south_district",
+    "בית אל": "yosh_district",
+    "בית גמליאל": "center_district",
+    "בית דגן": "center_district",
+    "בית חלקיה": "center_district",
+    "בית חנן": "center_district",
+    "בית ינאי": "sharon_district",
+    "בית עובד": "center_district",
+    "בית רבן": "center_district",
+    "בית שאן": "north_district",
+    "בית שמש": "jerusalem_district",
+    "ביתר עילית": "yosh_district",
+    "בן זכאי": "center_district",
+    "בני ברק": "gush_dan_district",
+    "בני דרום": "center_district",
+    "בני דרור": "center_district",
+    "בני ראם": "center_district",
+    "בנימינה-גבעת עדה": "sharon_district",
+    "בסמת טבעון": "haifa_district",
+    "בת ים": "gush_dan_district",
+    "גבעות בר": "south_district",
+    "גבעת אבני": "north_district",
+    "גבעת אלה": "north_district",
+    "גבעת זאב": "jerusalem_district",
+    "גבעת עוז": "north_district",
+    "גבעת שמואל": "gush_dan_district",
+    "גבעת שפירא": "north_district",
+    "גבעתיים": "gush_dan_district",
+    "גדרה": "center_district",
+    "גן הדרום": "center_district",
+    "גן יבנה": "center_district",
+    "גן שורק": "center_district",
+    "גן שמואל": "sharon_district",
+    "גני טל": "center_district",
+    "גני יוחנן": "center_district",
+    "גני תקווה": "center_district",
+    "געש": "sharon_district",
+    "דאלית אל-כרמל": "haifa_district",
+    "דימונה": "south_district",
+    "דן": "north_district",
+    "דפנה": "north_district",
+    "הוד השרון": "sharon_district",
+    "הזורעים": "north_district",
+    "הרצליה": "sharon_district",
+    "זכרון יעקב": "sharon_district",
+    "חדרה": "sharon_district",
+    "חולדה": "center_district",
+    "חולון": "gush_dan_district",
+    "חולתה": "north_district",
+    "חופית": "sharon_district",
+    "חורה": "south_district",
+    "חיפה": "haifa_district",
+    "חפץ חיים": "center_district",
+    "חצור הגלילית": "north_district",
+    "טבריה": "north_district",
+    "טירה": "center_district",
+    "טירת כרמל": "haifa_district",
+    "טמרה": "north_district",
+    "יבול": "south_district",
+    "יבנאל": "north_district",
+    "יבנה": "center_district",
+    "יד בנימין": "center_district",
+    "יהוד-מונוסון": "center_district",
+    "יסודות": "center_district",
+    "יקיר": "yosh_district",
+    "יקנעם עילית": "haifa_district",
+    "ירוחם": "south_district",
+    "ירושלים": "jerusalem_district",
+    "כוכב יאיר": "yosh_district",
+    "כיסופים": "south_district",
+    "כפר אביב": "center_district",
+    "כפר אחים": "center_district",
+    "כפר בלום": "north_district",
+    "כפר ברא": "center_district",
+    "כפר הנשיא": "north_district",
+    "כפר ויתקין": "sharon_district",
+    "כפר ורבורג": "center_district",
+    "כפר חיטים": "north_district",
+    "כפר יונה": "sharon_district",
+    "כפר כנא": "north_district",
+    "כפר סבא": "sharon_district",
+    "כפר קאסם": "center_district",
+    "כפר שמריהו": "gush_dan_district",
+    "כרמיאל": "north_district",
+    "כרמים": "north_district",
+    "להב": "south_district",
+    "להבים": "south_district",
+    "לוד": "center_district",
+    "לקיה": "south_district",
+    "מבשרת ציון": "jerusalem_district",
+    "מגדל": "north_district",
+    "מגדל העמק": "north_district",
+    "מודיעין עילית": "yosh_district",
+    "מודיעין-מכבים-רעות": "center_district",
+    "מוצא עילית": "jerusalem_district",
+    "מזכרת בתיה": "center_district",
+    "מטולה": "north_district",
+    "מישר": "center_district",
+    "מיתר": "south_district",
+    "מכמורת": "sharon_district",
+    "מעגן": "north_district",
+    "מעגן מיכאל": "sharon_district",
+    "מעין ברוך": "north_district",
+    "מעלה אדומים": "jerusalem_district",
+    "מעלה גמלא": "north_district",
+    "מעלות-תרשיחא": "north_district",
+    "מפלסים": "south_district",
+    "מצפה": "north_district",
+    "מצפה רמון": "south_district",
+    "משגב עם": "north_district",
+    "נאות גולן": "north_district",
+    "נהריה": "haifa_district",
+    "ניר עוז": "south_district",
+    "ניר צבי": "center_district",
+    "נירים": "south_district",
+    "נס ציונה": "center_district",
+    "נצרת": "north_district",
+    "נשר": "haifa_district",
+    "נתיבות": "south_district",
+    "נתניה": "sharon_district",
+    "סביון": "gush_dan_district",
+    "עומר": "south_district",
+    "עיינות": "center_district",
+    "עין גב": "north_district",
+    "עין הבשור": "south_district",
+    "עין צורים": "center_district",
+    "עכו": "haifa_district",
+    "עלי זהב": "yosh_district",
+    "עמנואל": "yosh_district",
+    "עפולה": "north_district",
+    "ערד": "south_district",
+    "עתלית": "sharon_district",
+    "פדיה": "center_district",
+    "פוריידיס": "sharon_district",
+    "פלמחים": "center_district",
+    "פתח תקווה": "gush_dan_district",
+    "צופיה": "center_district",
+    "צור הדסה": "jerusalem_district",
+    "צפת": "north_district",
+    "קדימה-צורן": "sharon_district",
+    "קלנסווה": "center_district",
+    "קצרין": "north_district",
+    "קרני שומרון": "yosh_district",
+    "ראש פינה": "north_district",
+    "ראשון לציון": "center_district",
+    "רבבה": "yosh_district",
+    "רהט": "south_district",
+    "רחובות": "center_district",
+    "רכסים": "haifa_district",
+    "רמות": "north_district",
+    "רמלה": "center_district",
+    "רמת גן": "gush_dan_district",
+    "רמת השרון": "sharon_district",
+    "רמת ישי": "haifa_district",
+    "רעננה": "sharon_district",
+    "שאר ישוב": "north_district",
+    "שדה דוד": "south_district",
+    "שדמה": "center_district",
+    "שדרות": "south_district",
+    "שובל": "south_district",
+    "שוהם": "center_district",
+    "שערי תקווה": "center_district",
+    "שפיים": "sharon_district",
+    "שפרעם": "north_district",
+    "תימורים": "center_district",
+    "תל אביב - יפו": "gush_dan_district",
+    "תל קציר": "north_district",
+    "תל שבע": "south_district",
+    "תלמי יחיאל": "center_district",
+    "תלמי יפה": "center_district"
+  },
+  "unresolved": [
+    {
+      "key": "קריית גת",
+      "district": "south_district"
+    },
+    {
+      "key": "קריית מלאכי",
+      "district": "south_district"
+    },
+    {
+      "key": "ניר העגלה",
+      "district": "south_district"
+    },
+    {
+      "key": "קריית יערים",
+      "district": "jerusalem_district"
+    },
+    {
+      "key": "קריית יובל",
+      "district": "jerusalem_district"
+    },
+    {
+      "key": "קריית מנחם",
+      "district": "jerusalem_district"
+    },
+    {
+      "key": "גבעת משואה",
+      "district": "jerusalem_district"
+    },
+    {
+      "key": "קריית ארבע",
+      "district": "yosh_district"
+    },
+    {
+      "key": "גינות שומרון",
+      "district": "yosh_district"
+    },
+    {
+      "key": "קריית עקרון",
+      "district": "center_district"
+    },
+    {
+      "key": "בני עייש",
+      "district": "center_district"
+    },
+    {
+      "key": "צריפין",
+      "district": "center_district"
+    },
+    {
+      "key": "כפר בילו",
+      "district": "center_district"
+    },
+    {
+      "key": "קריית אונו",
+      "district": "gush_dan_district"
+    },
+    {
+      "key": "כוכב יאיר צור יגאל",
+      "district": "gush_dan_district"
+    },
+    {
+      "key": "פרדס חנה כרכור",
+      "district": "sharon_district"
+    },
+    {
+      "key": "גבעת עדה",
+      "district": "sharon_district"
+    },
+    {
+      "key": "בית חרות",
+      "district": "sharon_district"
+    },
+    {
+      "key": "נווה איתמר",
+      "district": "sharon_district"
+    },
+    {
+      "key": "עמק חפר",
+      "district": "sharon_district"
+    },
+    {
+      "key": "קריית אתא",
+      "district": "haifa_district"
+    },
+    {
+      "key": "קריית ביאליק",
+      "district": "haifa_district"
+    },
+    {
+      "key": "קריית מוצקין",
+      "district": "haifa_district"
+    },
+    {
+      "key": "קריית ים",
+      "district": "haifa_district"
+    },
+    {
+      "key": "עוספיה",
+      "district": "haifa_district"
+    },
+    {
+      "key": "קריית טבעון",
+      "district": "haifa_district"
+    },
+    {
+      "key": "נצרת עילית",
+      "district": "north_district"
+    },
+    {
+      "key": "קריית שמונה",
+      "district": "north_district"
+    },
+    {
+      "key": "סחנין",
+      "district": "north_district"
+    },
+    {
+      "key": "גוש חלב",
+      "district": "north_district"
+    },
+    {
+      "key": "נווה אטיב",
+      "district": "north_district"
+    },
+    {
+      "key": "מעלות",
+      "district": "north_district"
+    },
+    {
+      "key": "דובב",
+      "district": "north_district"
+    },
+    {
+      "key": "ניר דוד",
+      "district": "north_district"
+    },
+    {
+      "key": "עין חרוד",
+      "district": "north_district"
+    },
+    {
+      "key": "עין חרוד מאוחד",
+      "district": "north_district"
+    },
+    {
+      "key": "גבעות עדן",
+      "district": "north_district"
+    },
+    {
+      "key": "גבעת אסף",
+      "district": "north_district"
+    },
+    {
+      "key": "גבעת חביבה",
+      "district": "north_district"
+    },
+    {
+      "key": "גבעת חיים",
+      "district": "north_district"
+    }
+  ],
+  "apiCount": 1268,
+  "records": 1272
+}

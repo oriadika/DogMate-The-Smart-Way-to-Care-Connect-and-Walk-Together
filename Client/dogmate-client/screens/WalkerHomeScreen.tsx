@@ -68,7 +68,9 @@ const WalkerHomeScreen = ({ navigation, route }: any) => {
               <Ionicons name="settings-outline" size={28} color="#5C4033" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.subtitle}>מרכז הדוגווקר — כאן יופיעו בקשות ופרטי עבודה בהמשך</Text>
+          <Text style={styles.subtitle}>
+            מרכז הדוגווקר — שירות, ביקורות וטיולים במקום אחד
+          </Text>
         </View>
 
         <TouchableOpacity
@@ -88,7 +90,7 @@ const WalkerHomeScreen = ({ navigation, route }: any) => {
           }}
         >
           <FontAwesome5 name="id-card" size={22} color={PRIMARY_COLOR} />
-          <Text style={styles.cardTitle}>פרופיל מקצועי</Text>
+          <Text style={styles.cardTitle}>ניהול השירות שלי</Text>
           <Text style={styles.cardHint}>זמינות, ערים ותעריפים</Text>
         </TouchableOpacity>
 
@@ -109,7 +111,7 @@ const WalkerHomeScreen = ({ navigation, route }: any) => {
           }}
         >
           <Ionicons name="star-outline" size={26} color={PRIMARY_COLOR} />
-          <Text style={styles.cardTitle}>ביקורות</Text>
+          <Text style={styles.cardTitle}>הביקורות שלי</Text>
           <Text style={styles.cardHint}>כל הביקורות והדירוגים מבעלי כלבים</Text>
         </TouchableOpacity>
 
@@ -130,8 +132,8 @@ const WalkerHomeScreen = ({ navigation, route }: any) => {
           }}
         >
           <Ionicons name="calendar-outline" size={24} color={PRIMARY_COLOR} />
-          <Text style={styles.cardTitle}>לוח זמנים</Text>
-          <Text style={styles.cardHint}>הגדר שעות זמינות</Text>
+          <Text style={styles.cardTitle}>הטיולים שלי</Text>
+          <Text style={styles.cardHint}>ניהול לו״ז, טיולים קרובים והיסטוריה</Text>
         </TouchableOpacity>
       </ScrollView>
 
