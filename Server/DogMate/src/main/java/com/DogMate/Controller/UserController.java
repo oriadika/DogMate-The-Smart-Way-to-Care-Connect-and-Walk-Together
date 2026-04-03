@@ -5,6 +5,7 @@ import com.DogMate.Domain.RegularUser;
 import com.DogMate.Domain.Ping;
 import com.DogMate.Service.DogWalkerService;
 import com.DogMate.Service.UserService;
+import com.DogMate.util.PhoneValidation;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +56,7 @@ public class UserController {
             }
 
             String role = normalizeRegistrationRole(request.getUserRole());
+            String phoneDigits = PhoneValidation.requireValidIsraeliMobile(request.getPhoneNumber());
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -65,7 +67,8 @@ public class UserController {
                     request.getEmail(),
                     request.getPassword(),
                     request.getFirstName(),
-                    request.getLastName()
+                    request.getLastName(),
+                    phoneDigits
                 );
                 response.put("userId", newWalker.getId());
                 response.put("email", newWalker.getEmail());
@@ -75,7 +78,8 @@ public class UserController {
                     request.getEmail(),
                     request.getPassword(),
                     request.getFirstName(),
-                    request.getLastName()
+                    request.getLastName(),
+                    phoneDigits
                 );
                 response.put("userId", newUser.getId());
                 response.put("email", newUser.getEmail());
@@ -672,6 +676,7 @@ public class UserController {
         private String password;
         private String firstName;
         private String lastName;
+        private String phoneNumber;
         /** "owner" (default) or "walker" */
         private String userRole;
         private boolean isLoggedIn;
@@ -711,6 +716,14 @@ public class UserController {
 
         public void setLastName(String lastName) {
             this.lastName = lastName;
+        }
+
+        public String getPhoneNumber() {
+            return phoneNumber;
+        }
+
+        public void setPhoneNumber(String phoneNumber) {
+            this.phoneNumber = phoneNumber;
         }
 
         public String getUserRole() {

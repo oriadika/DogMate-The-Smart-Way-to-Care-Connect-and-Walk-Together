@@ -45,6 +45,7 @@ class DogWalkerControllerTest {
         UUID id = UUID.randomUUID();
         DogWalkerUser walker = new DogWalkerUser(
                 id, "walker@test.com", "hash", "Jane", "Walker");
+        walker.setPhoneNumber("0501234567");
         walker.getCityOfferings().add(new WalkerCityOffering("Haifa", "09:00-17:00", "80 ₪ לשעה"));
         when(dogWalkerService.getProfessionalProfile(id)).thenReturn(walker);
         when(dogWalkerService.getRatingSummaryForWalker(eq(id), isNull()))
@@ -55,6 +56,7 @@ class DogWalkerControllerTest {
                 .andExpect(jsonPath("$.email").value("walker@test.com"))
                 .andExpect(jsonPath("$.firstName").value("Jane"))
                 .andExpect(jsonPath("$.lastName").value("Walker"))
+                .andExpect(jsonPath("$.phoneNumber").value("0501234567"))
                 .andExpect(jsonPath("$.cityOfferings[0].city").value("Haifa"))
                 .andExpect(jsonPath("$.cityOfferings[0].availability").value("09:00-17:00"))
                 .andExpect(jsonPath("$.cityOfferings[0].pricing").value("80 ₪ לשעה"));
@@ -65,6 +67,7 @@ class DogWalkerControllerTest {
         UUID id = UUID.randomUUID();
         DogWalkerUser walker = new DogWalkerUser(
                 id, "walker@test.com", "hash", "Jane", "Walker");
+        walker.setPhoneNumber("0501234567");
         walker.getCityOfferings().add(new WalkerCityOffering("Haifa", "09:00-17:00", "80 ₪ לשעה"));
         when(dogWalkerService.getWalkersWithProfessionalDetails()).thenReturn(List.of(walker));
         when(dogWalkerService.getRatingSummaryForWalker(eq(id), isNull()))
@@ -75,6 +78,7 @@ class DogWalkerControllerTest {
                 .andExpect(jsonPath("$[0].email").value("walker@test.com"))
                 .andExpect(jsonPath("$[0].firstName").value("Jane"))
                 .andExpect(jsonPath("$[0].averageRating").value(4.5))
+                .andExpect(jsonPath("$[0].phoneNumber").value("0501234567"))
                 .andExpect(jsonPath("$[0].cityOfferings[0].city").value("Haifa"));
     }
 

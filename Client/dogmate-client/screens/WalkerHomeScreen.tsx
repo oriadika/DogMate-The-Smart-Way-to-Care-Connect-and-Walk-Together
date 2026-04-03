@@ -1,5 +1,4 @@
-import React, { useCallback, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import React from 'react';
 import {
   SafeAreaView,
   View,
@@ -9,7 +8,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 
 const PRIMARY_COLOR = '#7FB069';
 const BG_COLOR = '#f5e6d3';
@@ -17,30 +16,10 @@ const TEXT_DARK = '#5C4033';
 const CARD_BG = '#faf0e6';
 
 const WalkerHomeScreen = ({ navigation, route }: any) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'profile'>('home');
-
-  /** חזרה ממסכים אחרים (למשל פרופיל) משאירה את הקומפוננטה עם activeTab ישן — מאפסים בפוקוס */
-  useFocusEffect(
-    useCallback(() => {
-      setActiveTab('home');
-    }, [])
-  );
-
   const currentUserId = route?.params?.userId;
   const firstName = route?.params?.userFirstName || '';
   const lastName = route?.params?.userLastName || '';
   const displayName = `${firstName} ${lastName}`.trim() || 'דוגווקר';
-
-  const goProfile = () => {
-    setActiveTab('profile');
-    navigation.navigate('Profile', {
-      userId: currentUserId,
-      userFirstName: firstName,
-      userLastName: lastName,
-      userRole: 'walker',
-      email: route?.params?.email,
-    });
-  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -136,29 +115,6 @@ const WalkerHomeScreen = ({ navigation, route }: any) => {
           <Text style={styles.cardHint}>ניהול לו״ז, טיולים קרובים והיסטוריה</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => setActiveTab('home')}
-        >
-          <Ionicons
-            name={activeTab === 'home' ? 'home' : 'home-outline'}
-            size={24}
-            color={activeTab === 'home' ? PRIMARY_COLOR : '#9CA3AF'}
-          />
-          <Text style={[styles.navLabel, activeTab === 'home' && styles.navLabelActive]}>בית</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navItem} onPress={goProfile}>
-          <FontAwesome5
-            name="walking"
-            size={22}
-            color={activeTab === 'profile' ? PRIMARY_COLOR : '#9CA3AF'}
-          />
-          <Text style={[styles.navLabel, activeTab === 'profile' && styles.navLabelActive]}>טיולים</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 };
@@ -176,7 +132,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 100,
+    paddingBottom: 28,
   },
   header: {
     marginBottom: 28,
@@ -234,29 +190,5 @@ const styles = StyleSheet.create({
     color: '#8B7355',
     textAlign: 'right',
     alignSelf: 'stretch',
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'space-around',
-  },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  navLabel: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  navLabelActive: {
-    color: PRIMARY_COLOR,
-    fontWeight: '600',
   },
 });

@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { BASE_URL } from './config';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.131:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.132:8080/api';
 
 let authToken: string | null = null;
 
@@ -46,6 +46,8 @@ export interface RegisterUserPayload {
   password: string;
   firstName: string;
   lastName: string;
+  /** Israeli mobile; required; validated on server */
+  phoneNumber: string;
   profileImageUrl?: string;
   userRole?: 'owner' | 'walker';
 }
@@ -117,6 +119,8 @@ export interface ProfessionalProfileResponse {
   email: string;
   firstName: string;
   lastName: string;
+  /** From registration phone; mapped from API (camelCase/snake_case) */
+  phoneNumber?: string | null;
   cityOfferings: CityOffering[];
   averageRating: number;
   ratingsCount: number;
@@ -362,6 +366,20 @@ export const dogAPI = {
   },
 };
 
+function mapProfessionalProfileResponse(row: unknown): ProfessionalProfileResponse {
+  const o = row as Record<string, unknown>;
+  const merged =
+    o.phoneNumber ?? o.phone_number ?? o.PhoneNumber ?? o.phone;
+  let phoneNumber: string | null = null;
+  if (merged != null && merged !== '') {
+    phoneNumber =
+      typeof merged === 'number' && Number.isFinite(merged)
+        ? String(Math.trunc(merged))
+        : String(merged);
+  }
+  return { ...o, phoneNumber } as ProfessionalProfileResponse;
+}
+
 export const dogWalkerAPI = {
   /**
    * Dog walkers who saved at least one professional offering (city, availability, pricing).
@@ -371,7 +389,8 @@ export const dogWalkerAPI = {
       const response = await apiClient.get('/dog-walkers/available-with-professional-profile', {
         params: ownerId ? { ownerId } : undefined,
       });
-      return Array.isArray(response.data) ? response.data : [];
+      const list = Array.isArray(response.data) ? response.data : [];
+      return list.map(mapProfessionalProfileResponse);
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.error || error.message || 'Failed to load available dog walkers';
@@ -434,7 +453,7 @@ export const dogWalkerAPI = {
   getProfessionalProfile: async (userId: string): Promise<ProfessionalProfileResponse> => {
     try {
       const response = await apiClient.get(`/dog-walkers/${userId}/professional-profile`);
-      return response.data;
+      return mapProfessionalProfileResponse(response.data);
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.error || error.message || 'Failed to load professional profile';
@@ -449,7 +468,7 @@ export const dogWalkerAPI = {
   ): Promise<ProfessionalProfileResponse> => {
     try {
       const response = await apiClient.put(`/dog-walkers/${userId}/professional-profile`, body);
-      return response.data;
+      return mapProfessionalProfileResponse(response.data);
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.error || error.message || 'Failed to update professional profile';

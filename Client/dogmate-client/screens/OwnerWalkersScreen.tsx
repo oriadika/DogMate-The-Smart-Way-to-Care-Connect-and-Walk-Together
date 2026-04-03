@@ -10,6 +10,7 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  Pressable,
   Alert,
   ActivityIndicator,
   Modal,
@@ -18,7 +19,8 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { FontAwesome5, Ionicons } from '@expo/vector-icons';
+import * as Linking from 'expo-linking';
+import { FontAwesome, FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { userAPI, dogWalkerAPI, type ProfessionalProfileResponse } from '../services/api';
 import HebrewAsciiParensText from '../components/HebrewAsciiParensText';
 import { formatLocationLineForStoredCity } from '../utils/locationFieldCodec';
@@ -37,9 +39,27 @@ import {
   hasActiveFilters,
   type WalkerSortOption,
 } from '../utils/walkerListQuery';
+import {
+  digitsForTelDial,
+  normalizeIsraeliMobileToDigits,
+  normalizeIsraeliMobileToWhatsAppPhoneParam,
+} from '../utils/phoneValidation';
 
 const PRIMARY_COLOR = '#7FB069';
+const CALL_BUTTON_GREEN = '#34C759';
+const WHATSAPP_GREEN = '#25D366';
+const WHATSAPP_PREFILL_MESSAGE =
+  'שלום, ראיתי את הפרופיל שלך ב-DogMate ואשמח לקבוע טיול לכלב שלי!';
 const USERS_REFRESH_INTERVAL_MS = 5000;
+
+function getWalkerPhoneRaw(item: ProfessionalProfileResponse): string | number | null | undefined {
+  const ext = item as ProfessionalProfileResponse & {
+    phone_number?: string | null;
+    PhoneNumber?: string | null;
+    phone?: string | null;
+  };
+  return item.phoneNumber ?? ext.phone_number ?? ext.PhoneNumber ?? ext.phone ?? undefined;
+}
 
 const formatReviewDate = (rawDate: string | null | undefined): string => {
   if (!rawDate) return '';
@@ -189,6 +209,49 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
     [availableWalkers, walkerListFilters, walkerListSort, walkerDistanceByUserId]
   );
 
+  const handleCall = useCallback(async (phone: string | number | null | undefined) => {
+    const digits = digitsForTelDial(phone);
+    if (!digits) {
+      Alert.alert('אין מספר טלפון', 'לא רשום מספר התקשרות לדוגווקר זה.');
+      return;
+    }
+    const url = `tel:${digits}`;
+    try {
+      if (Platform.OS === 'android') {
+        const ok = await Linking.canOpenURL(url);
+        if (!ok) {
+          Alert.alert('לא ניתן להתקשר', 'המכשיר לא תומך בהתקשרות ישירה.');
+          return;
+        }
+      }
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('שגיאה', 'לא ניתן לפתוח את החייגן.');
+    }
+  }, []);
+
+  const handleWhatsApp = useCallback(async (phone: string | number | null | undefined) => {
+    const waPhone = normalizeIsraeliMobileToWhatsAppPhoneParam(phone);
+    if (!waPhone) {
+      Alert.alert('אין מספר טלפון', 'לא רשום מספר התקשרות לדוגווקר זה.');
+      return;
+    }
+    const text = encodeURIComponent(WHATSAPP_PREFILL_MESSAGE);
+    const url = `whatsapp://send?phone=${waPhone}&text=${text}`;
+    try {
+      if (Platform.OS === 'android') {
+        const ok = await Linking.canOpenURL(url);
+        if (!ok) {
+          Alert.alert('לא ניתן לפתוח', 'ודא ש-WhatsApp מותקן במכשיר.');
+          return;
+        }
+      }
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('שגיאה', 'לא ניתן לפתוח את WhatsApp.');
+    }
+  }, []);
+
   const submitWalkerRating = async () => {
     if (!ownerId || !selectedWalker) {
       Alert.alert('שגיאה', 'לא ניתן לשלוח דירוג כרגע');
@@ -219,40 +282,77 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
     const walkerKey = String(item.userId);
     const isReviewsExpanded = expandedReviewsByWalker[walkerKey] === true;
     const currentOwnerId = String(ownerId || '');
+    const canCallWalker = normalizeIsraeliMobileToDigits(getWalkerPhoneRaw(item)) != null;
 
     return (
       <View style={styles.walkerProfessionalCard}>
-        <View style={styles.walkerCardHeader}>
-          <View style={styles.avatar}>
-            <FontAwesome5 name="walking" size={20} color="#fff" />
+        <View style={styles.walkerCardHeaderBlock} collapsable={false}>
+          <View style={styles.walkerCardHeaderRow}>
+            <View style={styles.avatar}>
+              <FontAwesome5 name="walking" size={20} color="#fff" />
+            </View>
+            <View style={styles.userInfo}>
+              <Text style={styles.userName}>{displayName}</Text>
+              <Text style={styles.userMeta}>דוגווקר</Text>
+            </View>
+            <View style={styles.headerContactColumn}>
+              <View style={styles.headerContactButtons}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.whatsappButton,
+                    !canCallWalker && styles.callButtonDisabled,
+                    pressed && styles.callButtonPressed,
+                  ]}
+                  onPress={() => handleWhatsApp(getWalkerPhoneRaw(item))}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="שלח הודעת WhatsApp לדוגווקר"
+                  android_ripple={{ color: 'rgba(255,255,255,0.35)', borderless: true }}
+                >
+                  <FontAwesome name="whatsapp" size={22} color="#fff" />
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.callButton,
+                    !canCallWalker && styles.callButtonDisabled,
+                    pressed && styles.callButtonPressed,
+                  ]}
+                  onPress={() => handleCall(getWalkerPhoneRaw(item))}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="התקשר לדוגווקר"
+                  android_ripple={{ color: 'rgba(255,255,255,0.35)', borderless: true }}
+                >
+                  <Ionicons name="call" size={18} color="#fff" />
+                </Pressable>
+              </View>
+              {item.alreadyRatedByCurrentOwner ? (
+                <View style={styles.ratedBadgeUnderCalls}>
+                  <Text style={styles.ratedBadgeText}>כבר דירגת</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.addRatingButtonUnderCalls}
+                  onPress={() => {
+                    setSelectedWalker(item);
+                    setSelectedStars(5);
+                    setRatingComment('');
+                    setRatingModalVisible(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.addRatingButtonText}>הוספת דירוג</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>{displayName}</Text>
-            <Text style={styles.userMeta}>דוגווקר</Text>
-            <Text style={styles.ratingSummaryText}>
+          <View style={styles.walkerCardHeaderRatingSummaryRow}>
+            <Text style={[styles.ratingSummaryText, styles.ratingSummaryInRatingRow]}>
               דירוג:{' '}
               <Text style={styles.ratingNumberHighlight}>{avgRating}</Text>{' '}
               <Text style={styles.goldStarText}>★</Text> ({item.ratingsCount || 0})
             </Text>
           </View>
-          {item.alreadyRatedByCurrentOwner ? (
-            <View style={styles.ratedBadge}>
-              <Text style={styles.ratedBadgeText}>כבר דירגת</Text>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.addRatingButton}
-              onPress={() => {
-                setSelectedWalker(item);
-                setSelectedStars(5);
-                setRatingComment('');
-                setRatingModalVisible(true);
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.addRatingButtonText}>הוספת דירוג</Text>
-            </TouchableOpacity>
-          )}
         </View>
         {item.cityOfferings?.map((offering, idx) => {
           const loc = formatLocationLineForStoredCity(offering.city);
@@ -422,6 +522,8 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
         renderItem={renderWalkerProfessionalCard}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={listEmpty}
+        removeClippedSubviews={Platform.OS === 'android' ? false : undefined}
+        keyboardShouldPersistTaps="handled"
       />
 
       <WalkerFiltersModal
@@ -546,9 +648,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 12,
+    flexShrink: 0,
   },
   userInfo: {
     flex: 1,
+    minWidth: 0,
   },
   userName: {
     fontSize: 18,
@@ -590,43 +694,95 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0D5C7',
   },
-  walkerCardHeader: {
+  walkerCardHeaderBlock: {
+    marginBottom: 10,
+  },
+  walkerCardHeaderRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    marginBottom: 10,
+  },
+  headerContactColumn: {
+    alignItems: 'center',
+    marginStart: 8,
+    flexShrink: 0,
+    gap: 8,
+  },
+  walkerCardHeaderRatingSummaryRow: {
+    marginTop: 10,
+    width: '100%',
+    alignItems: 'flex-end',
+  },
+  ratingSummaryInRatingRow: {
+    marginTop: 0,
+    flexShrink: 1,
+    alignSelf: 'stretch',
+    textAlign: 'right',
   },
   ratingSummaryText: {
     marginTop: 4,
-    fontSize: 14,
+    fontSize: 17,
     color: '#8B7355',
     textAlign: 'right',
   },
   ratingNumberHighlight: {
-    fontSize: 15,
+    fontSize: 19,
     fontWeight: '800',
   },
   goldStarText: {
     color: '#F5B301',
     fontWeight: '700',
   },
-  addRatingButton: {
+  headerContactButtons: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+  },
+  whatsappButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: WHATSAPP_GREEN,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+    elevation: 3,
+  },
+  callButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: CALL_BUTTON_GREEN,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+    zIndex: 2,
+    elevation: 3,
+  },
+  callButtonDisabled: {
+    opacity: 0.35,
+  },
+  callButtonPressed: {
+    opacity: 0.85,
+  },
+  addRatingButtonUnderCalls: {
     backgroundColor: PRIMARY_COLOR,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
-    marginLeft: 8,
+    alignSelf: 'center',
   },
   addRatingButtonText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '700',
   },
-  ratedBadge: {
+  ratedBadgeUnderCalls: {
     backgroundColor: '#E0D5C7',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
-    marginLeft: 8,
+    alignSelf: 'center',
   },
   ratedBadgeText: {
     color: '#5C4033',

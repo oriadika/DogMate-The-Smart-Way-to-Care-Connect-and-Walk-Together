@@ -27,6 +27,10 @@ public class UserAccount {
     @Column(name = "suspended", nullable = false, updatable = true, columnDefinition = "BOOLEAN DEFAULT false")
     private boolean suspended = false;
 
+    /** Phone from registration (nullable for legacy rows). */
+    @Column(name = "phone_number", length = 32)
+    private String phoneNumber;
+
     // Default constructor required by JPA
     protected UserAccount() {
         // JPA requires a no-args constructor
@@ -163,5 +167,13 @@ public class UserAccount {
 
     public void setSuspended(boolean suspended) {
         this.suspended = suspended;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber != null && !phoneNumber.isBlank() ? phoneNumber.trim() : null;
     }
 }

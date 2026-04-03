@@ -43,9 +43,19 @@ public class DogWalkerService {
     @Transactional
     public DogWalkerUser registerDogWalker(String email, String password,
                                             String firstName, String lastName) {
+        return registerDogWalker(email, password, firstName, lastName, null);
+    }
+
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    @Transactional
+    public DogWalkerUser registerDogWalker(String email, String password,
+                                            String firstName, String lastName, String phoneNumber) {
         boolean emailExists = userRepository.existsByEmail(email);
         DogWalkerUser newUser = DogWalkerUser.create(
                 email, password, firstName, lastName, emailExists, passwordEncoder::encode);
+        if (phoneNumber != null && !phoneNumber.isBlank()) {
+            newUser.setPhoneNumber(phoneNumber);
+        }
         return dogWalkerRepository.save(newUser);
     }
 

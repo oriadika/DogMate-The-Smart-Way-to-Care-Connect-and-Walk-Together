@@ -4,9 +4,9 @@ import { BASE_URL } from './config';
 
 
 // Use ws:// protocol for WebSocket instead of http://
-const WEBSOCKET_URL = 'ws://192.168.1.131:8080/ws-ping';
+const WEBSOCKET_URL = 'ws://192.168.1.132:8080/ws-ping';
 // Fallback SockJS endpoint
-const SOCKJS_URL = 'http://192.168.1.131:8080/ws-ping';
+const SOCKJS_URL = 'http://192.168.1.132:8080/ws-ping';
 
 
 interface PingNotification {
