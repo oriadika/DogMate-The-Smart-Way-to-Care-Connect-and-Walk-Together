@@ -295,63 +295,63 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
               <Text style={styles.userName}>{displayName}</Text>
               <Text style={styles.userMeta}>דוגווקר</Text>
             </View>
-            <View style={styles.headerContactColumn}>
-              <View style={styles.headerContactButtons}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.whatsappButton,
-                    !canCallWalker && styles.callButtonDisabled,
-                    pressed && styles.callButtonPressed,
-                  ]}
-                  onPress={() => handleWhatsApp(getWalkerPhoneRaw(item))}
-                  hitSlop={12}
-                  accessibilityRole="button"
-                  accessibilityLabel="שלח הודעת WhatsApp לדוגווקר"
-                  android_ripple={{ color: 'rgba(255,255,255,0.35)', borderless: true }}
-                >
-                  <FontAwesome name="whatsapp" size={22} color="#fff" />
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.callButton,
-                    !canCallWalker && styles.callButtonDisabled,
-                    pressed && styles.callButtonPressed,
-                  ]}
-                  onPress={() => handleCall(getWalkerPhoneRaw(item))}
-                  hitSlop={12}
-                  accessibilityRole="button"
-                  accessibilityLabel="התקשר לדוגווקר"
-                  android_ripple={{ color: 'rgba(255,255,255,0.35)', borderless: true }}
-                >
-                  <Ionicons name="call" size={18} color="#fff" />
-                </Pressable>
-              </View>
-              {item.alreadyRatedByCurrentOwner ? (
-                <View style={styles.ratedBadgeUnderCalls}>
-                  <Text style={styles.ratedBadgeText}>כבר דירגת</Text>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.addRatingButtonUnderCalls}
-                  onPress={() => {
-                    setSelectedWalker(item);
-                    setSelectedStars(5);
-                    setRatingComment('');
-                    setRatingModalVisible(true);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.addRatingButtonText}>הוספת דירוג</Text>
-                </TouchableOpacity>
-              )}
+            <View style={styles.headerContactButtons}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.whatsappButton,
+                  !canCallWalker && styles.callButtonDisabled,
+                  pressed && styles.callButtonPressed,
+                ]}
+                onPress={() => handleWhatsApp(getWalkerPhoneRaw(item))}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="שלח הודעת WhatsApp לדוגווקר"
+                android_ripple={{ color: 'rgba(255,255,255,0.35)', borderless: true }}
+              >
+                <FontAwesome name="whatsapp" size={22} color="#fff" />
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.callButton,
+                  !canCallWalker && styles.callButtonDisabled,
+                  pressed && styles.callButtonPressed,
+                ]}
+                onPress={() => handleCall(getWalkerPhoneRaw(item))}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="התקשר לדוגווקר"
+                android_ripple={{ color: 'rgba(255,255,255,0.35)', borderless: true }}
+              >
+                <Ionicons name="call" size={18} color="#fff" />
+              </Pressable>
             </View>
           </View>
           <View style={styles.walkerCardHeaderRatingSummaryRow}>
-            <Text style={[styles.ratingSummaryText, styles.ratingSummaryInRatingRow]}>
-              דירוג:{' '}
-              <Text style={styles.ratingNumberHighlight}>{avgRating}</Text>{' '}
-              <Text style={styles.goldStarText}>★</Text> ({item.ratingsCount || 0})
-            </Text>
+            <View style={styles.ratingSummaryLineTextBlock}>
+              <Text style={[styles.ratingSummaryText, styles.ratingSummaryInRatingRow, styles.ratingSummaryOnLine]}>
+                דירוג:{' '}
+                <Text style={styles.ratingNumberHighlight}>{avgRating}</Text>{' '}
+                <Text style={styles.goldStarText}>★</Text> ({item.ratingsCount || 0})
+              </Text>
+            </View>
+            {item.alreadyRatedByCurrentOwner ? (
+              <View style={styles.ratedBadgeInRatingRow}>
+                <Text style={styles.ratedBadgeText}>כבר דירגת</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.addRatingButtonInRatingRow}
+                onPress={() => {
+                  setSelectedWalker(item);
+                  setSelectedStars(5);
+                  setRatingComment('');
+                  setRatingModalVisible(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.addRatingButtonText}>הוספת ביקורת</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
         {item.cityOfferings?.map((offering, idx) => {
@@ -701,15 +701,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
   },
-  headerContactColumn: {
-    alignItems: 'center',
-    marginStart: 8,
-    flexShrink: 0,
-    gap: 8,
-  },
   walkerCardHeaderRatingSummaryRow: {
     marginTop: 10,
     width: '100%',
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ratingSummaryLineTextBlock: {
+    flex: 1,
+    minWidth: 0,
     alignItems: 'flex-end',
   },
   ratingSummaryInRatingRow: {
@@ -717,6 +718,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     alignSelf: 'stretch',
     textAlign: 'right',
+  },
+  ratingSummaryOnLine: {
+    marginTop: 0,
   },
   ratingSummaryText: {
     marginTop: 4,
@@ -737,6 +741,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flexShrink: 0,
+    marginStart: 8,
   },
   whatsappButton: {
     width: 44,
@@ -765,24 +770,25 @@ const styles = StyleSheet.create({
   callButtonPressed: {
     opacity: 0.85,
   },
-  addRatingButtonUnderCalls: {
+  addRatingButtonInRatingRow: {
     backgroundColor: PRIMARY_COLOR,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 10,
-    alignSelf: 'center',
+    flexShrink: 0,
+    marginLeft: 6,
   },
   addRatingButtonText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '700',
   },
-  ratedBadgeUnderCalls: {
+  ratedBadgeInRatingRow: {
     backgroundColor: '#E0D5C7',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: 10,
-    alignSelf: 'center',
+    flexShrink: 0,
   },
   ratedBadgeText: {
     color: '#5C4033',
