@@ -39,7 +39,11 @@ public class DogController {
             for (Dog dog : dogs) {
                 Map<String, Object> dogResponse = createDogResponse(dog);
                 List<String> users_related = dog.getDogRelationships().stream().filter(dogRelationship ->
-                        dogRelationship.getDogID() == dog.getID()).map(dogRelationship -> dogRelationship.getRegularUser().getFirst_name() + " " + dogRelationship.getRegularUser().getLast_name()).toList();
+                        dogRelationship.getDogID() == dog.getID())
+                        .map(dogRelationship ->
+                                dogRelationship.getRegularUser().getFirst_name() +
+                                        " " + dogRelationship.getRegularUser().getLast_name()
+                                        + "(" + dogRelationship.getRegularUser().getEmail() + ")").toList();
                 dogResponse.put("users_related", users_related);
                 dogsResponse.add(dogResponse);
             }
