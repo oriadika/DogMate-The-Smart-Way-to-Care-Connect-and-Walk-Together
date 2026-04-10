@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { BASE_URL } from './config';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.119:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://172.20.10.6:8080/api';
 
 let authToken: string | null = null;
 
@@ -261,6 +261,16 @@ export const userAPI = {
     }
   },
 
+  searchUsers: async (query: string) => {
+    try {
+      const response = await apiClient.get(`/users/search?query=${query}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to search users';
+      throw new Error(errorMessage);
+    }
+  },
+
   /**
    * Note: Ping notifications are now received via WebSocket in real-time.
    * No polling or marking as read needed.
@@ -309,7 +319,44 @@ export const dogAPI = {
       throw new Error(errorMessage);
     }
   },
-};
+
+  /**
+   * Delete a dog for a user
+   */
+  deleteDogForever: async (dogId: string) => {
+    try {
+      const response = await apiClient.delete(`/dogs/${dogId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete dog';
+      console.error("Failed to delete dog:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Get all dogs
+   */
+  getAllDogs: async () => {
+    try {
+      const response = await apiClient.get('/dogs');
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch dogs';
+      console.error("Failed to get all dogs:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+  searchDogs: async (query: string) => {
+    try {
+      const response = await apiClient.get(`/dogs/search?query=${query}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to search dogs';
+      throw new Error(errorMessage);
+    }
+  },
+}
 
 // Reminder API methods
 export const reminderAPI = {

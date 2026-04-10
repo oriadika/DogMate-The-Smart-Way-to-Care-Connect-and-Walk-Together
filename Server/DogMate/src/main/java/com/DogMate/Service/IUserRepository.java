@@ -1,6 +1,10 @@
 package com.DogMate.Service;
 
 import com.DogMate.Domain.UserAccount;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -38,4 +42,27 @@ public interface IUserRepository {
      * @param id The UUID of the user to delete
      */
     void deleteById(UUID id);
+
+    /**
+     * Return all users in the
+     * @return users
+     */
+    List<UserAccount> findAll();
+
+    @Query("""
+    SELECT u FROM UserAccount u
+    WHERE LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%'))
+       OR (
+            TYPE(u) = RegularUser AND (
+                LOWER(TREAT(u AS RegularUser).first_name) LIKE LOWER(CONCAT('%', :text, '%'))
+                OR LOWER(TREAT(u AS RegularUser).last_name) LIKE LOWER(CONCAT('%', :text, '%'))
+                OR LOWER(CONCAT(
+                    TREAT(u AS RegularUser).first_name,
+                    ' ',
+                    TREAT(u AS RegularUser).last_name
+                )) LIKE LOWER(CONCAT('%', :text, '%'))
+            )
+       )
+""")
+    List<UserAccount> searchUsers(@Param("text") String text);
 }

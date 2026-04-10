@@ -77,23 +77,32 @@ const HomeScreen = ({ navigation, route }: any) => {
   // Load data when screen is focused (including when returning from AddDog screen)
   useFocusEffect(
     React.useCallback(() => {
-      setActiveTab('home'); // Set home tab as active when screen is focused
-      if (currentUserId) {
-        const cached = homeDataCache.get(currentUserId);
-        const shouldFetch = !cached || dirtyHomeDataUsers.has(currentUserId);
+      setActiveTab('home');
 
-        if (cached) {
-          setUserName(cached.userName || 'חברים');
-          setUserLastName(cached.userLastName || '');
-          setDogs(cached.dogs || []);
-          setReminders(cached.reminders || []);
-          setLoading(false);
-        }
+      if (!currentUserId) return;
 
-        if (shouldFetch) {
-          loadUserAndDogs(currentUserId, currentUserName, { showLoader: !cached });
-        }
+      const cached = homeDataCache.get(currentUserId);
+      if (cached) {
+        setUserName(cached.userName || 'חברים');
+        setUserLastName(cached.userLastName || '');
+        setDogs(cached.dogs || []);
+        setReminders(cached.reminders || []);
+        setLoading(false);
+      } else {
+        setLoading(true);
       }
+
+      // Always fetch fresh data when screen gets focus
+      loadUserAndDogs(currentUserId, currentUserName, { showLoader: !cached });
+
+      // Keep screen fresh while user stays on it
+      const intervalId = setInterval(() => {
+        loadUserAndDogs(currentUserId, currentUserName, { showLoader: false });
+      }, 5000);
+
+      return () => {
+        clearInterval(intervalId);
+      };
     }, [currentUserId, currentUserName])
   );
 

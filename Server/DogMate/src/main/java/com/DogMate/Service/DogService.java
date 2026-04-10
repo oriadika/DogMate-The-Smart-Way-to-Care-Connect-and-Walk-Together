@@ -216,8 +216,16 @@ public class DogService {
             }
         }
 
-        dogRepository.deleteById(dogId);
-
+        List<UserAccount> allUsers = userRepository.findAll();
+        for (UserAccount user: allUsers){
+            if (user instanceof RegularUser) {
+                if (((RegularUser) user).getDogRelationships().stream()
+                        .map(DogRelationship::getDogID)
+                        .toList().contains(dogId)) {
+                    removeDogFromUser(user.getId(),dogId);
+                }
+            }
+        }
     }
 
     @Transactional
@@ -327,6 +335,20 @@ public class DogService {
         return dogRepository.findAll().stream().filter(dog -> dog.getDogRelationships().stream().anyMatch(rel -> rel.getRegularUser().getId().equals(userId))).collect(Collectors.toList());
     }
 
+    /**
+     * Get all dogs
+     * Service layer - only orchestration
+     * @return List of all dogs in the database
+     */
+    public java.util.List<Dog> getAllDogs() {
+        // Get all users from repository (orchestration)
+        // UserRepository extends JpaRepository which provides findAll() method
+        if (dogRepository instanceof com.DogMate.Infrastructure.DogRepository) {
+            return ((com.DogMate.Infrastructure.DogRepository) dogRepository).findAll();
+        }
+        throw new IllegalStateException("UserRepository is not properly configured");
+    }
+
     public List<FoodStockDTO> getUserFoodStocks(UUID userId) {
         List<Dog> userDogs = getDogsForUser(userId);
         List<FoodStock> userFoodStocks =  userDogs.stream()
@@ -423,5 +445,9 @@ public class DogService {
         dog.getDogMoodLogs().removeIf(log -> log.getId().equals(moodLogId));
 
         dogRepository.save(dog);
+    }
+
+    public List<Dog> searchDogs(String text){
+        return dogRepository.searchDogs(text.trim());
     }
 }

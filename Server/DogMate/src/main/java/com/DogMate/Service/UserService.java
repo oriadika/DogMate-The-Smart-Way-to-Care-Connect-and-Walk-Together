@@ -472,6 +472,16 @@ public class UserService {
         }
     }
 
+    /**
+     * Search for users that their emails or first or last name contains the parameter text
+     * @param text
+     * @return users
+     */
+    public List<UserAccount> searchUsers(String text){
+        String normalized = text == null ? "" : text.trim().replaceAll("\\s+", " ");
+        return userRepository.searchUsers(normalized);
+    }
+
     public boolean hasAtLeastOneDog(String email){
         if(!userRepository.existsByEmail(email)){
             throw new IllegalArgumentException("user not found with the given email");

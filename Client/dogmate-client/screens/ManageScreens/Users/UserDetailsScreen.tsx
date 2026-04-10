@@ -7,8 +7,8 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { userAPI } from '../../services/api';
-import { useUsers } from '../../contexts/UsersContext';
+import { userAPI } from '../../../services/api';
+import { useUsers } from '../../../contexts/UsersContext';
 
 const PRIMARY_COLOR = '#7FB069'; // matches HomeScreen (regular user)
 const DESTRUCTIVE_COLOR = '#E74C3C'; // matches HomeScreen delete
