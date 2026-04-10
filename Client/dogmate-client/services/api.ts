@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { BASE_URL } from './config';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.135:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.164:8080/api';
 
 let authToken: string | null = null;
 
@@ -411,7 +411,6 @@ export const dogAPI = {
       throw new Error(errorMessage);
     }
   },
-}
 };
 
 function mapProfessionalProfileResponse(row: unknown): ProfessionalProfileResponse {
