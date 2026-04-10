@@ -1,8 +1,11 @@
 package com.DogMate.Controller;
 
+import com.DogMate.Domain.DogWalkerUser;
 import com.DogMate.Domain.RegularUser;
 import com.DogMate.Domain.Ping;
+import com.DogMate.Service.DogWalkerService;
 import com.DogMate.Service.UserService;
+import com.DogMate.util.PhoneValidation;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,14 +26,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class UserController {
     
     private final UserService userService;
+    private final DogWalkerService dogWalkerService;
     private final SimpMessagingTemplate messagingTemplate;
     
     // In-memory ping storage: Map<toUserId, List<Ping>>
     private static final Map<String, List<Ping>> pingStorage = new ConcurrentHashMap<>();
 
     @Autowired
-    public UserController(UserService userService, SimpMessagingTemplate messagingTemplate) {
+    public UserController(UserService userService, DogWalkerService dogWalkerService,
+                          SimpMessagingTemplate messagingTemplate) {
         this.userService = userService;
+        this.dogWalkerService = dogWalkerService;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -49,21 +55,37 @@ public class UserController {
                     .body(createErrorResponse("Missing required fields"));
             }
 
-            // Register user
-            RegularUser newUser = userService.registerUser(
-                request.getEmail(),
-                request.getPassword(),
-                request.getFirstName(),
-                request.getLastName()
-            );
+            String role = normalizeRegistrationRole(request.getUserRole());
+            String phoneDigits = PhoneValidation.requireValidIsraeliMobile(request.getPhoneNumber());
 
-            // Create response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("message", "User registered successfully");
-            response.put("userId", newUser.getId());
-            response.put("email", newUser.getEmail());
-            
+
+            if ("walker".equals(role)) {
+                DogWalkerUser newWalker = dogWalkerService.registerDogWalker(
+                    request.getEmail(),
+                    request.getPassword(),
+                    request.getFirstName(),
+                    request.getLastName(),
+                    phoneDigits
+                );
+                response.put("userId", newWalker.getId());
+                response.put("email", newWalker.getEmail());
+                response.put("userRole", "walker");
+            } else {
+                RegularUser newUser = userService.registerUser(
+                    request.getEmail(),
+                    request.getPassword(),
+                    request.getFirstName(),
+                    request.getLastName(),
+                    phoneDigits
+                );
+                response.put("userId", newUser.getId());
+                response.put("email", newUser.getEmail());
+                response.put("userRole", "owner");
+            }
+
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
         } catch (IllegalArgumentException e) {
@@ -289,6 +311,11 @@ public class UserController {
                     userInfo.put("type", "RegularUser");
                     userInfo.put("firstName", regularUser.getFirst_name());
                     userInfo.put("lastName", regularUser.getLast_name());
+                } else if (user instanceof com.DogMate.Domain.DogWalkerUser) {
+                    com.DogMate.Domain.DogWalkerUser walker = (com.DogMate.Domain.DogWalkerUser) user;
+                    userInfo.put("type", "DogWalkerUser");
+                    userInfo.put("firstName", walker.getFirst_name());
+                    userInfo.put("lastName", walker.getLast_name());
                 } else if (user instanceof com.DogMate.Domain.AdminUser) {
                     com.DogMate.Domain.AdminUser adminUser = (com.DogMate.Domain.AdminUser) user;
                     userInfo.put("type", "AdminUser");
@@ -311,9 +338,9 @@ public class UserController {
         }
     }
 
-        /**
-     * Get all users
-     * GET /api/users
+    /**
+     * Get all logged-in users
+     * GET /api/users/logged
      */
     @GetMapping("/logged")
     @Cacheable(cacheNames = "loggedUsers")
@@ -343,6 +370,11 @@ public class UserController {
                         userInfo.put("latitude", regularUser.getLatitude());
                         userInfo.put("longitude", regularUser.getLongitude());
                     }
+                } else if (user instanceof com.DogMate.Domain.DogWalkerUser) {
+                    com.DogMate.Domain.DogWalkerUser walker = (com.DogMate.Domain.DogWalkerUser) user;
+                    userInfo.put("type", "DogWalkerUser");
+                    userInfo.put("firstName", walker.getFirst_name());
+                    userInfo.put("lastName", walker.getLast_name());
                 } else if (user instanceof com.DogMate.Domain.AdminUser) {
                     com.DogMate.Domain.AdminUser adminUser = (com.DogMate.Domain.AdminUser) user;
                     userInfo.put("type", "AdminUser");
@@ -625,6 +657,16 @@ public class UserController {
         ));
     }
 
+    private static String normalizeRegistrationRole(String userRole) {
+        if (userRole == null || userRole.trim().isEmpty()) {
+            return "owner";
+        }
+        if ("walker".equalsIgnoreCase(userRole.trim())) {
+            return "walker";
+        }
+        return "owner";
+    }
+
     private Map<String, Object> createErrorResponse(String message) {
         Map<String, Object> error = new HashMap<>();
         error.put("success", false);
@@ -667,6 +709,9 @@ public class UserController {
         private String password;
         private String firstName;
         private String lastName;
+        private String phoneNumber;
+        /** "owner" (default) or "walker" */
+        private String userRole;
         private boolean isLoggedIn;
 
         // Default constructor for Jackson
@@ -704,6 +749,22 @@ public class UserController {
 
         public void setLastName(String lastName) {
             this.lastName = lastName;
+        }
+
+        public String getPhoneNumber() {
+            return phoneNumber;
+        }
+
+        public void setPhoneNumber(String phoneNumber) {
+            this.phoneNumber = phoneNumber;
+        }
+
+        public String getUserRole() {
+            return userRole;
+        }
+
+        public void setUserRole(String userRole) {
+            this.userRole = userRole;
         }
 
         public boolean isLogggedIn() {

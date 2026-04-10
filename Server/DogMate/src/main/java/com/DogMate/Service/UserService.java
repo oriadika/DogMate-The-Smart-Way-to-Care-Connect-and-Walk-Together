@@ -40,22 +40,25 @@ public class UserService {
      * @throws IllegalArgumentException if email already exists or validation fails
      */
     @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
-    public RegularUser registerUser(String email, String password, 
-                                     String firstName, String lastName 
-                                     ) {
-        // Check if email already exists (orchestration - getting data for domain)
+    public RegularUser registerUser(String email, String password,
+                                     String firstName, String lastName) {
+        return registerUser(email, password, firstName, lastName, null);
+    }
+
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    public RegularUser registerUser(String email, String password,
+                                     String firstName, String lastName, String phoneNumber) {
         boolean emailExists = userRepository.existsByEmail(email);
-        
-        // Create RegularUser using domain factory method (all business logic is in domain)
+
         RegularUser newUser = RegularUser.create(
-            email, password, firstName, lastName, 
+            email, password, firstName, lastName,
             emailExists, passwordEncoder::encode
         );
+        if (phoneNumber != null && !phoneNumber.isBlank()) {
+            newUser.setPhoneNumber(phoneNumber);
+        }
 
-        // Save to repository (orchestration)
         UserAccount savedUser = userRepository.save(newUser);
-        
-        // Return as RegularUser (cast is safe since we just created it)
         return (RegularUser) savedUser;
     }
 

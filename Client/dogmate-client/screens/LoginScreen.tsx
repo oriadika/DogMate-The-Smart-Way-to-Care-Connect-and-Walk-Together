@@ -40,17 +40,18 @@ const LoginScreen = ({ navigation }: any) => {
             email: response.email
           });
         }
-      else{
+      else {
+          const role = response.userRole || 'owner';
           navigation.reset({
               index: 0,
               routes: [{
-                  name: 'Home',
+                  name: role === 'walker' ? 'WalkerHome' : 'Home',
                   params: {
                       userId: response.userId,
                       email: response.email,
                       userFirstName: response.firstName || response.email,
                       userLastName: response.lastName || '',
-                      userRole: response.userRole || 'owner',
+                      userRole: role,
                       phoneNumber: response.phoneNumber || '',
                   }
               }],

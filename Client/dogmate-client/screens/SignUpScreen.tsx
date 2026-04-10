@@ -14,6 +14,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { userAPI } from '../services/api';
+import { isValidIsraeliMobileInput } from '../utils/phoneValidation';
 
 const SignUpScreen: React.FC = ({ navigation }: any) => {
   const [firstName, setFirstName] = useState('');
@@ -41,8 +42,11 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
       return;
     }
 
-    if (phoneNumber.length !== 10){
-      Alert.alert('מספר טלפון לא תקין', 'מספר הטלפון חייב להכיל 10 ספרות');
+    if (!isValidIsraeliMobileInput(phoneNumber.trim())) {
+      Alert.alert(
+        'מספר טלפון לא תקין',
+        'נדרש מספר פלאפון ישראלי תקין (למשל 05XXXXXXXX).'
+      );
       return;
     }
 
@@ -54,6 +58,8 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
         password,
         firstName,
         lastName,
+        phoneNumber,
+        userRole: role,
       });
 
       let registeredUserId = response?.userId;
@@ -68,24 +74,33 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
         throw new Error('Registration succeeded, but failed to obtain user ID');
       }
 
+    const registeredRole =
+      response?.userRole === 'walker' || response?.userRole === 'owner'
+        ? response.userRole
+        : role;
+
     Alert.alert(
       'החשבון נוצר בהצלחה',
-      `ברוך הבא ל-DogMate, ${firstName} ${lastName}! (${role === 'owner' ? 'בעל כלב' : 'דוגווקר'})`
+      `ברוך הבא ל-DogMate, ${firstName} ${lastName}! (${registeredRole === 'owner' ? 'בעל כלב' : 'דוגווקר'})`
     );
+
+    const homeParams = {
+      userId: registeredUserId,
+      userFirstName: firstName,
+      userLastName: lastName,
+      email,
+      userRole: registeredRole,
+      phoneNumber,
+    };
 
     navigation.reset({
       index: 0,
-      routes: [{
-        name: 'Home',
-        params: {
-        userId: registeredUserId,
-        userFirstName: firstName,
-        userLastName: lastName,
-        email: email,
-        userRole: role,          // 'owner' or 'walker'
-        phoneNumber: phoneNumber
-        }
-      }],
+      routes: [
+        {
+          name: registeredRole === 'walker' ? 'WalkerHome' : 'Home',
+          params: homeParams,
+        },
+      ],
     });
     } catch (error: any) {
       Alert.alert('הרשמה נכשלה', error.message || 'אירעה שגיאה בעת ההרשמה');
@@ -182,7 +197,7 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
                 {/* Phone Number */}
                 <TextInput
                   style={styles.input}
-                  placeholder="מספר פלאפון"
+                  placeholder="מספר פלאפון (חובה, 05…)"
                   placeholderTextColor="#A9B5C7"
                   keyboardType="phone-pad"
                   value={phoneNumber}

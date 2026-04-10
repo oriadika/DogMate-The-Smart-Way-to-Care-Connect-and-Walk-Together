@@ -716,7 +716,13 @@ const HomeScreen = ({ navigation, route }: any) => {
             style={[styles.navItem, activeTab === 'profile' && styles.navItemActive]}
             onPress={() => {
               setActiveTab('profile');
-              navigation.navigate('DogProfile', { userId: currentUserId });
+              navigation.navigate('OwnerWalkers', {
+                userId: currentUserId,
+                userFirstName: currentUserName,
+                userLastName: currentUserLastName,
+                userRole: route?.params?.userRole,
+                email: route?.params?.email,
+              });
             }}
           >
             <FontAwesome5
@@ -725,7 +731,7 @@ const HomeScreen = ({ navigation, route }: any) => {
               color={activeTab === 'profile' ? PRIMARY_COLOR : '#9CA3AF'}
             />
             <Text style={[styles.navLabel, activeTab === 'profile' && styles.navLabelActive]}>
-              פרופיל
+              דוגווקרים
             </Text>
           </TouchableOpacity>
 
@@ -754,6 +760,8 @@ const HomeScreen = ({ navigation, route }: any) => {
                 userId: currentUserId,
                 userFirstName: currentUserName,
                 userLastName: currentUserLastName,
+                userRole: route?.params?.userRole,
+                email: route?.params?.email,
               });
             }}
           >

@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { BASE_URL } from './config';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://172.20.10.6:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.164:8080/api';
 
 let authToken: string | null = null;
 
@@ -46,7 +46,10 @@ export interface RegisterUserPayload {
   password: string;
   firstName: string;
   lastName: string;
+  /** Israeli mobile; required; validated on server */
+  phoneNumber: string;
   profileImageUrl?: string;
+  userRole?: 'owner' | 'walker';
 }
 
 export interface LoginPayload {
@@ -59,6 +62,7 @@ export interface RegisterUserResponse {
   message: string;
   userId: string;
   email: string;
+  userRole?: string;
 }
 
 export interface LoginResponse {
@@ -102,6 +106,57 @@ export interface AddDogResponse {
   success: boolean;
   message: string;
   dog: DogData;
+}
+
+export interface CityOffering {
+  city: string;
+  availability: string;
+  pricing: string;
+}
+
+export interface ProfessionalProfileResponse {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  /** From registration phone; mapped from API (camelCase/snake_case) */
+  phoneNumber?: string | null;
+  cityOfferings: CityOffering[];
+  averageRating: number;
+  ratingsCount: number;
+  alreadyRatedByCurrentOwner: boolean;
+  reviews: WalkerReview[];
+}
+
+export interface ProfessionalProfileUpdatePayload {
+  cityOfferings: CityOffering[];
+}
+
+export interface WalkerReview {
+  ratingId: string;
+  reviewerId: string;
+  stars: number;
+  comment: string;
+  reviewerName: string;
+  createdAt: string | null;
+}
+
+export interface CreateWalkerRatingPayload {
+  ownerId: string;
+  stars: number;
+  comment: string;
+}
+
+export interface CreateWalkerRatingResponse {
+  success: boolean;
+  message: string;
+  ratingId: string;
+}
+
+export interface DeleteWalkerRatingResponse {
+  success: boolean;
+  message: string;
+  ratingId: string;
 }
 
 // API Methods
@@ -356,7 +411,119 @@ export const dogAPI = {
       throw new Error(errorMessage);
     }
   },
+};
+
+function mapProfessionalProfileResponse(row: unknown): ProfessionalProfileResponse {
+  const o = row as Record<string, unknown>;
+  const merged =
+    o.phoneNumber ?? o.phone_number ?? o.PhoneNumber ?? o.phone;
+  let phoneNumber: string | null = null;
+  if (merged != null && merged !== '') {
+    phoneNumber =
+      typeof merged === 'number' && Number.isFinite(merged)
+        ? String(Math.trunc(merged))
+        : String(merged);
+  }
+  return { ...o, phoneNumber } as ProfessionalProfileResponse;
 }
+
+export const dogWalkerAPI = {
+  /**
+   * Dog walkers who saved at least one professional offering (city, availability, pricing).
+   */
+  getWalkersWithProfessionalProfiles: async (ownerId?: string): Promise<ProfessionalProfileResponse[]> => {
+    try {
+      const response = await apiClient.get('/dog-walkers/available-with-professional-profile', {
+        params: ownerId ? { ownerId } : undefined,
+      });
+      const list = Array.isArray(response.data) ? response.data : [];
+      return list.map(mapProfessionalProfileResponse);
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.error || error.message || 'Failed to load available dog walkers';
+      console.error('getWalkersWithProfessionalProfiles failed:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  createWalkerRating: async (
+    walkerId: string,
+    payload: CreateWalkerRatingPayload
+  ): Promise<CreateWalkerRatingResponse> => {
+    try {
+      const response = await apiClient.post(`/dog-walkers/${walkerId}/ratings`, payload);
+      return response.data;
+    } catch (error: any) {
+      const responseData = error?.response?.data;
+      const errorMessage =
+        responseData?.error ||
+        responseData?.message ||
+        responseData?.detail ||
+        error.message ||
+        'Failed to create rating';
+      console.error('createWalkerRating failed', {
+        url: `${error?.config?.baseURL || API_BASE_URL}${error?.config?.url || ''}`,
+        status: error?.response?.status,
+        data: responseData,
+      });
+      throw new Error(errorMessage);
+    }
+  },
+
+  deleteWalkerRating: async (
+    walkerId: string,
+    ratingId: string,
+    ownerId: string
+  ): Promise<DeleteWalkerRatingResponse> => {
+    try {
+      const response = await apiClient.delete(`/dog-walkers/${walkerId}/ratings/${ratingId}`, {
+        params: { ownerId },
+      });
+      return response.data;
+    } catch (error: any) {
+      const responseData = error?.response?.data;
+      const errorMessage =
+        responseData?.error ||
+        responseData?.message ||
+        responseData?.detail ||
+        error.message ||
+        'Failed to delete rating';
+      console.error('deleteWalkerRating failed', {
+        url: `${error?.config?.baseURL || API_BASE_URL}${error?.config?.url || ''}`,
+        status: error?.response?.status,
+        data: responseData,
+      });
+      throw new Error(errorMessage);
+    }
+  },
+
+  getProfessionalProfile: async (userId: string): Promise<ProfessionalProfileResponse> => {
+    try {
+      const response = await apiClient.get(`/dog-walkers/${userId}/professional-profile`);
+      return mapProfessionalProfileResponse(response.data);
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.error || error.message || 'Failed to load professional profile';
+      console.error('getProfessionalProfile failed:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  updateProfessionalProfile: async (
+    userId: string,
+    body: ProfessionalProfileUpdatePayload
+  ): Promise<ProfessionalProfileResponse> => {
+    try {
+      const response = await apiClient.put(`/dog-walkers/${userId}/professional-profile`, body);
+      return mapProfessionalProfileResponse(response.data);
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.error || error.message || 'Failed to update professional profile';
+      console.error('updateProfessionalProfile failed:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+};
 
 // Reminder API methods
 export const reminderAPI = {
