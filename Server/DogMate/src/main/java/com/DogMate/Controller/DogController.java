@@ -4,10 +4,7 @@ import com.DogMate.DTO.AddFoodStockRequest;
 import com.DogMate.DTO.AddMoodLogRequest;
 import com.DogMate.DTO.DogMoodLogDTO;
 import com.DogMate.DTO.FoodStockDTO;
-import com.DogMate.Domain.Dog;
-import com.DogMate.Domain.DogMoodLog;
-import com.DogMate.Domain.FoodStock;
-import com.DogMate.Domain.RelationshipType;
+import com.DogMate.Domain.*;
 import com.DogMate.Service.DogService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +27,71 @@ public class DogController {
     @Autowired
     public DogController(DogService dogService) {
         this.dogService = dogService;
+    }
+
+    @GetMapping
+    public ResponseEntity<?> getAllDogs(){
+        try {
+            // Get dogs for this user using DogService
+            List<Dog> dogs = dogService.getAllDogs();
+
+            java.util.List<Map<String, Object>> dogsResponse = new java.util.ArrayList<>();
+            for (Dog dog : dogs) {
+                Map<String, Object> dogResponse = createDogResponse(dog);
+                List<String> users_related = dog.getDogRelationships().stream().filter(dogRelationship ->
+                        dogRelationship.getDogID() == dog.getID())
+                        .map(dogRelationship ->
+                                dogRelationship.getRegularUser().getFirst_name() +
+                                        " " + dogRelationship.getRegularUser().getLast_name()
+                                        + "(" + dogRelationship.getRegularUser().getEmail() + ")").toList();
+                dogResponse.put("users_related", users_related);
+                dogsResponse.add(dogResponse);
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("dogs", dogsResponse);
+
+            System.out.println("Found " + dogsResponse.size() + " dogs");
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            System.err.println("Failed to get dogs: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("Failed to fetch dogs: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<?> searchDogs(@RequestParam String query){
+        try {
+            // Get dogs for this user using DogService
+            List<Dog> dogs = dogService.searchDogs(query);
+
+            java.util.List<Map<String, Object>> dogsResponse = new java.util.ArrayList<>();
+
+            for (Dog dog: dogs){
+                Map<String, Object> dogResponse = createDogResponse(dog);
+                List<String> users_related = dog.getDogRelationships().stream().filter(dogRelationship ->
+                        dogRelationship.getDogID() == dog.getID()).map(dogRelationship -> dogRelationship.getRegularUser().getFirst_name() + " " + dogRelationship.getRegularUser().getLast_name()).toList();
+                dogResponse.put("users_related", users_related);
+                dogsResponse.add(dogResponse);
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("dogs", dogsResponse);
+
+            System.out.println("Found " + dogs.size() + " dogs");
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            System.err.println("Failed to get dogs: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("Failed to fetch dogs: " + e.getMessage()));
+        }
     }
 
     /**
@@ -150,14 +212,54 @@ public class DogController {
         }
     }
 
-    
+    @DeleteMapping("/{dogId}")
+    public ResponseEntity<?> deleteDog(@PathVariable String dogId) {
+        try {
+            if (dogId == null || dogId.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(createErrorResponse("Dog ID are required"));
+            }
+
+            // Parse UUIDs
+            UUID dogUuid;
+            try {
+                dogUuid = UUID.fromString(dogId);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                        .body(createErrorResponse("Invalid user ID or dog ID format"));
+            }
+
+            System.out.println("Deleting dog: " + dogId);
+
+            // Remove dog from user
+            dogService.deleteDog(dogUuid);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Dog deleted successfully");
+            response.put("dogId", dogId);
+
+            System.out.println("Dog deleted successfully");
+            return ResponseEntity.ok(response);
+
+        } catch (IllegalArgumentException e) {
+            System.err.println("Validation error: " + e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            System.err.println("Failed to delete dog: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("Failed to delete dog: " + e.getMessage()));
+        }
+    }
 
     /**
      * Delete a dog for a user
      * DELETE /api/dogs/{userId}/{dogId}
      */
     @DeleteMapping("/{userId}/{dogId}")
-    public ResponseEntity<?> deleteDog(@PathVariable String userId, @PathVariable String dogId) {
+    public ResponseEntity<?> removeDogFromUser(@PathVariable String userId, @PathVariable String dogId) {
         try {
             if (userId == null || userId.trim().isEmpty() || dogId == null || dogId.trim().isEmpty()) {
                 return ResponseEntity.badRequest()

@@ -60,9 +60,9 @@ public class ReminderService {
             throw new IllegalArgumentException("remindAt must be in the future");
         }
 
-        if (description  == null || description.trim().isEmpty()) {
-            throw new IllegalArgumentException("Title cannot be empty");
-        }
+//        if (description  == null || description.trim().isEmpty()) {
+//            throw new IllegalArgumentException("Title cannot be empty");
+//        }
 
         List<Dog> dogs = dogRepository.findAll().stream().filter(dog -> (dogIds.contains(dog.getID()))).toList();
         Reminder r = new Reminder(user,

@@ -1,6 +1,10 @@
 package com.DogMate.Service;
 
 import com.DogMate.Domain.Dog;
+import com.DogMate.Domain.UserAccount;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,4 +42,12 @@ public interface IDogRepository {
      * @return List of all dogs
      */
     List<Dog> findAll();
+
+    @Query("""
+        SELECT d FROM Dog d
+        WHERE LOWER(d.name) LIKE LOWER(CONCAT('%', :text, '%'))
+           OR LOWER(d.breed) LIKE LOWER(CONCAT('%', :text, '%'))
+    """)
+    List<Dog> searchDogs(@Param("text") String text);
+
 }

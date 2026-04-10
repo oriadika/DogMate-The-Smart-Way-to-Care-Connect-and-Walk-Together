@@ -316,6 +316,16 @@ export const userAPI = {
     }
   },
 
+  searchUsers: async (query: string) => {
+    try {
+      const response = await apiClient.get(`/users/search?query=${query}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to search users';
+      throw new Error(errorMessage);
+    }
+  },
+
   /**
    * Note: Ping notifications are now received via WebSocket in real-time.
    * No polling or marking as read needed.
@@ -364,6 +374,44 @@ export const dogAPI = {
       throw new Error(errorMessage);
     }
   },
+
+  /**
+   * Delete a dog for a user
+   */
+  deleteDogForever: async (dogId: string) => {
+    try {
+      const response = await apiClient.delete(`/dogs/${dogId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete dog';
+      console.error("Failed to delete dog:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Get all dogs
+   */
+  getAllDogs: async () => {
+    try {
+      const response = await apiClient.get('/dogs');
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch dogs';
+      console.error("Failed to get all dogs:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+  searchDogs: async (query: string) => {
+    try {
+      const response = await apiClient.get(`/dogs/search?query=${query}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to search dogs';
+      throw new Error(errorMessage);
+    }
+  },
+}
 };
 
 function mapProfessionalProfileResponse(row: unknown): ProfessionalProfileResponse {

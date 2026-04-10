@@ -9,8 +9,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { userAPI } from '../../services/api';
-import { useUsers } from '../../contexts/UsersContext';
+import { userAPI } from '../../../services/api';
+import { useUsers } from '../../../contexts/UsersContext';
+import { TextInput } from 'react-native';
 
 const PRIMARY_COLOR = '#7FB069'; // matches HomeScreen (regular user)
 
@@ -18,6 +19,8 @@ const ManageUsersScreen = ({ navigation, route }: any) => {
   const { users, setUsers, removeUserById } = useUsers();
   const email = route?.params?.email ?? '';
   const [refreshing, setRefreshing] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const loadUsers = async () => {
     try {
@@ -41,6 +44,29 @@ const ManageUsersScreen = ({ navigation, route }: any) => {
       setUsers(route.params.users);
     }
   }, [route?.params?.users, setUsers]);
+
+  useEffect(() => {
+  const delay = setTimeout(async () => {
+    try {
+      if (searchText.trim().length === 0) {
+        // load all users again
+        const res = await userAPI.getAllUsers();
+        setUsers(res.users || []);
+        return;
+      }
+
+      setLoading(true);
+      const res = await userAPI.searchUsers(searchText);
+      setUsers(res.users || []);
+    } catch (err) {
+      console.error('Search failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, 400);
+
+  return () => clearTimeout(delay);
+}, [searchText]);
 
   useFocusEffect(
     useCallback(() => {
@@ -128,6 +154,12 @@ const ManageUsersScreen = ({ navigation, route }: any) => {
           <Text style={styles.subtitle}>
             צפייה וניהול של כל המשתמשים הרשומים ב־DogMate
           </Text>
+          <TextInput
+            placeholder="חפש שם משתמש/אימייל"
+            value={searchText}
+            onChangeText={setSearchText}
+            style={styles.searchInput}
+          />
         </View>
 
         <View style={styles.summaryCard}>
@@ -301,4 +333,14 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     writingDirection: 'rtl',
   },
+  searchInput: {
+  backgroundColor: '#fff',
+  borderRadius: 12,
+  paddingHorizontal: 16,
+  paddingVertical: 10,
+  marginBottom: 12,
+  borderWidth: 1,
+  borderColor: '#ddd',
+  textAlign: 'right',
+},
 });

@@ -5,8 +5,10 @@ import com.DogMate.Service.IUserRepository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,6 +28,12 @@ public interface UserRepository extends JpaRepository<UserAccount, UUID>, IUserR
     boolean existsByEmail(String email);
 
     /**
+     * Return all users in the
+     * @return users
+     */
+    List<UserAccount> findAll();
+
+    /**
      * Reset all users on server startup:
      * - Set loggedIn to false
      * - Clear latitude and longitude (hide location)
@@ -42,4 +50,6 @@ public interface UserRepository extends JpaRepository<UserAccount, UUID>, IUserR
     // Note: If you need custom queries, you can add them here:
     // @Query("SELECT u FROM UserAccount u WHERE u.email = :email")
     // Optional<UserAccount> findByEmail(@Param("email") String email);
+
+    List<UserAccount> searchUsers(@Param("text") String text);
 }
