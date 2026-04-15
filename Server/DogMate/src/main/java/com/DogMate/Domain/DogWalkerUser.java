@@ -64,6 +64,19 @@ public class DogWalkerUser extends UserAccount {
         return new DogWalkerUser(userId, email, passwordHash, firstName, lastName);
     }
 
+    /**
+     * Create a walker with an already-hashed password (e.g. after email OTP during pending registration).
+     */
+    public static DogWalkerUser createWithHashedPassword(
+        String email, String passwordHash, String firstName, String lastName
+    ) {
+        UserAccount.validateEmail(email);
+        validateFirstName(firstName);
+        validateLastName(lastName);
+        UUID userId = UUID.randomUUID();
+        return new DogWalkerUser(userId, email, passwordHash, firstName, lastName);
+    }
+
     public String getFirst_name() {
         return first_name;
     }

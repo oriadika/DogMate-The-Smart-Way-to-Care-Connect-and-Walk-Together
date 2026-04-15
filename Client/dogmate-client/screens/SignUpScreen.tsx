@@ -27,6 +27,8 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignUp = async () => {
@@ -45,16 +47,28 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
       return;
     }
 
-    if (!isValidIsraeliMobileInput(phoneNumber.trim())) {
+    const phoneTrimmed = phoneNumber.trim();
+    if (role === 'walker') {
+      if (!isValidIsraeliMobileInput(phoneTrimmed)) {
+        Alert.alert(
+          'מספר טלפון לא תקין',
+          'לדוגווקר נדרש מספר פלאפון ישראלי תקין (למשל 05XXXXXXXX).'
+        );
+        return;
+      }
+    } else if (phoneTrimmed && !isValidIsraeliMobileInput(phoneTrimmed)) {
       Alert.alert(
         'מספר טלפון לא תקין',
-        'נדרש מספר פלאפון ישראלי תקין (למשל 05XXXXXXXX).'
+        'אם ממלאים מספר פלאפון, יש להזין מספר ישראלי תקין (למשל 05XXXXXXXX).'
       );
       return;
     }
 
     if (!acceptedTerms) {
-      Alert.alert('נדרש אישור', 'יש לאשר שקראת את תנאי השימוש ומדיניות הפרטיות.');
+      Alert.alert(
+        'אישור תנאי שימוש נדרש',
+        'יש לסמן את תיבת האישור כדי לאשר שקראת את תנאי השימוש ומדיניות הפרטיות.'
+      );
       return;
     }
 
@@ -66,50 +80,34 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
         password,
         firstName,
         lastName,
-        phoneNumber,
+        phoneNumber: phoneTrimmed || undefined,
         userRole: role,
       });
-
-      let registeredUserId = response?.userId;
-
-      // Fallback: if register response misses userId, login immediately to retrieve it.
-      if (!registeredUserId) {
-        const loginResponse = await userAPI.login({ email, password });
-        registeredUserId = loginResponse?.userId;
-      }
-
-      if (!registeredUserId) {
-        throw new Error('Registration succeeded, but failed to obtain user ID');
-      }
 
     const registeredRole =
       response?.userRole === 'walker' || response?.userRole === 'owner'
         ? response.userRole
         : role;
 
+    const mailOk = response?.verificationEmailSent !== false;
     Alert.alert(
-      'החשבון נוצר בהצלחה',
-      `ברוך הבא ל-DogMate, ${firstName} ${lastName}! (${registeredRole === 'owner' ? 'בעל כלב' : 'דוגווקר'})`
+      mailOk ? 'קוד אימות נשלח' : 'שימו לב',
+      mailOk
+        ? 'החשבון ייווצר רק אחרי שתזין את הקוד שנשלח למייל שלך.'
+        : 'השרת לא הצליח לשלוח מייל (חסרה הגדרת SMTP). הקוד מופיע בלוג השרת. אחרי הגדרת סיסמת אפליקציה ב-Gmail יופעל שליחה אוטומטית.'
     );
 
-    const homeParams = {
-      userId: registeredUserId,
-      userFirstName: firstName,
-      userLastName: lastName,
-      email,
+    const verifyParams = {
+      firstName,
+      lastName,
+      email: (response?.email as string | undefined)?.trim() || email.trim(),
       userRole: registeredRole,
-      phoneNumber,
+      phoneNumber: phoneTrimmed,
+      password,
+      fromSignUp: true,
     };
 
-    navigation.reset({
-      index: 0,
-      routes: [
-        {
-          name: registeredRole === 'walker' ? 'WalkerHome' : 'Home',
-          params: homeParams,
-        },
-      ],
-    });
+    navigation.navigate('VerifyEmail', verifyParams);
     } catch (error: any) {
       Alert.alert('הרשמה נכשלה', error.message || 'אירעה שגיאה בעת ההרשמה');
       console.error('Sign up error:', error);
@@ -147,27 +145,35 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
                 </View>
 
                 {/* First Name */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="שם פרטי"
-                  placeholderTextColor="#A9B5C7"
-                  value={firstName}
-                  onChangeText={setFirstName}
-                  textAlign="right"
-                />
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    שם פרטי <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[styles.input, styles.inputInField]}
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    textAlign="right"
+                  />
+                </View>
 
                 {/* Last Name */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="שם משפחה"
-                  placeholderTextColor="#A9B5C7"
-                  value={lastName}
-                  onChangeText={setLastName}
-                  textAlign="right"
-                />
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    שם משפחה <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[styles.input, styles.inputInField]}
+                    value={lastName}
+                    onChangeText={setLastName}
+                    textAlign="right"
+                  />
+                </View>
 
                 {/* Role selector */}
-                <Text style={styles.roleLabel}>אני נרשם בתור:</Text>
+                <Text style={styles.roleLabel}>
+                  אני נרשם בתור: <Text style={styles.requiredStar}>*</Text>
+                </Text>
                 <View style={styles.roleRow}>
                   <TouchableOpacity
                     style={[
@@ -203,50 +209,103 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
                 </View>
 
                 {/* Phone Number */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="מספר פלאפון (חובה, 05…)"
-                  placeholderTextColor="#A9B5C7"
-                  keyboardType="phone-pad"
-                  value={phoneNumber}
-                  onChangeText={setPhoneNumber}
-                  textAlign="right"
-                />
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    מספר פלאפון{' '}
+                    {role === 'walker' ? (
+                      <Text style={styles.requiredStar}>*</Text>
+                    ) : (
+                      <Text style={styles.optionalHint}>(אופציונלי)</Text>
+                    )}
+                  </Text>
+                  <TextInput
+                    style={[styles.input, styles.inputInField]}
+                    keyboardType="phone-pad"
+                    value={phoneNumber}
+                    onChangeText={setPhoneNumber}
+                    textAlign="right"
+                  />
+                </View>
 
                 {/* Email */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="אימייל"
-                  placeholderTextColor="#A9B5C7"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={setEmail}
-                  textAlign="right"
-                />
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    אימייל <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[styles.input, styles.inputInField]}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={email}
+                    onChangeText={setEmail}
+                    textAlign="right"
+                  />
+                </View>
 
                 {/* Password */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="סיסמה"
-                  placeholderTextColor="#A9B5C7"
-                  secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
-                  textAlign="right"
-                />
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    סיסמה <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <View style={styles.passwordInputRow}>
+                    <TouchableOpacity
+                      style={styles.eyeButton}
+                      onPress={() => setShowPassword((prev) => !prev)}
+                      activeOpacity={0.8}
+                      accessibilityLabel={showPassword ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                    >
+                      <Ionicons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#8B7355"
+                      />
+                    </TouchableOpacity>
+                    <TextInput
+                      style={styles.passwordInputInner}
+                      secureTextEntry={!showPassword}
+                      value={password}
+                      onChangeText={setPassword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      textAlign="right"
+                    />
+                  </View>
+                </View>
 
                 {/* Confirm Password */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="אימות סיסמה"
-                  placeholderTextColor="#A9B5C7"
-                  secureTextEntry
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  textAlign="right"
-                />
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    אימות סיסמה <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <View style={styles.passwordInputRow}>
+                    <TouchableOpacity
+                      style={styles.eyeButton}
+                      onPress={() => setShowConfirmPassword((prev) => !prev)}
+                      activeOpacity={0.8}
+                      accessibilityLabel={showConfirmPassword ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                    >
+                      <Ionicons
+                        name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#8B7355"
+                      />
+                    </TouchableOpacity>
+                    <TextInput
+                      style={styles.passwordInputInner}
+                      secureTextEntry={!showConfirmPassword}
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      textAlign="right"
+                    />
+                  </View>
+                </View>
 
+                <Text style={[styles.fieldLabel, styles.termsFieldLabel]}>
+                  אישור תנאי שימוש ומדיניות פרטיות{' '}
+                  <Text style={styles.requiredStar}>*</Text>
+                </Text>
                 <View style={styles.termsRow}>
                   <Pressable
                     style={styles.termsCheckboxButton}
@@ -269,11 +328,15 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
                   </Text>
                 </View>
 
+                <Text style={styles.requiredFieldLegend}>
+                  <Text style={styles.requiredStar}>*</Text> שדה חובה
+                </Text>
+
                 {/* Sign Up button */}
                 <TouchableOpacity
-                  style={[styles.primaryButton, (isLoading || !acceptedTerms) && styles.primaryButtonDisabled]}
+                  style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
                   onPress={handleSignUp}
-                  disabled={isLoading || !acceptedTerms}
+                  disabled={isLoading}
                   activeOpacity={0.85}
                 >
                   {isLoading ? (
@@ -337,6 +400,29 @@ const styles = StyleSheet.create({
     color: '#5C4033', // Dark brown
     textAlign: 'center',
   },
+  fieldBlock: {
+    marginBottom: 14,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5C4033',
+    textAlign: 'right',
+    marginBottom: 6,
+  },
+  requiredStar: {
+    color: '#D32F2F',
+    fontWeight: '700',
+  },
+  optionalHint: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#8B7355',
+  },
+  termsFieldLabel: {
+    marginTop: 2,
+    marginBottom: 8,
+  },
   input: {
     backgroundColor: '#faf0e6', // Light beige
     borderRadius: 12,
@@ -348,6 +434,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0d5c7', // Subtle border
     minHeight: 50,
+  },
+  inputInField: {
+    marginBottom: 0,
+  },
+  passwordInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0d5c7',
+    borderRadius: 12,
+    backgroundColor: '#faf0e6',
+    paddingHorizontal: 10,
+    minHeight: 50,
+  },
+  eyeButton: {
+    padding: 6,
+  },
+  passwordInputInner: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    fontSize: 16,
+    color: '#000000',
   },
   roleLabel: {
     fontSize: 16,
@@ -466,5 +575,13 @@ const styles = StyleSheet.create({
   footerLinkTextBold: {
     fontWeight: '700',
     color: '#5C4033',
+  },
+  requiredFieldLegend: {
+    marginTop: 10,
+    marginBottom: 10,
+    fontSize: 12,
+    color: '#8B7355',
+    textAlign: 'right',
+    alignSelf: 'stretch',
   },
 });

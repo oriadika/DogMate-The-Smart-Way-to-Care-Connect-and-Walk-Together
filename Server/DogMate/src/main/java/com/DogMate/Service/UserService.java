@@ -77,6 +77,28 @@ public class UserService {
     }
 
     /**
+     * Creates an owner after email OTP; password is already bcrypt-hashed (from pending registration).
+     */
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    public RegularUser registerRegularUserFromPending(
+        String email,
+        String passwordHash,
+        String firstName,
+        String lastName,
+        String phoneNumber
+    ) {
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new IllegalArgumentException("Email already exists: " + email);
+        }
+        RegularUser newUser = RegularUser.createWithHashedPassword(email, passwordHash, firstName, lastName, null);
+        if (phoneNumber != null && !phoneNumber.isBlank()) {
+            newUser.setPhoneNumber(phoneNumber);
+        }
+        UserAccount savedUser = userRepository.save(newUser);
+        return (RegularUser) savedUser;
+    }
+
+    /**
      * Create a user account (generic method for any UserAccount type)
      * Service layer - only orchestration
      * @param userAccount The user account to create (should be already validated by domain)
@@ -240,6 +262,7 @@ public class UserService {
         AdminUser newAdmin = AdminUser.create(
             email, password, permissionLevel, emailExists, passwordEncoder::encode
         );
+        newAdmin.setEmailVerified(true);
 
         // Save to repository (orchestration)
         UserAccount savedUser = userRepository.save(newAdmin);
@@ -263,8 +286,8 @@ public class UserService {
         UserAccount.validateEmail(email);
         UserAccount.validatePassword(password);
         
-        // Find user by email (orchestration)
-        java.util.Optional<UserAccount> userOpt = userRepository.findByEmail(email);
+        // Find user by email (case-insensitive; verification OTP applies only before account creation)
+        java.util.Optional<UserAccount> userOpt = userRepository.findByEmailIgnoreCase(email.trim());
         
         // Validate user exists (business logic)
         if (userOpt.isEmpty()) {

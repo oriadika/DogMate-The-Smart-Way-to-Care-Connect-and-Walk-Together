@@ -4,6 +4,7 @@ import com.DogMate.Domain.DogWalkerUser;
 import com.DogMate.Domain.RegularUser;
 import com.DogMate.Domain.Ping;
 import com.DogMate.Service.DogWalkerService;
+import com.DogMate.Service.PendingRegistrationService;
 import com.DogMate.Service.UserService;
 import com.DogMate.util.PhoneValidation;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -27,6 +28,7 @@ public class UserController {
     
     private final UserService userService;
     private final DogWalkerService dogWalkerService;
+    private final PendingRegistrationService pendingRegistrationService;
     private final SimpMessagingTemplate messagingTemplate;
     
     // In-memory ping storage: Map<toUserId, List<Ping>>
@@ -34,9 +36,11 @@ public class UserController {
 
     @Autowired
     public UserController(UserService userService, DogWalkerService dogWalkerService,
+                          PendingRegistrationService pendingRegistrationService,
                           SimpMessagingTemplate messagingTemplate) {
         this.userService = userService;
         this.dogWalkerService = dogWalkerService;
+        this.pendingRegistrationService = pendingRegistrationService;
         this.messagingTemplate = messagingTemplate;
     }
 
@@ -56,37 +60,33 @@ public class UserController {
             }
 
             String role = normalizeRegistrationRole(request.getUserRole());
-            String phoneDigits = PhoneValidation.requireValidIsraeliMobile(request.getPhoneNumber());
+            String phoneDigits = "walker".equals(role)
+                ? PhoneValidation.requireValidIsraeliMobile(request.getPhoneNumber())
+                : PhoneValidation.optionalValidIsraeliMobile(request.getPhoneNumber());
+
+            boolean verificationEmailSent = pendingRegistrationService.startRegistration(
+                request.getEmail(),
+                request.getPassword(),
+                request.getFirstName(),
+                request.getLastName(),
+                phoneDigits,
+                role
+            );
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "User registered successfully");
+            response.put(
+                "message",
+                verificationEmailSent
+                    ? "Verification code sent to your email. Enter the code to finish creating your account."
+                    : "Registration saved. The server could not send email (configure SPRING_MAIL_PASSWORD for Gmail). Use the code from server logs or tap resend after fixing mail."
+            );
+            response.put("email", request.getEmail().trim());
+            response.put("userRole", role);
+            response.put("pendingVerification", true);
+            response.put("verificationEmailSent", verificationEmailSent);
 
-            if ("walker".equals(role)) {
-                DogWalkerUser newWalker = dogWalkerService.registerDogWalker(
-                    request.getEmail(),
-                    request.getPassword(),
-                    request.getFirstName(),
-                    request.getLastName(),
-                    phoneDigits
-                );
-                response.put("userId", newWalker.getId());
-                response.put("email", newWalker.getEmail());
-                response.put("userRole", "walker");
-            } else {
-                RegularUser newUser = userService.registerUser(
-                    request.getEmail(),
-                    request.getPassword(),
-                    request.getFirstName(),
-                    request.getLastName(),
-                    phoneDigits
-                );
-                response.put("userId", newUser.getId());
-                response.put("email", newUser.getEmail());
-                response.put("userRole", "owner");
-            }
-
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
 
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest()

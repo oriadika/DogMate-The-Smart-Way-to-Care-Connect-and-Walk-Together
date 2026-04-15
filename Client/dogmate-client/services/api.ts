@@ -46,8 +46,8 @@ export interface RegisterUserPayload {
   password: string;
   firstName: string;
   lastName: string;
-  /** Israeli mobile; required; validated on server */
-  phoneNumber: string;
+  /** Israeli mobile; required for walkers, optional for owners (validated on server) */
+  phoneNumber?: string;
   profileImageUrl?: string;
   userRole?: 'owner' | 'walker';
 }
@@ -60,9 +60,14 @@ export interface LoginPayload {
 export interface RegisterUserResponse {
   success: boolean;
   message: string;
-  userId: string;
+  /** Present only after email OTP completes (verify-registration). */
+  userId?: string;
   email: string;
   userRole?: string;
+  /** True after signup request until OTP completes the account. */
+  pendingVerification?: boolean;
+  /** False if SMTP is not configured or send failed — check server logs for OTP. */
+  verificationEmailSent?: boolean;
 }
 
 export interface LoginResponse {
@@ -76,6 +81,32 @@ export interface LoginResponse {
   userRole?: string;
   phoneNumber?: string;
   token?: string;
+}
+
+export interface VerifyEmailPayload {
+  email: string;
+  code: string;
+}
+
+export interface ResendVerificationPayload {
+  email: string;
+}
+
+export interface VerifyEmailResponse {
+  success: boolean;
+  message: string;
+}
+
+/** Response from POST /auth/verify-registration (after OTP, account is created). */
+export interface VerifyRegistrationResponse {
+  success: boolean;
+  message: string;
+  userId: string;
+  email: string;
+  userRole?: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
 }
 
 export interface UserProfileResponse {
@@ -232,6 +263,28 @@ export const userAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'Login failed';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /** Complete signup after OTP — creates the user account (signup flow only). */
+  verifyRegistration: async (payload: VerifyEmailPayload): Promise<VerifyRegistrationResponse> => {
+    try {
+      const response = await apiClient.post('/auth/verify-registration', payload);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Email verification failed';
+      throw new Error(errorMessage);
+    }
+  },
+
+  resendVerification: async (payload: ResendVerificationPayload): Promise<VerifyEmailResponse> => {
+    try {
+      const response = await apiClient.post('/auth/resend-verification', payload);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.error || error.message || 'Failed to resend verification code';
       throw new Error(errorMessage);
     }
   },

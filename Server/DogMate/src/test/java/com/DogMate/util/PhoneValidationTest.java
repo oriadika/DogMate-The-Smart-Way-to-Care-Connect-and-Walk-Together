@@ -30,4 +30,17 @@ class PhoneValidationTest {
         assertThrows(IllegalArgumentException.class, () -> PhoneValidation.requireValidIsraeliMobile("123"));
         assertThrows(IllegalArgumentException.class, () -> PhoneValidation.requireValidIsraeliMobile("054"));
     }
+
+    @Test
+    void optional_blank_returnsNull() {
+        assertNull(PhoneValidation.optionalValidIsraeliMobile(null));
+        assertNull(PhoneValidation.optionalValidIsraeliMobile(""));
+        assertNull(PhoneValidation.optionalValidIsraeliMobile("   "));
+    }
+
+    @Test
+    void optional_nonBlank_validates() {
+        assertEquals("0501234567", PhoneValidation.optionalValidIsraeliMobile("0501234567"));
+        assertThrows(IllegalArgumentException.class, () -> PhoneValidation.optionalValidIsraeliMobile("031234567"));
+    }
 }

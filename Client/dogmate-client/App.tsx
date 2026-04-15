@@ -5,6 +5,7 @@ import { UsersProvider } from './contexts/UsersContext';
 
 import StartScreen from './screens/StartScreen';
 import SignUpScreen from './screens/SignUpScreen';
+import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import HomeScreen from './screens/HomeScreen';
 import WalkerHomeScreen from './screens/WalkerHomeScreen';
 import WalkerProfessionalProfileScreen from './screens/WalkerProfessionalProfileScreen';
@@ -53,6 +54,7 @@ export default function App() {
           <Stack.Screen name="Start" component={StartScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="SignUp" component={SignUpScreen} />
+          <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="WalkerHome" component={WalkerHomeScreen} />

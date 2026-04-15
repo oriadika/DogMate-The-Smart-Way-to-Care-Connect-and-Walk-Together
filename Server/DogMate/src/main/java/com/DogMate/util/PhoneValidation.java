@@ -28,4 +28,15 @@ public final class PhoneValidation {
         }
         return digits;
     }
+
+    /**
+     * For optional phone (e.g. dog owner registration): returns {@code null} if blank.
+     * If non-blank, validates the same way as {@link #requireValidIsraeliMobile(String)}.
+     */
+    public static String optionalValidIsraeliMobile(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        return requireValidIsraeliMobile(raw);
+    }
 }

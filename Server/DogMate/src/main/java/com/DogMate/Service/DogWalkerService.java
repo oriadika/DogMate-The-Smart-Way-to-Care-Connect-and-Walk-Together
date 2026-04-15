@@ -59,6 +59,28 @@ public class DogWalkerService {
         return dogWalkerRepository.save(newUser);
     }
 
+    /**
+     * Creates a walker after email OTP; password is already bcrypt-hashed (from pending registration).
+     */
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    @Transactional
+    public DogWalkerUser registerDogWalkerFromPending(
+        String email,
+        String passwordHash,
+        String firstName,
+        String lastName,
+        String phoneNumber
+    ) {
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new IllegalArgumentException("Email already exists: " + email);
+        }
+        DogWalkerUser newUser = DogWalkerUser.createWithHashedPassword(email, passwordHash, firstName, lastName);
+        if (phoneNumber != null && !phoneNumber.isBlank()) {
+            newUser.setPhoneNumber(phoneNumber);
+        }
+        return dogWalkerRepository.save(newUser);
+    }
+
     private DogWalkerUser loadDogWalkerOrThrow(UUID userId) {
         UserAccount user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));

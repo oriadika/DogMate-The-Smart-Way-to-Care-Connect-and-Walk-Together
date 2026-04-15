@@ -27,6 +27,9 @@ public class UserAccount {
     @Column(name = "suspended", nullable = false, updatable = true, columnDefinition = "BOOLEAN DEFAULT false")
     private boolean suspended = false;
 
+    @Column(name = "email_verified", nullable = false, columnDefinition = "BOOLEAN DEFAULT false")
+    private boolean emailVerified = false;
+
     /** Phone from registration (nullable for legacy rows). */
     @Column(name = "phone_number", length = 32)
     private String phoneNumber;
@@ -167,6 +170,14 @@ public class UserAccount {
 
     public void setSuspended(boolean suspended) {
         this.suspended = suspended;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
+    }
+
+    public void setEmailVerified(boolean emailVerified) {
+        this.emailVerified = emailVerified;
     }
 
     public String getPhoneNumber() {

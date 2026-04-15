@@ -8,6 +8,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.UUID;
@@ -26,6 +28,15 @@ class UserServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @Mock
+    private IReminderRepository reminderRepository;
+
+    @Mock
+    private ISupportRequestRepository supportRequestRepository;
+
+    @Mock
+    private ObjectProvider<JavaMailSender> mailSenderProvider;
+
     @InjectMocks
     private UserService userService;
 
@@ -42,6 +53,7 @@ class UserServiceTest {
         testFirstName = "John";
         testLastName = "Doe";
         testPasswordHash = "$2a$10$hashedPasswordString";
+        lenient().when(mailSenderProvider.getIfAvailable()).thenReturn(null);
     }
 
     @Test

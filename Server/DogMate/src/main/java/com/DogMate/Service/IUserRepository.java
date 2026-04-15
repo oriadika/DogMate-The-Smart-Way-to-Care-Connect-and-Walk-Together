@@ -24,6 +24,11 @@ public interface IUserRepository {
     Optional<UserAccount> findByEmail(String email);
 
     /**
+     * Case-insensitive email lookup (for verification and login flows).
+     */
+    Optional<UserAccount> findByEmailIgnoreCase(String email);
+
+    /**
      * Find a user by ID
      * @param id The UUID of the user
      * @return Optional containing the user if found
@@ -36,6 +41,8 @@ public interface IUserRepository {
      * @return true if email exists, false otherwise
      */
     boolean existsByEmail(String email);
+
+    boolean existsByEmailIgnoreCase(String email);
 
     /**
      * Delete a user by ID
