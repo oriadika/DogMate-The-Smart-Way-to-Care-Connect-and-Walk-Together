@@ -369,27 +369,27 @@ const AddDogScreen = ({ navigation, route }: any) => {
               <Text style={styles.label}>מין:</Text>
               <View style={styles.genderContainer}>
                 <TouchableOpacity
-                  style={[styles.genderButton, gender === 'M' && styles.genderActive]}
+                  style={[styles.genderButton, gender === 'M' && styles.genderMaleActive]}
                   onPress={() => setGender('M')}
                   disabled={loading}
                 >
                   <MaterialCommunityIcons 
                     name="gender-male" 
                     size={24} 
-                    color={gender === 'M' ? '#fff' : '#8B7355'} 
+                    color={gender === 'M' ? '#fff' : MALE_COLOR} 
                   />
                   <Text style={[styles.genderText, gender === 'M' && styles.genderTextActive]}>זכר</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.genderButton, gender === 'F' && styles.genderActive]}
+                  style={[styles.genderButton, gender === 'F' && styles.genderFemaleActive]}
                   onPress={() => setGender('F')}
                   disabled={loading}
                 >
                   <MaterialCommunityIcons 
                     name="gender-female" 
                     size={24} 
-                    color={gender === 'F' ? '#fff' : '#8B7355'} 
+                    color={gender === 'F' ? '#fff' : FEMALE_COLOR} 
                   />
                   <Text style={[styles.genderText, gender === 'F' && styles.genderTextActive]}>נקבה</Text>
                 </TouchableOpacity>
@@ -420,6 +420,8 @@ const AddDogScreen = ({ navigation, route }: any) => {
 export default AddDogScreen;
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
+const MALE_COLOR = '#4A90E2';
+const FEMALE_COLOR = '#FF69B4';
 
 const styles = StyleSheet.create({
   container: {
@@ -523,9 +525,13 @@ const styles = StyleSheet.create({
     borderColor: '#E0D5C7',
     gap: 8,
   },
-  genderActive: {
-    backgroundColor: PRIMARY_COLOR,
-    borderColor: PRIMARY_COLOR,
+  genderMaleActive: {
+    backgroundColor: MALE_COLOR,
+    borderColor: MALE_COLOR,
+  },
+  genderFemaleActive: {
+    backgroundColor: FEMALE_COLOR,
+    borderColor: FEMALE_COLOR,
   },
   genderText: {
     fontSize: 16,

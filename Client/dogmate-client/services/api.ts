@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { BASE_URL } from './config';
 
 // Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.164:8080/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.68.101:8080/api';
 
 let authToken: string | null = null;
 
@@ -76,6 +76,46 @@ export interface LoginResponse {
   userRole?: string;
   phoneNumber?: string;
   token?: string;
+}
+
+export interface UserProfileResponse {
+  userId: string;
+  email: string;
+  userRole: string;
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+}
+
+export interface UpdateUserProfilePayload {
+  firstName: string;
+  lastName: string;
+  phoneNumber: string;
+}
+
+export interface ChangePasswordPayload {
+  oldPassword: string;
+  newPassword: string;
+  confirmNewPassword: string;
+}
+
+export interface ChangePasswordResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface SupportRequestPayload {
+  category: 'bug' | 'feature' | 'general';
+  subject: string;
+  description: string;
+  contactEmail: string;
+  contactPhone: string;
+}
+
+export interface SupportRequestResponse {
+  success: boolean;
+  message: string;
+  requestId: string;
 }
 
 export interface ErrorResponse {
@@ -267,6 +307,53 @@ export const userAPI = {
       clearAuthToken();
       // Return success anyway to allow local logout
       return { success: true, message: 'Local logout completed' };
+    }
+  },
+
+  getProfile: async (userId: string): Promise<UserProfileResponse> => {
+    try {
+      const response = await apiClient.get(`/users/${userId}/profile`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to load profile';
+      throw new Error(errorMessage);
+    }
+  },
+
+  updateProfile: async (userId: string, payload: UpdateUserProfilePayload): Promise<UserProfileResponse> => {
+    try {
+      const response = await apiClient.put(`/users/${userId}/profile`, payload);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to update profile';
+      throw new Error(errorMessage);
+    }
+  },
+
+  changePassword: async (
+    userId: string,
+    payload: ChangePasswordPayload
+  ): Promise<ChangePasswordResponse> => {
+    try {
+      const response = await apiClient.post(`/users/${userId}/change-password`, payload);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to change password';
+      throw new Error(errorMessage);
+    }
+  },
+
+  createSupportRequest: async (
+    userId: string,
+    payload: SupportRequestPayload
+  ): Promise<SupportRequestResponse> => {
+    try {
+      const response = await apiClient.post(`/users/${userId}/support-requests`, payload);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.error || error.message || 'Failed to submit support request';
+      throw new Error(errorMessage);
     }
   },
 

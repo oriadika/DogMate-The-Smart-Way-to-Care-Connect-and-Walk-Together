@@ -564,6 +564,7 @@ const HomeScreen = ({ navigation, route }: any) => {
                 renderItem={renderDogCard}
                 keyExtractor={(item) => item.id}
                 horizontal
+                inverted
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.dogsContainer}
                 snapToInterval={320} // Card width + margin
@@ -1187,14 +1188,14 @@ const styles = StyleSheet.create({
   dogsContainer: {
     paddingHorizontal: 20,
     paddingVertical: 20,
-    paddingRight: 24, // Extra padding on the right for last card
+    paddingLeft: 24, // Extra padding on the left for last card when list is inverted
   },
   dogCard: {
     backgroundColor: '#F6D9B7',
     borderRadius: 16,
     padding: 16,
     width: 300, // Fixed width for horizontal scrolling
-    marginRight: 16, // Space between cards
+    marginLeft: 16, // Space between cards in inverted horizontal list
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 8,

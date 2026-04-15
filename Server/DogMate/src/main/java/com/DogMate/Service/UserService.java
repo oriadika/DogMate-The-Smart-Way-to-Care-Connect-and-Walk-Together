@@ -1,9 +1,14 @@
 package com.DogMate.Service;
 
 import com.DogMate.Domain.*;
+import com.DogMate.util.PhoneValidation;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,13 +23,22 @@ public class UserService {
     private final IUserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final IReminderRepository reminderRepository;
+    private final ISupportRequestRepository supportRequestRepository;
+    private final JavaMailSender mailSender;
+    private final String supportEmail;
 
     @Autowired
     public UserService(IUserRepository userRepository, PasswordEncoder passwordEncoder,
-                       IReminderRepository reminderRepository) {
+                       IReminderRepository reminderRepository,
+                       ISupportRequestRepository supportRequestRepository,
+                       ObjectProvider<JavaMailSender> mailSenderProvider,
+                       @Value("${dogmate.support.email:dogmateteam@gmail.com}") String supportEmail) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.reminderRepository = reminderRepository;
+        this.supportRequestRepository = supportRequestRepository;
+        this.mailSender = mailSenderProvider.getIfAvailable();
+        this.supportEmail = supportEmail;
         // createAdminUser("admin2@gmail.com", "123456", "Admin");    
     }
 
@@ -169,6 +183,42 @@ public class UserService {
         }
         
         // Save to repository (orchestration)
+        userRepository.save(user);
+    }
+
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    public void changePassword(UUID userId, String oldPassword, String newPassword, String confirmNewPassword) {
+        UserAccount.validateUserId(userId);
+        UserAccount.validatePassword(oldPassword);
+        UserAccount.validatePassword(newPassword);
+        UserAccount.validatePassword(confirmNewPassword);
+
+        Optional<UserAccount> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with ID: " + userId);
+        }
+
+        UserAccount user = userOpt.get();
+        boolean oldPasswordMatches = user.verifyPassword(oldPassword, passwordEncoder::matches);
+        if (!oldPasswordMatches) {
+            throw new IllegalArgumentException("Old password is incorrect");
+        }
+        if (!newPassword.equals(confirmNewPassword)) {
+            throw new IllegalArgumentException("New password and confirmation do not match");
+        }
+        if (oldPassword.equals(newPassword)) {
+            throw new IllegalArgumentException("New password must be different from old password");
+        }
+
+        if (user instanceof RegularUser) {
+            ((RegularUser) user).changePassword(newPassword, passwordEncoder::encode);
+        } else if (user instanceof AdminUser) {
+            ((AdminUser) user).changePassword(newPassword, passwordEncoder::encode);
+        } else {
+            UserAccount.validatePassword(newPassword);
+            user.setPasswordHash(passwordEncoder.encode(newPassword));
+        }
+
         userRepository.save(user);
     }
 
@@ -523,5 +573,166 @@ public class UserService {
                     .map(dogRelationship -> dogRelationship.getDog()).toList();
         }
         return null;
+    }
+
+    public UserProfileData getUserProfile(UUID userId) {
+        UserAccount.validateUserId(userId);
+        Optional<UserAccount> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with ID: " + userId);
+        }
+        UserAccount user = userOpt.get();
+        if (user instanceof RegularUser regularUser) {
+            return new UserProfileData(
+                regularUser.getId(),
+                regularUser.getEmail(),
+                "owner",
+                regularUser.getFirst_name(),
+                regularUser.getLast_name(),
+                regularUser.getPhoneNumber()
+            );
+        }
+        if (user instanceof DogWalkerUser walkerUser) {
+            return new UserProfileData(
+                walkerUser.getId(),
+                walkerUser.getEmail(),
+                "walker",
+                walkerUser.getFirst_name(),
+                walkerUser.getLast_name(),
+                walkerUser.getPhoneNumber()
+            );
+        }
+        throw new IllegalArgumentException("Only owner/walker accounts support profile editing");
+    }
+
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    public UserProfileData updateUserProfile(UUID userId, String firstName, String lastName, String phoneNumber) {
+        UserAccount.validateUserId(userId);
+        Optional<UserAccount> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with ID: " + userId);
+        }
+
+        String normalizedPhone = PhoneValidation.requireValidIsraeliMobile(phoneNumber);
+        UserAccount user = userOpt.get();
+
+        if (user instanceof RegularUser regularUser) {
+            RegularUser.validateFirstName(firstName);
+            RegularUser.validateLastName(lastName);
+            regularUser.setFirst_name(firstName.trim());
+            regularUser.setLast_name(lastName.trim());
+            regularUser.setPhoneNumber(normalizedPhone);
+            UserAccount saved = userRepository.save(regularUser);
+            RegularUser persisted = (RegularUser) saved;
+            return new UserProfileData(
+                persisted.getId(),
+                persisted.getEmail(),
+                "owner",
+                persisted.getFirst_name(),
+                persisted.getLast_name(),
+                persisted.getPhoneNumber()
+            );
+        }
+
+        if (user instanceof DogWalkerUser walkerUser) {
+            DogWalkerUser.validateFirstName(firstName);
+            DogWalkerUser.validateLastName(lastName);
+            walkerUser.setFirst_name(firstName.trim());
+            walkerUser.setLast_name(lastName.trim());
+            walkerUser.setPhoneNumber(normalizedPhone);
+            UserAccount saved = userRepository.save(walkerUser);
+            DogWalkerUser persisted = (DogWalkerUser) saved;
+            return new UserProfileData(
+                persisted.getId(),
+                persisted.getEmail(),
+                "walker",
+                persisted.getFirst_name(),
+                persisted.getLast_name(),
+                persisted.getPhoneNumber()
+            );
+        }
+
+        throw new IllegalArgumentException("Only owner/walker accounts support profile editing");
+    }
+
+    public record UserProfileData(
+        UUID userId,
+        String email,
+        String userRole,
+        String firstName,
+        String lastName,
+        String phoneNumber
+    ) {}
+
+    public SupportRequest createSupportRequest(
+        UUID userId,
+        String category,
+        String subject,
+        String description,
+        String contactEmail,
+        String contactPhone
+    ) {
+        UserAccount.validateUserId(userId);
+        Optional<UserAccount> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("User not found with ID: " + userId);
+        }
+
+        String normalizedCategory = category == null ? "" : category.trim();
+        String normalizedSubject = subject == null ? "" : subject.trim();
+        String normalizedDescription = description == null ? "" : description.trim();
+        String normalizedContactEmail = contactEmail == null ? "" : contactEmail.trim();
+        String normalizedContactPhone = contactPhone == null ? "" : contactPhone.trim();
+
+        if (normalizedCategory.isEmpty() || normalizedSubject.isEmpty() || normalizedDescription.isEmpty()) {
+            throw new IllegalArgumentException("Category, subject and description are required");
+        }
+        if (normalizedDescription.length() < 10) {
+            throw new IllegalArgumentException("Description must contain at least 10 characters");
+        }
+        if (normalizedContactEmail.isEmpty()) {
+            normalizedContactEmail = userOpt.get().getEmail();
+        }
+        UserAccount.validateEmail(normalizedContactEmail);
+
+        SupportRequest supportRequest = new SupportRequest(
+            userId,
+            normalizedCategory,
+            normalizedSubject,
+            normalizedDescription,
+            normalizedContactEmail,
+            normalizedContactPhone
+        );
+        SupportRequest saved = supportRequestRepository.save(supportRequest);
+        sendSupportRequestEmail(saved, userOpt.get());
+        return saved;
+    }
+
+    private void sendSupportRequestEmail(SupportRequest supportRequest, UserAccount user) {
+        if (mailSender == null) {
+            return;
+        }
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(user.getEmail());
+            message.setReplyTo(user.getEmail());
+            message.setTo(supportEmail);
+            message.setSubject("[DogMate Support] " + supportRequest.getSubject());
+            message.setText(
+                "Support request submitted\n" +
+                "Request ID: " + supportRequest.getId() + "\n" +
+                "User ID: " + user.getId() + "\n" +
+                "User Email: " + user.getEmail() + "\n" +
+                "Category: " + supportRequest.getCategory() + "\n" +
+                "Contact Email: " + supportRequest.getContactEmail() + "\n" +
+                "Contact Phone: " + supportRequest.getContactPhone() + "\n" +
+                "Created At: " + supportRequest.getCreatedAt() + "\n\n" +
+                "Description:\n" +
+                supportRequest.getDescription()
+            );
+            mailSender.send(message);
+        } catch (Exception ignored) {
+            // Intentionally do not fail request creation when email delivery fails.
+        }
     }
 }

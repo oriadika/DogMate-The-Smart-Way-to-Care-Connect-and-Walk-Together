@@ -17,6 +17,10 @@ import OwnerWalkersScreen from './screens/OwnerWalkersScreen';
 import DogProfileScreen from './screens/DogProfileScreen';
 import AddDogScreen from './screens/AddDogScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import EditProfileScreen from './screens/EditProfileScreen';
+import ChangePasswordScreen from './screens/ChangePasswordScreen';
+import TermsPrivacyScreen from './screens/TermsPrivacyScreen';
+import SupportScreen from './screens/SupportScreen';
 import FoodIntakeScreen from './screens/Health/FoodIntakeScreen';
 import AddReminderScreen from './screens/AddReminderScreen';
 import HealthScreen from './screens/Health/HealthScreen';
@@ -60,6 +64,10 @@ export default function App() {
           <Stack.Screen name="DogProfile" component={DogProfileScreen} />
           <Stack.Screen name="AddDog" component={AddDogScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+          <Stack.Screen name="TermsPrivacy" component={TermsPrivacyScreen} />
+          <Stack.Screen name="Support" component={SupportScreen} />
           <Stack.Screen name="Health" component={HealthScreen} />
           <Stack.Screen name="FoodInventoryHub" component={FoodInventoryHubScreen} />
           <Stack.Screen name="FoodIntake" component={FoodIntakeScreen} />

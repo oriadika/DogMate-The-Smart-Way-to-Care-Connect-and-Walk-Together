@@ -7,12 +7,14 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  Pressable,
   KeyboardAvoidingView,
   Platform,
   Alert,
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
 import { isValidIsraeliMobileInput } from '../utils/phoneValidation';
 
@@ -24,6 +26,7 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignUp = async () => {
@@ -47,6 +50,11 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
         'מספר טלפון לא תקין',
         'נדרש מספר פלאפון ישראלי תקין (למשל 05XXXXXXXX).'
       );
+      return;
+    }
+
+    if (!acceptedTerms) {
+      Alert.alert('נדרש אישור', 'יש לאשר שקראת את תנאי השימוש ומדיניות הפרטיות.');
       return;
     }
 
@@ -239,11 +247,33 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
                   textAlign="right"
                 />
 
+                <View style={styles.termsRow}>
+                  <Pressable
+                    style={styles.termsCheckboxButton}
+                    onPress={() => setAcceptedTerms((prev) => !prev)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: acceptedTerms }}
+                    accessibilityLabel="אישור קריאת תנאי שימוש ומדיניות פרטיות"
+                  >
+                    <Ionicons
+                      name={acceptedTerms ? 'checkbox' : 'square-outline'}
+                      size={24}
+                      color={acceptedTerms ? PRIMARY_COLOR : '#8B7355'}
+                    />
+                  </Pressable>
+                  <Text style={styles.termsText}>
+                    אני מאשר/ת שקראתי את{' '}
+                    <Text style={styles.termsLink} onPress={() => navigation.navigate('TermsPrivacy')}>
+                      תנאי השימוש ומדיניות הפרטיות
+                    </Text>
+                  </Text>
+                </View>
+
                 {/* Sign Up button */}
                 <TouchableOpacity
-                  style={[styles.primaryButton, isLoading && styles.primaryButtonDisabled]}
+                  style={[styles.primaryButton, (isLoading || !acceptedTerms) && styles.primaryButtonDisabled]}
                   onPress={handleSignUp}
-                  disabled={isLoading}
+                  disabled={isLoading || !acceptedTerms}
                   activeOpacity={0.85}
                 >
                   {isLoading ? (
@@ -365,6 +395,29 @@ const styles = StyleSheet.create({
   },
   roleTextInactive: {
     color: '#5C4033',
+  },
+  termsRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 8,
+    gap: 8,
+  },
+  termsCheckboxButton: {
+    padding: 2,
+  },
+  termsText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#5C4033',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: '#1E6BB8',
+    textDecorationLine: 'underline',
+    fontWeight: '700',
   },
   primaryButton: {
     marginTop: 10,

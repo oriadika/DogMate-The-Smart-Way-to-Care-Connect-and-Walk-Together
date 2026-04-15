@@ -97,6 +97,159 @@ public class UserController {
         }
     }
 
+    @GetMapping("/{userId}/profile")
+    public ResponseEntity<?> getUserProfile(@PathVariable String userId) {
+        UUID parsedId;
+        try {
+            parsedId = UUID.fromString(userId);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse("Invalid user ID format"));
+        }
+
+        try {
+            UserService.UserProfileData profile = userService.getUserProfile(parsedId);
+            return ResponseEntity.ok(new UserProfileResponse(
+                profile.userId().toString(),
+                profile.email(),
+                profile.userRole(),
+                profile.firstName(),
+                profile.lastName(),
+                profile.phoneNumber()
+            ));
+        } catch (IllegalArgumentException e) {
+            String msg = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
+            HttpStatus status = msg.contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            return ResponseEntity.status(status).body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to load profile: " + e.getMessage()));
+        }
+    }
+
+    @PutMapping("/{userId}/profile")
+    public ResponseEntity<?> updateUserProfile(
+            @PathVariable String userId,
+            @RequestBody ProfileUpdateRequest request) {
+        UUID parsedId;
+        try {
+            parsedId = UUID.fromString(userId);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse("Invalid user ID format"));
+        }
+
+        if (request == null ||
+            request.getFirstName() == null ||
+            request.getLastName() == null ||
+            request.getPhoneNumber() == null) {
+            return ResponseEntity.badRequest().body(createErrorResponse("Missing required fields"));
+        }
+
+        try {
+            UserService.UserProfileData profile = userService.updateUserProfile(
+                parsedId,
+                request.getFirstName(),
+                request.getLastName(),
+                request.getPhoneNumber()
+            );
+            return ResponseEntity.ok(new UserProfileResponse(
+                profile.userId().toString(),
+                profile.email(),
+                profile.userRole(),
+                profile.firstName(),
+                profile.lastName(),
+                profile.phoneNumber()
+            ));
+        } catch (IllegalArgumentException e) {
+            String msg = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
+            HttpStatus status = msg.contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            return ResponseEntity.status(status).body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to update profile: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{userId}/change-password")
+    public ResponseEntity<?> changePassword(
+            @PathVariable String userId,
+            @RequestBody ChangePasswordRequest request) {
+        UUID parsedId;
+        try {
+            parsedId = UUID.fromString(userId);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse("Invalid user ID format"));
+        }
+
+        if (request == null ||
+            request.getOldPassword() == null ||
+            request.getNewPassword() == null ||
+            request.getConfirmNewPassword() == null) {
+            return ResponseEntity.badRequest().body(createErrorResponse("Missing required fields"));
+        }
+
+        try {
+            userService.changePassword(
+                parsedId,
+                request.getOldPassword(),
+                request.getNewPassword(),
+                request.getConfirmNewPassword()
+            );
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Password updated successfully"
+            ));
+        } catch (IllegalArgumentException e) {
+            String msg = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
+            HttpStatus status = msg.contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            return ResponseEntity.status(status).body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to update password: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{userId}/support-requests")
+    public ResponseEntity<?> createSupportRequest(
+            @PathVariable String userId,
+            @RequestBody SupportRequestCreateRequest request) {
+        UUID parsedId;
+        try {
+            parsedId = UUID.fromString(userId);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse("Invalid user ID format"));
+        }
+
+        if (request == null ||
+            request.getCategory() == null ||
+            request.getSubject() == null ||
+            request.getDescription() == null) {
+            return ResponseEntity.badRequest().body(createErrorResponse("Missing required fields"));
+        }
+
+        try {
+            var saved = userService.createSupportRequest(
+                parsedId,
+                request.getCategory(),
+                request.getSubject(),
+                request.getDescription(),
+                request.getContactEmail(),
+                request.getContactPhone()
+            );
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "success", true,
+                "message", "Support request submitted successfully",
+                "requestId", saved.getId().toString()
+            ));
+        } catch (IllegalArgumentException e) {
+            String msg = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
+            HttpStatus status = msg.contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            return ResponseEntity.status(status).body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("Failed to submit support request: " + e.getMessage()));
+        }
+    }
+
     /**
      * Logout a user by ID (sets isActive to false)
      * POST /api/users/logout/{userId}
@@ -775,6 +928,135 @@ public class UserController {
             this.isLoggedIn = isActive;
         }
     }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ProfileUpdateRequest {
+        private String firstName;
+        private String lastName;
+        private String phoneNumber;
+
+        public ProfileUpdateRequest() {
+        }
+
+        public String getFirstName() {
+            return firstName;
+        }
+
+        public void setFirstName(String firstName) {
+            this.firstName = firstName;
+        }
+
+        public String getLastName() {
+            return lastName;
+        }
+
+        public void setLastName(String lastName) {
+            this.lastName = lastName;
+        }
+
+        public String getPhoneNumber() {
+            return phoneNumber;
+        }
+
+        public void setPhoneNumber(String phoneNumber) {
+            this.phoneNumber = phoneNumber;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ChangePasswordRequest {
+        private String oldPassword;
+        private String newPassword;
+        private String confirmNewPassword;
+
+        public ChangePasswordRequest() {
+        }
+
+        public String getOldPassword() {
+            return oldPassword;
+        }
+
+        public void setOldPassword(String oldPassword) {
+            this.oldPassword = oldPassword;
+        }
+
+        public String getNewPassword() {
+            return newPassword;
+        }
+
+        public void setNewPassword(String newPassword) {
+            this.newPassword = newPassword;
+        }
+
+        public String getConfirmNewPassword() {
+            return confirmNewPassword;
+        }
+
+        public void setConfirmNewPassword(String confirmNewPassword) {
+            this.confirmNewPassword = confirmNewPassword;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class SupportRequestCreateRequest {
+        private String category;
+        private String subject;
+        private String description;
+        private String contactEmail;
+        private String contactPhone;
+
+        public SupportRequestCreateRequest() {
+        }
+
+        public String getCategory() {
+            return category;
+        }
+
+        public void setCategory(String category) {
+            this.category = category;
+        }
+
+        public String getSubject() {
+            return subject;
+        }
+
+        public void setSubject(String subject) {
+            this.subject = subject;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public void setDescription(String description) {
+            this.description = description;
+        }
+
+        public String getContactEmail() {
+            return contactEmail;
+        }
+
+        public void setContactEmail(String contactEmail) {
+            this.contactEmail = contactEmail;
+        }
+
+        public String getContactPhone() {
+            return contactPhone;
+        }
+
+        public void setContactPhone(String contactPhone) {
+            this.contactPhone = contactPhone;
+        }
+    }
+
+    public record UserProfileResponse(
+        String userId,
+        String email,
+        String userRole,
+        String firstName,
+        String lastName,
+        String phoneNumber
+    ) {}
 
     // Inner class for ping request DTO
     @JsonIgnoreProperties(ignoreUnknown = true)
