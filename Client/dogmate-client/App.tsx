@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { UsersProvider } from './contexts/UsersContext';
 
 import StartScreen from './screens/StartScreen';
@@ -49,9 +50,10 @@ export default function App() {
   }, []);
 
   return (
-    <UsersProvider>
-      <NavigationContainer>
-        <Stack.Navigator initialRouteName="Start" screenOptions={{ headerShown: false }}>
+    <SafeAreaProvider>
+      <UsersProvider>
+        <NavigationContainer>
+          <Stack.Navigator initialRouteName="Start" screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Start" component={StartScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="SignUp" component={SignUpScreen} />
@@ -82,8 +84,9 @@ export default function App() {
           <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
           <Stack.Screen name="AdminManageDogs" component={ManageDogScreens} />
           <Stack.Screen name="DogDetail" component={DogDetailScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </UsersProvider>
+          </Stack.Navigator>
+        </NavigationContainer>
+      </UsersProvider>
+    </SafeAreaProvider>
   );
 }

@@ -1,42 +1,106 @@
 // screens/ProfileScreen.tsx
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
-  SafeAreaView,
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Image,
+  Platform,
 } from 'react-native';
-import { FontAwesome5, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Circle } from 'react-native-maps';
+import Constants from 'expo-constants';
+import { BlurView } from 'expo-blur';
+import { FontAwesome5, Ionicons } from '@expo/vector-icons';
+import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import Slider from '@react-native-community/slider';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { userAPI } from '../services/api';
 import websocketService from '../services/websocket';
 import locationService, { LocationService } from '../services/location';
+import { dogMateMapStyle } from '../src/constants/MapStyles';
+
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const USERS_REFRESH_INTERVAL_MS = 5000;
 const LOCATION_PUSH_INTERVAL_MS = 5000;
+const HEADER_OVERLAY_HEIGHT = 56;
+const MARKER_SIZE = 42;
+const SELECTION_CARD_APPROX_HEIGHT = 168;
+
+/** זום מסחרי — פירוט רחובות (~0.005) */
+const WALK_MAP_LAT_DELTA = 0.005;
+const WALK_MAP_LNG_DELTA = 0.005;
 
 type ProfileCacheEntry = {
   loggedUsers: any[];
   signature: string;
 };
 
+type MapSelection = null | 'self' | { kind: 'other'; user: any };
+
 const profileDataCache = new Map<string, ProfileCacheEntry>();
 const profileDirtyUsers = new Set<string>();
 
 const buildUsersSignature = (users: any[]): string => {
   const usersPart = users
-    .map((u: any) => `${u?.id ?? ''}:${u?.latitude ?? ''}:${u?.longitude ?? ''}:${u?.name ?? ''}`)
+    .map(
+      (u: any) =>
+        `${u?.id ?? ''}:${u?.latitude ?? ''}:${u?.longitude ?? ''}:${u?.name ?? ''}:${u?.mapDogProfileImageUrl ?? ''}`
+    )
     .join('|');
   return `${users.length}#${usersPart}`;
 };
 
+function MapMarkerAvatar({
+  uri,
+  size = MARKER_SIZE,
+  borderColor = PRIMARY_COLOR,
+}: {
+  uri?: string | null;
+  size?: number;
+  borderColor?: string;
+}) {
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 3,
+          borderColor,
+        }}
+        resizeMode="cover"
+      />
+    );
+  }
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: PRIMARY_COLOR,
+        borderWidth: 3,
+        borderColor: '#fff',
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3,
+        elevation: 4,
+      }}
+    >
+      <FontAwesome5 name="paw" size={size * 0.42} color="#fff" />
+    </View>
+  );
+}
+
 const ProfileScreen = ({ navigation, route }: any) => {
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const insets = useSafeAreaInsets();
   const [loggedUsers, setLoggedUsers] = useState<any[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [currentUserDisplayName, setCurrentUserDisplayName] = useState<string>(
@@ -44,14 +108,19 @@ const ProfileScreen = ({ navigation, route }: any) => {
   );
   const [currentUserRoleLabel, setCurrentUserRoleLabel] = useState<string>(route?.params?.role || '');
   const [serverAccountType, setServerAccountType] = useState<string | null>(null);
-  const [wsConnected, setWsConnected] = useState(false);
+  const [, setCurrentUserDogImageUrl] = useState<string | null>(null);
   const [locationTracking, setLocationTracking] = useState(false);
-  const [isLocationSharingEnabled, setIsLocationSharingEnabled] = useState(false); // Default: sharing disabled (location hidden)
+  const [isLocationSharingEnabled, setIsLocationSharingEnabled] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [mapRegion, setMapRegion] = useState<any>(null);
-  const [radiusKm, setRadiusKm] = useState<number>(1); // Default 1km radius
-  const [showRadiusFilter, setShowRadiusFilter] = useState<boolean>(true);
+  const [radiusKm, setRadiusKm] = useState<number>(1);
+  const [selectedMarker, setSelectedMarker] = useState<MapSelection>(null);
   const mapRef = useRef<MapView>(null);
+
+  const iosGoogleMapsKey = Constants.expoConfig?.ios?.config?.googleMapsApiKey as string | undefined;
+  const useGoogleMapsOnIos =
+    Platform.OS === 'ios' && typeof iosGoogleMapsKey === 'string' && iosGoogleMapsKey.trim().length > 0;
+  const useGoogleMapsProvider = Platform.OS === 'android' || useGoogleMapsOnIos;
+  const useAppleMapsFallback = Platform.OS === 'ios' && !useGoogleMapsOnIos;
 
   const isWalkerProfile = useMemo(
     () => route?.params?.userRole === 'walker' || serverAccountType === 'DogWalkerUser',
@@ -64,28 +133,15 @@ const ProfileScreen = ({ navigation, route }: any) => {
     }
   }, [route?.params?.userRole]);
 
-  // Radius filter for map visibility
   const usersInRadius = loggedUsers.filter((user: any) => {
-    if (user.latitude == null || user.longitude == null) return false; // No location = skip
-    if (user.distance == null) return true; // Distance not calculated yet - include them
+    if (user.latitude == null || user.longitude == null) return false;
+    if (user.distance == null) return true;
     return user.distance <= radiusKm;
   });
 
-  // Ping list includes all logged users, even those hiding location.
-  const usersForPing = loggedUsers;
-
-  // Show same cohort on map and in list for consistent UX.
-  const usersWithLocation = usersInRadius.filter((user: any) => user.latitude != null && user.longitude != null);
-
-  // Debug: Log users data
-  useEffect(() => {
-    console.log('📊 Total logged users:', loggedUsers.length);
-    console.log('📊 Users with location:', usersWithLocation.length);
-    console.log('📊 Users in radius:', usersInRadius.length);
-    if (loggedUsers.length > 0) {
-      console.log('📊 First user data:', JSON.stringify(loggedUsers[0]));
-    }
-  }, [loggedUsers, usersWithLocation.length, usersInRadius.length]);
+  const usersWithLocation = usersInRadius.filter(
+    (user: any) => user.latitude != null && user.longitude != null
+  );
 
   useEffect(() => {
     const currentUserId = route?.params?.userId;
@@ -101,30 +157,22 @@ const ProfileScreen = ({ navigation, route }: any) => {
       fetchLoggedUsers({ showLoader: !cached });
     }
 
-    // Always refresh in background so other users become visible without reopening screen.
     const refreshInterval = setInterval(() => {
       fetchLoggedUsers({ showLoader: false });
     }, USERS_REFRESH_INTERVAL_MS);
 
-    // Set up periodic location sending (every 5 seconds when sharing is enabled)
-    let locationSendInterval: ReturnType<typeof setInterval> | null = null;
-
-    // Request location permissions and start tracking
     const initializeLocation = async () => {
       const userId = route?.params?.userId;
       const permissionsGranted = await locationService.requestPermissions();
-      
+
       if (permissionsGranted) {
         setLocationTracking(true);
-        
-        // Get initial location
+
         const initialLocation = await locationService.getCurrentLocation();
         if (initialLocation && userId) {
           setUserLocation(initialLocation);
-          console.log('📍 Initial location obtained:', initialLocation);
         }
 
-        // Start watching location for continuous updates
         const success = locationService.startWatchingLocation(
           async (location) => {
             setUserLocation(location);
@@ -133,9 +181,8 @@ const ProfileScreen = ({ navigation, route }: any) => {
             console.error('Location tracking error:', error);
           }
         );
-        
+
         if (!success) {
-          console.warn('⚠️ Failed to start location watching');
           setLocationTracking(false);
         }
       }
@@ -145,31 +192,23 @@ const ProfileScreen = ({ navigation, route }: any) => {
       initializeLocation();
     }
 
-    // Connect to WebSocket for real-time ping notifications
     const userId = route?.params?.userId;
     if (userId) {
-      console.log('📱 ProfileScreen mounted, connecting WebSocket for user:', userId);
-      // Small delay to ensure everything is ready
       const timer = setTimeout(() => {
         connectWebSocket(userId);
       }, 500);
-      
+
       return () => {
         clearTimeout(timer);
         clearInterval(refreshInterval);
-        if (locationSendInterval) clearInterval(locationSendInterval);
         locationService.stopWatchingLocation();
-        console.log('📱 ProfileScreen unmounting, disconnecting WebSocket');
         websocketService.disconnect();
       };
     }
 
-    // Cleanup on unmount
     return () => {
       clearInterval(refreshInterval);
-      if (locationSendInterval) clearInterval(locationSendInterval);
       locationService.stopWatchingLocation();
-      console.log('📱 ProfileScreen unmounting, disconnecting WebSocket');
       websocketService.disconnect();
     };
   }, [route?.params?.userId, route?.params?.userRole]);
@@ -183,8 +222,6 @@ const ProfileScreen = ({ navigation, route }: any) => {
     setIsLocationSharingEnabled(false);
   }, [serverAccountType]);
 
-  // Send location updates to server continuously when sharing is enabled
-  // Use a ref to store the latest location to avoid recreating the interval
   const userLocationRef = useRef(userLocation);
   useEffect(() => {
     userLocationRef.current = userLocation;
@@ -199,22 +236,22 @@ const ProfileScreen = ({ navigation, route }: any) => {
     }
 
     if (userId && isLocationSharingEnabled) {
-      // Send location immediately
       if (userLocationRef.current) {
-        userAPI.updateLocation(userId, userLocationRef.current.latitude, userLocationRef.current.longitude)
+        userAPI
+          .updateLocation(userId, userLocationRef.current.latitude, userLocationRef.current.longitude)
           .then(() => console.log('📍 Location sent to server'))
           .catch((error) => console.error('Failed to update location:', error));
       }
-      
-      // Send location on a moderate interval to reduce backend load.
+
       locationInterval = setInterval(() => {
         if (userLocationRef.current) {
-          userAPI.updateLocation(userId, userLocationRef.current.latitude, userLocationRef.current.longitude)
+          userAPI
+            .updateLocation(userId, userLocationRef.current.latitude, userLocationRef.current.longitude)
             .catch((error) => console.error('Failed to update location:', error));
         }
       }, LOCATION_PUSH_INTERVAL_MS);
     }
-    
+
     return () => {
       if (locationInterval) {
         clearInterval(locationInterval);
@@ -222,16 +259,15 @@ const ProfileScreen = ({ navigation, route }: any) => {
     };
   }, [isLocationSharingEnabled, route?.params?.userId, isWalkerProfile]);
 
-  // Recalculate distances when userLocation changes
   useEffect(() => {
     if (userLocation && loggedUsers.length > 0) {
       const updatedUsers = loggedUsers.map((user: any) => {
         if (user.latitude && user.longitude) {
           const distance = LocationService.calculateDistance(
-              userLocation.latitude,
-              userLocation.longitude,
-              user.latitude,
-              user.longitude
+            userLocation.latitude,
+            userLocation.longitude,
+            user.latitude,
+            user.longitude
           );
           return { ...user, distance };
         }
@@ -241,58 +277,17 @@ const ProfileScreen = ({ navigation, route }: any) => {
     }
   }, [userLocation]);
 
-  // Calculate map region to include all users
-  useEffect(() => {
-    if (userLocation) {
-      const usersWithLocation = loggedUsers.filter((user: any) => user.latitude != null && user.longitude != null);
-      
-      if (usersWithLocation.length === 0) {
-        // Only current user, center on their location with 500 meter radius
-        setMapRegion({
-          latitude: userLocation.latitude,
-          longitude: userLocation.longitude,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
-        });
-      } else {
-        // Calculate bounds to include all users, but limit to 500 meter radius
-        const latitudes = [userLocation.latitude, ...usersWithLocation.map((u: any) => u.latitude)];
-        const longitudes = [userLocation.longitude, ...usersWithLocation.map((u: any) => u.longitude)];
-        
-        const minLat = Math.min(...latitudes);
-        const maxLat = Math.max(...latitudes);
-        const minLng = Math.min(...longitudes);
-        const maxLng = Math.max(...longitudes);
-        
-        const latDelta = (maxLat - minLat) * 1.5;
-        const lngDelta = (maxLng - minLng) * 1.5;
-        
-        // Use calculated delta if it's within 500 meters, otherwise use 500 meter radius
-        const finalLatDelta = latDelta > 0 && latDelta < 0.005 ? latDelta : 0.005;
-        const finalLngDelta = lngDelta > 0 && lngDelta < 0.005 ? lngDelta : 0.005;
-        
-        setMapRegion({
-          latitude: (minLat + maxLat) / 2,
-          longitude: (minLng + maxLng) / 2,
-          latitudeDelta: Math.max(finalLatDelta, 0.005),
-          longitudeDelta: Math.max(finalLngDelta, 0.005),
-        });
-      }
-    }
-  }, [userLocation, loggedUsers]);
   const toggleLocationSharing = async () => {
     if (isWalkerProfile) {
       return;
     }
     const newState = !isLocationSharingEnabled;
     setIsLocationSharingEnabled(newState);
-    
+
     const userId = route?.params?.userId;
     if (!newState && userId) {
-      // Clear location from server when sharing is disabled
       try {
         await userAPI.clearLocation(userId);
-        console.log('🔒 Location cleared from server - you are now hidden');
       } catch (error) {
         console.error('Failed to clear location:', error);
       }
@@ -302,83 +297,20 @@ const ProfileScreen = ({ navigation, route }: any) => {
       profileDirtyUsers.add(userId);
       fetchLoggedUsers({ showLoader: false });
     }
-    
-    console.log(`📍 Location sharing ${newState ? 'enabled' : 'disabled'}`);
   };
 
   const connectWebSocket = (userId: string) => {
     websocketService.connect(userId, {
-      onConnected: () => {
-        console.log('WebSocket connected');
-        setWsConnected(true);
-      },
-      onDisconnected: () => {
-        console.log('WebSocket disconnected');
-        setWsConnected(false);
-      },
+      onConnected: () => {},
+      onDisconnected: () => {},
       onPingReceived: (ping: any) => {
-        console.log('Ping received from:', ping.fromUserName);
-        
-        // Show instant notification when ping is received
-        Alert.alert(
-          'פינג חדש! 🐕',
-          `${ping.fromUserName} שלח לך פינג!`,
-          [
-            {
-              text: 'בסדר',
-            },
-          ]
-        );
+        Alert.alert('פינג חדש! 🐕', `${ping.fromUserName} שלח לך פינג!`, [{ text: 'בסדר' }]);
       },
       onError: (error: any) => {
         console.error('WebSocket error:', error);
       },
     });
   };
-
-  const checkPendingPings = async () => {
-    const currentUserId = route?.params?.userId;
-    if (!currentUserId) return;
-
-    try {
-      const response = await userAPI.getPendingPings(currentUserId);
-      if (response.success && response.pings && response.pings.length > 0) {
-        for (const ping of response.pings) {
-          Alert.alert(
-            'פינג חדש! 🐕',
-            `${ping.fromUserName || 'משתמש'} שלח לך פינג!`,
-            [{ text: 'בסדר' }]
-          );
-
-          if (ping.id) {
-            try {
-              await userAPI.markPingAsRead(ping.id);
-            } catch (markError) {
-              console.warn('Failed to mark ping as read:', markError);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      // Silent fallback polling: do not interrupt user.
-      console.log('Pending ping check failed:', error);
-    }
-  };
-
-  useEffect(() => {
-    if (wsConnected) {
-      return;
-    }
-
-    checkPendingPings();
-    const pendingInterval = setInterval(() => {
-      checkPendingPings();
-    }, 5000);
-
-    return () => {
-      clearInterval(pendingInterval);
-    };
-  }, [wsConnected, route?.params?.userId]);
 
   const fetchLoggedUsers = async (options?: { showLoader?: boolean }) => {
     const shouldShowLoader = options?.showLoader ?? true;
@@ -389,7 +321,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
       }
       const data = await userAPI.getLoggedUsers();
       const currentUserId = route?.params?.userId;
-      
+
       if (data.success && data.users) {
         const currentUser = data.users.find((user: any) => user.id === currentUserId);
         if (currentUser) {
@@ -405,60 +337,68 @@ const ProfileScreen = ({ navigation, route }: any) => {
                 ? 'דוגווקר'
                 : 'מנהל'
           );
+          setCurrentUserDogImageUrl(
+            typeof currentUser.mapDogProfileImageUrl === 'string' && currentUser.mapDogProfileImageUrl
+              ? currentUser.mapDogProfileImageUrl
+              : null
+          );
         }
 
-        // Format users for display and filter out current user
         const formattedUsers = data.users
-          .filter((user: any) => user.id !== currentUserId) // Filter out current user
+          .filter((user: any) => user.id !== currentUserId)
           .map((user: any) => {
-          const userObj: any = {
-            id: user.id,
-            name:
-              user.type === 'RegularUser' || user.type === 'DogWalkerUser'
-                ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
-                : `Admin: ${user.email}`,
-            role:
-              user.type === 'RegularUser'
-                ? 'בעל כלב'
-                : user.type === 'DogWalkerUser'
-                  ? 'דוגווקר'
-                  : `מנהל (רמה ${user.permissionLevel})`,
-            email: user.email,
-            type: user.type,
-          };
+            const userObj: any = {
+              id: user.id,
+              name:
+                user.type === 'RegularUser' || user.type === 'DogWalkerUser'
+                  ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                  : `Admin: ${user.email}`,
+              role:
+                user.type === 'RegularUser'
+                  ? 'בעל כלב'
+                  : user.type === 'DogWalkerUser'
+                    ? 'דוגווקר'
+                    : `מנהל (רמה ${user.permissionLevel})`,
+              email: user.email,
+              type: user.type,
+            };
 
-          // מיקום לבעלי כלב ולדוגווקרים (למפה ולמיון מרחק)
-          const canHaveLocation =
-            (user.type === 'RegularUser' || user.type === 'DogWalkerUser') &&
-            user.latitude != null &&
-            user.longitude != null;
-          if (canHaveLocation) {
-            userObj.latitude = user.latitude;
-            userObj.longitude = user.longitude;
-
-            if (userLocation) {
-              const distance = LocationService.calculateDistance(
-                userLocation.latitude,
-                userLocation.longitude,
-                user.latitude,
-                user.longitude
-              );
-              userObj.distance = distance;
+            if (typeof user.mapDogProfileImageUrl === 'string' && user.mapDogProfileImageUrl) {
+              userObj.mapDogProfileImageUrl = user.mapDogProfileImageUrl;
             }
-          }
 
-          return userObj;
-        });
+            const canHaveLocation =
+              (user.type === 'RegularUser' || user.type === 'DogWalkerUser') &&
+              user.latitude != null &&
+              user.longitude != null;
+            if (canHaveLocation) {
+              userObj.latitude = user.latitude;
+              userObj.longitude = user.longitude;
+
+              if (userLocation) {
+                userObj.distance = LocationService.calculateDistance(
+                  userLocation.latitude,
+                  userLocation.longitude,
+                  user.latitude,
+                  user.longitude
+                );
+              }
+            }
+
+            return userObj;
+          });
         const updatedUsersWithDistance = userLocation
           ? formattedUsers.map((user: any) => {
               if (user.latitude != null && user.longitude != null) {
-                const distance = LocationService.calculateDistance(
+                return {
+                  ...user,
+                  distance: LocationService.calculateDistance(
                     userLocation.latitude,
                     userLocation.longitude,
                     user.latitude,
                     user.longitude
-                );
-                return { ...user, distance };
+                  ),
+                };
               }
               return user;
             })
@@ -492,25 +432,27 @@ const ProfileScreen = ({ navigation, route }: any) => {
     }
   };
 
-  // Function to focus map on a user's location
-  const focusOnUser = (user: any) => {
+  const focusOnUser = useCallback((user: any) => {
     if (user.latitude != null && user.longitude != null && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: user.latitude,
-        longitude: user.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      }, 500);
+      mapRef.current.animateToRegion(
+        {
+          latitude: user.latitude,
+          longitude: user.longitude,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
+        },
+        500
+      );
     } else {
       Alert.alert('מיקום לא זמין', 'למשתמש זה אין מיקום פעיל');
     }
-  };
+  }, []);
 
   const handlePing = async (toUserId: string, toUserName: string) => {
     try {
       const fromUserId = route?.params?.userId;
       const fromUserName = `${route?.params?.userFirstName || ''} ${route?.params?.userLastName || ''}`.trim();
-      
+
       if (!fromUserId) {
         Alert.alert('שגיאה', 'מזהה משתמש לא נמצא');
         return;
@@ -524,332 +466,323 @@ const ProfileScreen = ({ navigation, route }: any) => {
     }
   };
 
-  const renderContact = ({ item }: any) => (
-    <TouchableOpacity 
-      style={styles.userCard}
-      onPress={() => focusOnUser(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.avatar}>
-        {item.role === 'בעל כלב' ? (
-          <MaterialCommunityIcons name="dog" size={24} color="#fff" />
-        ) : item.role === 'דוגווקר' ? (
-          <FontAwesome5 name="walking" size={20} color="#fff" />
-        ) : (
-          <FontAwesome5 name="user-shield" size={20} color="#fff" />
-        )}
-      </View>
+  const centerOnMyLocation = useCallback(() => {
+    if (mapRef.current && userLocation) {
+      mapRef.current.animateToRegion(
+        {
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+          latitudeDelta: WALK_MAP_LAT_DELTA,
+          longitudeDelta: WALK_MAP_LNG_DELTA,
+        },
+        450
+      );
+    }
+  }, [userLocation]);
 
-      <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.name}</Text>
-        <Text style={styles.userMeta}>{item.role}</Text>
-        {/* Show distance if user has location */}
-        {item.distance !== undefined && (
-          <View style={styles.locationRow}>
-            <Ionicons name="location" size={14} color={PRIMARY_COLOR} />
-            <Text style={styles.distanceText}>
-              {LocationService.formatDistance(item.distance)} ממך
-            </Text>
-            <Text style={styles.tapToShowText}>(לחץ להצגה במפה)</Text>
-          </View>
-        )}
-      </View>
+  const headerBottom = insets.top + HEADER_OVERLAY_HEIGHT;
+  const floatingTop = headerBottom + 8;
+  const bottomInset = insets.bottom + 16;
+  const locateButtonBottom =
+    bottomInset + (selectedMarker ? SELECTION_CARD_APPROX_HEIGHT + 16 : 20);
 
-      {/* Ping button */}
-      <TouchableOpacity 
-        style={styles.pingButton} 
-        onPress={() => handlePing(item.id, item.name)}
-      >
-        <Text style={styles.pingText}>פינג</Text>
-      </TouchableOpacity>
-    </TouchableOpacity>
+  const renderHeaderOverlay = () => (
+    <View style={styles.headerOverlay} pointerEvents="box-none">
+      <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFillObject} />
+      <View style={[styles.headerTint, { paddingTop: insets.top }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Ionicons name="arrow-forward" size={28} color="#5C4033" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>טיולים</Text>
+          <View style={{ width: 40 }} />
+        </View>
+      </View>
+    </View>
   );
 
-  const handleSignOut = async () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        {
-          text: 'Cancel',
-          onPress: () => { },
-          style: 'cancel',
-        },
-        {
-          text: 'Sign Out',
-          onPress: async () => {
-            setIsLoggingOut(true);
-            try {
-              // Call logout API with userId and email
-              await userAPI.logout(route?.params?.userId || '', route?.params?.email || '');
+  const renderWalkerPlaceholder = () => (
+    <View style={[styles.walkerPlaceholder, { paddingTop: headerBottom + 24 }]}>
+      <FontAwesome5 name="walking" size={40} color="#8B7355" />
+      <Text style={styles.walkerPlaceholderTitle}>מפה לא זמינה לדוגווקר</Text>
+      <Text style={styles.walkerPlaceholderText}>שיתוף מיקום אינו זמין לחשבונות דוגווקר בשלב זה.</Text>
+    </View>
+  );
 
-              // Clear user data and navigate back to Start
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Start' }],
-              });
-            } catch (error: any) {
-              Alert.alert('Error', error.message || 'Failed to sign out');
-              console.error('Sign out error:', error);
-            } finally {
-              setIsLoggingOut(false);
-            }
-          },
-          style: 'destructive',
-        },
-      ]
+  const renderBottomCard = () => {
+    if (!selectedMarker || !userLocation) return null;
+
+    if (selectedMarker === 'self') {
+      return (
+        <View style={[styles.bottomCard, { bottom: bottomInset }]}>
+          <Text style={styles.bottomCardTitle}>{currentUserDisplayName || 'משתמש'}</Text>
+          <Text style={styles.bottomCardMeta}>
+            {currentUserRoleLabel || 'בעל כלב'} · המיקום שלך
+          </Text>
+          <Text style={styles.bottomCardDistance}>
+            שיתוף מיקום: {isLocationSharingEnabled ? 'פעיל למשתמשים אחרים' : 'מוסתר'}
+          </Text>
+          <TouchableOpacity style={styles.bottomCardSecondary} onPress={centerOnMyLocation} activeOpacity={0.7}>
+            <Ionicons name="locate" size={18} color={PRIMARY_COLOR} />
+            <Text style={styles.bottomCardSecondaryText}>מרכז מפה עליי</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    const { user } = selectedMarker;
+    return (
+      <View style={[styles.bottomCard, { bottom: bottomInset }]}>
+        <Text style={styles.bottomCardTitle}>{user.name}</Text>
+        <Text style={styles.bottomCardMeta}>{user.role}</Text>
+        {user.distance != null && (
+          <Text style={styles.bottomCardDistance}>
+            {LocationService.formatDistance(user.distance)} ממך
+          </Text>
+        )}
+        <View style={styles.bottomCardActions}>
+          <TouchableOpacity
+            style={styles.bottomCardSecondary}
+            onPress={() => focusOnUser(user)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="navigate-outline" size={18} color={PRIMARY_COLOR} />
+            <Text style={styles.bottomCardSecondaryText}>התמקד במפה</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.pingButton}
+            onPress={() => handlePing(user.id, user.name)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.pingText}>פינג</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     );
   };
 
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-forward" size={28} color="#5C4033" />
-        </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>טיולים</Text>
-
-        <View style={{ width: 40 }} />
+  if (isWalkerProfile) {
+    return (
+      <View style={styles.root}>
+        {renderWalkerPlaceholder()}
+        {renderHeaderOverlay()}
       </View>
+    );
+  }
 
-      <FlatList
-        data={usersForPing}
-        keyExtractor={(item) => item.id}
-        renderItem={renderContact}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={
-          <>
-            {/* PROFILE CARD */}
-            <View style={styles.profileCard}>
-              <View style={styles.profileAvatar}>
-                {isWalkerProfile ? (
-                  <FontAwesome5 name="walking" size={26} color="#fff" />
-                ) : (
-                  <MaterialCommunityIcons name="dog" size={28} color="#fff" />
-                )}
-              </View>
+  return (
+    <View style={styles.root}>
+      {userLocation ? (
+        <MapView
+          ref={mapRef}
+          style={StyleSheet.absoluteFillObject}
+          provider={useGoogleMapsProvider ? PROVIDER_GOOGLE : undefined}
+          customMapStyle={useGoogleMapsProvider ? dogMateMapStyle : undefined}
+          mapType={useAppleMapsFallback ? 'mutedStandard' : 'standard'}
+          initialRegion={{
+            latitude: userLocation.latitude,
+            longitude: userLocation.longitude,
+            latitudeDelta: WALK_MAP_LAT_DELTA,
+            longitudeDelta: WALK_MAP_LNG_DELTA,
+          }}
+          showsUserLocation
+          showsMyLocationButton={false}
+          showsPointsOfInterest={useAppleMapsFallback ? false : true}
+          toolbarEnabled={false}
+          zoomEnabled
+          scrollEnabled
+          rotateEnabled={false}
+          onPress={() => setSelectedMarker(null)}
+        >
+          <Circle
+            center={{
+              latitude: userLocation.latitude,
+              longitude: userLocation.longitude,
+            }}
+            radius={radiusKm * 1000}
+            strokeColor="rgba(127, 176, 105, 0.85)"
+            fillColor="rgba(127, 176, 105, 0.14)"
+            strokeWidth={2}
+          />
 
-              <View style={styles.profileTextBlock}>
-                <Text style={styles.profileName}>{currentUserDisplayName || 'משתמש'}</Text>
-                <Text style={styles.profileRole}>
-                  {currentUserRoleLabel ||
-                    (route?.params?.userRole === 'walker' ? 'דוגווקר' : route?.params?.role) ||
-                    'בעל כלב'}
-                </Text>
-              </View>
+          <Marker
+            coordinate={{
+              latitude: userLocation.latitude,
+              longitude: userLocation.longitude,
+            }}
+            onPress={() => setSelectedMarker('self')}
+            tracksViewChanges={false}
+          >
+            <View style={styles.invisibleSelfHitTarget} />
+          </Marker>
+
+          {usersWithLocation.map((user: any) => (
+            <Marker
+              key={user.id}
+              coordinate={{
+                latitude: user.latitude,
+                longitude: user.longitude,
+              }}
+              onPress={() => {
+                setSelectedMarker({ kind: 'other', user });
+              }}
+              tracksViewChanges={false}
+            >
+              <MapMarkerAvatar uri={user.mapDogProfileImageUrl} size={MARKER_SIZE - 2} />
+            </Marker>
+          ))}
+        </MapView>
+      ) : (
+        <View style={[StyleSheet.absoluteFillObject, styles.mapPlaceholderFull]}>
+          <Ionicons name="location-outline" size={56} color="#8B7355" />
+          <Text style={styles.mapPlaceholderText}>
+            {locationTracking ? 'מביא מיקום...' : 'מעקב מיקום מושבת'}
+          </Text>
+        </View>
+      )}
+
+      {renderHeaderOverlay()}
+
+      {userLocation && (
+        <>
+          <View
+            style={[
+              styles.floatingRangeCard,
+              {
+                top: floatingTop,
+                left: 16,
+                right: 100,
+              },
+            ]}
+            pointerEvents="box-none"
+          >
+            <View style={styles.radiusHeader}>
+              <Ionicons name="radio-button-on" size={16} color={PRIMARY_COLOR} />
+              <Text style={styles.radiusTitle} numberOfLines={2}>
+                טווח חיפוש מקסימלי:{' '}
+                {radiusKm >= 1 ? `${radiusKm} ק"מ` : `${Math.round(radiusKm * 1000)} מ'`}
+              </Text>
             </View>
-
-            {/* Location Display */}
-            {isWalkerProfile ? (
-              <View style={styles.locationCard}>
-                <View style={styles.locationHeader}>
-                  <Ionicons name="location-outline" size={18} color="#8B7355" />
-                  <Text style={styles.locationTitle}>שיתוף מיקום</Text>
-                </View>
-                <Text style={styles.locationText}>
-                  שיתוף מיקום אינו זמין לחשבונות דוגווקר בשלב זה.
-                </Text>
-              </View>
-            ) : userLocation ? (
-              <View style={styles.locationCard}>
-                <View style={styles.locationHeader}>
-                  <Ionicons name="location" size={18} color={PRIMARY_COLOR} />
-                  <Text style={styles.locationTitle}>המיקום שלך</Text>
-                  {locationTracking && (
-                    <View style={styles.locationStatusContainer}>
-                      <Text style={[
-                        styles.locationSharingStatus,
-                        isLocationSharingEnabled ? styles.locationSharingActive : styles.locationSharingInactive
-                      ]}>
-                        {isLocationSharingEnabled ? '📍 פעיל למשתמשים אחרים' : '🔒 מוסתר ממשתמשים אחרים'}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.toggleSharingButton,
-                    isLocationSharingEnabled ? styles.toggleSharingButtonActive : styles.toggleSharingButtonInactive
-                  ]}
-                  onPress={toggleLocationSharing}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name={isLocationSharingEnabled ? "eye-off" : "eye"}
-                    size={18}
-                    color="#FFFFFF"
-                    style={styles.toggleIcon}
-                  />
-                  <Text style={styles.toggleSharingButtonText}>
-                    {isLocationSharingEnabled ? 'הסתר מיקום' : 'שתף מיקום'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.locationCard}>
-                <View style={styles.locationHeader}>
-                  <Ionicons name="location" size={18} color="#8B7355" />
-                  <Text style={styles.locationTitle}>המיקום שלך</Text>
-                </View>
-                <Text style={styles.locationText}>
-                  {locationTracking ? 'מביא מיקום...' : 'מעקב מיקום מושבת'}
-                </Text>
-              </View>
-            )}
-
-            {/* Map Display */}
-            <View style={styles.mapContainer}>
-              <View style={styles.mapHeader}>
-                <Text style={styles.mapTitle}>מפה</Text>
-                {userLocation && (
-                  <TouchableOpacity
-                    style={styles.myLocationButton}
-                    onPress={() => {
-                    if (mapRef.current && userLocation) {
-                      // Zoom to fit the radius
-                      const latDelta = (radiusKm / 111) * 2.5; // ~111km per degree latitude
-                      mapRef.current.animateToRegion({
-                        latitude: userLocation.latitude,
-                        longitude: userLocation.longitude,
-                        latitudeDelta: latDelta,
-                        longitudeDelta: latDelta,
-                      }, 500);
-                    }
-                    }}
-                  >
-                    <Ionicons name="locate" size={24} color={PRIMARY_COLOR} />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Radius Filter Slider */}
-              {userLocation && (
-                <View style={styles.radiusFilterContainer}>
-                  <View style={styles.radiusHeader}>
-                    <Ionicons name="radio-button-on" size={16} color={PRIMARY_COLOR} />
-                    <Text style={styles.radiusTitle}>טווח חיפוש: {radiusKm >= 1 ? `${radiusKm} ק"מ` : `${Math.round(radiusKm * 1000)} מ'`}</Text>
-                    <Text style={styles.usersInRadiusCount}>
-                      ({usersInRadius.length} משתמשים בטווח)
-                    </Text>
-                  </View>
-                  <Slider
-                    style={styles.radiusSlider}
-                    minimumValue={0.05}
-                    maximumValue={5}
-                    step={0.05}
-                    value={radiusKm}
-                    onValueChange={(value) => setRadiusKm(Math.round(value * 100) / 100)}
-                    minimumTrackTintColor={PRIMARY_COLOR}
-                    maximumTrackTintColor="#E0D5C7"
-                    thumbTintColor={PRIMARY_COLOR}
-                  />
-                  <View style={styles.radiusLabels}>
-                    <Text style={styles.radiusLabelText}>50 מ'</Text>
-                    <Text style={styles.radiusLabelText}>5 ק"מ</Text>
-                  </View>
-                </View>
-              )}
-
-              {userLocation ? (
-                <MapView
-                  ref={mapRef}
-                  style={styles.map}
-                  initialRegion={mapRegion || {
-                    latitude: userLocation.latitude,
-                    longitude: userLocation.longitude,
-                    latitudeDelta: (radiusKm / 111) * 2.5,
-                    longitudeDelta: (radiusKm / 111) * 2.5,
-                  }}
-                  showsUserLocation={true}
-                  showsMyLocationButton={false}
-                  toolbarEnabled={false}
-                  zoomEnabled={true}
-                  scrollEnabled={true}
-                  rotateEnabled={false}
-                >
-                  {/* Radius circle */}
-                  <Circle
-                    center={{
-                      latitude: userLocation.latitude,
-                      longitude: userLocation.longitude,
-                    }}
-                    radius={radiusKm * 1000} // Convert km to meters
-                    strokeColor="rgba(127, 176, 105, 0.8)"
-                    fillColor="rgba(127, 176, 105, 0.15)"
-                    strokeWidth={2}
-                  />
-
-                  {/* Current user marker */}
-                  <Marker
-                    coordinate={{
-                      latitude: userLocation.latitude,
-                      longitude: userLocation.longitude,
-                    }}
-                    title="אתה כאן"
-                  >
-                    <View style={styles.currentUserMarker}>
-                      <MaterialCommunityIcons name="dog" size={20} color="#fff" />
-                    </View>
-                  </Marker>
-
-                  {/* Other users markers */}
-                  {usersWithLocation
-                    .map((user: any) => (
-                      <Marker
-                        key={user.id}
-                        coordinate={{
-                          latitude: user.latitude,
-                          longitude: user.longitude,
-                        }}
-                        title={user.name}
-                        description={user.distance ? `${LocationService.formatDistance(user.distance)} ממך` : ''}
-                      >
-                        <View style={styles.otherUserMarker}>
-                          <FontAwesome5 name="dog" size={16} color="#fff" />
-                        </View>
-                      </Marker>
-                    ))}
-                </MapView>
-              ) : (
-                <View style={styles.mapPlaceholder}>
-                  <Ionicons name="location-outline" size={48} color="#8B7355" />
-                  <Text style={styles.mapPlaceholderText}>
-                    {locationTracking ? 'מביא מיקום...' : 'מעקב מיקום מושבת'}
-                  </Text>
-                </View>
-              )}
+            <Text style={styles.usersInRadiusCount}>
+              {usersInRadius.length} משתמשים בטווח
+            </Text>
+            <Slider
+              style={styles.radiusSlider}
+              minimumValue={0.05}
+              maximumValue={5}
+              step={0.05}
+              value={radiusKm}
+              onValueChange={(value) => setRadiusKm(Math.round(value * 100) / 100)}
+              minimumTrackTintColor={PRIMARY_COLOR}
+              maximumTrackTintColor="#E0D5C7"
+              thumbTintColor={PRIMARY_COLOR}
+            />
+            <View style={styles.radiusLabels}>
+              <Text style={styles.radiusLabelText}>5 ק"מ</Text>
+              <Text style={styles.radiusLabelText}>50 מ'</Text>
             </View>
+          </View>
 
-            <Text style={styles.sectionTitle}>משתמשים מחוברים ({usersForPing.length}):</Text>
-            {isLoadingUsers && (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator color={PRIMARY_COLOR} size="large" />
-                <Text style={styles.loadingText}>טוען נתונים...</Text>
-              </View>
-            )}
-          </>
-        }
-        ListEmptyComponent={
-          !isLoadingUsers ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>לא נמצאו משתמשים מחוברים</Text>
-            </View>
-          ) : null
-        }
-      />
+          <TouchableOpacity
+            style={[
+              styles.floatingShareChip,
+              isLocationSharingEnabled ? styles.floatingShareChipOff : styles.floatingShareChipOn,
+              {
+                top: floatingTop,
+                right: 16,
+                zIndex: 16,
+              },
+            ]}
+            onPress={toggleLocationSharing}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={isLocationSharingEnabled ? 'הסתר מיקום' : 'שתף מיקום'}
+          >
+            <Ionicons
+              name={isLocationSharingEnabled ? 'eye-off' : 'eye'}
+              size={22}
+              color={isLocationSharingEnabled ? '#5C4033' : '#fff'}
+            />
+            <Text
+              style={[
+                styles.floatingShareChipText,
+                isLocationSharingEnabled ? styles.floatingShareChipTextMuted : styles.floatingShareChipTextLight,
+              ]}
+            >
+              {isLocationSharingEnabled ? 'מוסתר' : 'שיתוף'}
+            </Text>
+          </TouchableOpacity>
 
-    </SafeAreaView>
+          <TouchableOpacity
+            style={[
+              styles.floatingLocateButton,
+              {
+                bottom: locateButtonBottom,
+                right: 16,
+              },
+            ]}
+            onPress={centerOnMyLocation}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="מרכז אותי"
+          >
+            <Ionicons name="locate" size={26} color={PRIMARY_COLOR} />
+          </TouchableOpacity>
+        </>
+      )}
+
+      {renderBottomCard()}
+
+      {isLoadingUsers && (
+        <View style={[styles.loadingOverlay, { top: headerBottom }]}>
+          <ActivityIndicator color={PRIMARY_COLOR} size="small" />
+        </View>
+      )}
+    </View>
   );
 };
 
 export default ProfileScreen;
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
     backgroundColor: '#FAEFDD',
+  },
+
+  walkerPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 28,
+  },
+  walkerPlaceholderTitle: {
+    marginTop: 16,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#5C4033',
+    textAlign: 'center',
+  },
+  walkerPlaceholderText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#8B7355',
+    textAlign: 'center',
+  },
+
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    overflow: 'hidden',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(92, 64, 51, 0.1)',
+  },
+
+  headerTint: {
+    backgroundColor: 'rgba(250, 239, 221, 0.48)',
   },
 
   headerRow: {
@@ -857,7 +790,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingBottom: 12,
+    minHeight: HEADER_OVERLAY_HEIGHT - 12,
   },
 
   headerTitle: {
@@ -866,85 +800,35 @@ const styles = StyleSheet.create({
     color: '#5C4033',
   },
 
-  listContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    paddingBottom: 20,
+  floatingRangeCard: {
+    position: 'absolute',
+    zIndex: 15,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    shadowColor: '#5C4033',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 9,
   },
 
-  profileCard: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    backgroundColor: '#faf0e6',
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E0D5C7',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  profileAvatar: {
+  invisibleSelfHitTarget: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: PRIMARY_COLOR,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
-  },
-  profileTextBlock: {
-    flex: 1,
-  },
-  profileName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#5C4033',
-    textAlign: 'right',
-  },
-  profileRole: {
-    marginTop: 2,
-    fontSize: 13,
-    color: '#8B7355',
-    textAlign: 'right',
+    opacity: 0,
   },
 
-  infoRow: {
+  radiusHeader: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    marginTop: 8,
-    paddingHorizontal: 4,
-  },
-  infoText: {
-    marginRight: 8,
-    fontSize: 14,
-    color: '#5C4033',
-    textAlign: 'right',
-  },
-
-  locationCard: {
-    backgroundColor: '#faf0e6',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E0D5C7',
-  },
-
-  locationHeader: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
     flexWrap: 'wrap',
   },
 
-  locationTitle: {
-    fontSize: 14,
+  radiusTitle: {
+    fontSize: 13,
     fontWeight: '600',
     color: '#5C4033',
     marginRight: 8,
@@ -952,228 +836,88 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  locationStatusContainer: {
-    marginTop: 4,
+  usersInRadiusCount: {
+    fontSize: 11,
+    color: PRIMARY_COLOR,
+    fontWeight: '600',
+    textAlign: 'right',
+    marginBottom: 6,
+  },
+
+  radiusSlider: {
     width: '100%',
+    height: 36,
   },
 
-  locationSharingStatus: {
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'right',
-    marginTop: 4,
-  },
-
-  locationSharingActive: {
-    color: PRIMARY_COLOR,
-  },
-
-  locationSharingInactive: {
-    color: '#8B7355',
-  },
-
-  trackingBadge: {
-    fontSize: 12,
-    color: PRIMARY_COLOR,
-    fontWeight: '600',
-  },
-
-  locationText: {
-    fontSize: 12,
-    color: '#8B7355',
-    marginBottom: 4,
-    textAlign: 'right',
-  },
-
-  toggleSharingButton: {
+  radiusLabels: {
     flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    marginTop: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-
-  toggleSharingButtonActive: {
-    backgroundColor: '#8B7355',
-  },
-
-  toggleSharingButtonInactive: {
-    backgroundColor: PRIMARY_COLOR,
-  },
-
-  toggleIcon: {
-    marginLeft: 8,
-  },
-
-  toggleSharingButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-
-  sectionTitle: {
-    marginTop: 18,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#5C4033',
-    marginBottom: 12,
-    textAlign: 'right',
-  },
-
-  userCard: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    backgroundColor: '#faf0e6',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E0D5C7',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: PRIMARY_COLOR,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 12,
-  },
-
-  userInfo: {
-    flex: 1,
-  },
-
-  userName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#5C4033',
-    textAlign: 'right',
-  },
-
-  userMeta: {
-    fontSize: 14,
-    color: '#8B7355',
-    marginTop: 4,
-    textAlign: 'right',
-  },
-
-  distanceText: {
-    fontSize: 13,
-    color: PRIMARY_COLOR,
-    fontWeight: '600',
-    marginRight: 4,
-    textAlign: 'right',
-  },
-
-  pingButton: {
-    backgroundColor: PRIMARY_COLOR,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-
-  pingText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  loadingContainer: {
-    paddingVertical: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  loadingText: {
-    marginTop: 12,
-    color: '#5C4033',
-    fontSize: 16,
-  },
-
-  emptyContainer: {
-    paddingVertical: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  emptyText: {
-    fontSize: 16,
-    color: '#8B7355',
-    textAlign: 'center',
-  },
-
-  mapContainer: {
-    marginTop: 8,
-    marginBottom: 8,
-  },
-
-  mapHeader: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    paddingHorizontal: 2,
+    marginTop: 2,
   },
 
-  mapTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#5C4033',
-    textAlign: 'right',
-    flex: 1,
+  radiusLabelText: {
+    fontSize: 10,
+    color: '#8B7355',
   },
 
-  myLocationButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#faf0e6',
-    borderWidth: 1,
-    borderColor: '#E0D5C7',
-    justifyContent: 'center',
+  floatingShareChip: {
+    position: 'absolute',
+    zIndex: 15,
+    flexDirection: 'row-reverse',
     alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.12,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 5,
   },
 
-  map: {
-    width: '100%',
-    height: 400,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E0D5C7',
+  floatingShareChipOn: {
+    backgroundColor: PRIMARY_COLOR,
   },
 
-  mapPlaceholder: {
-    width: '100%',
-    height: 400,
-    borderRadius: 12,
+  floatingShareChipOff: {
+    backgroundColor: '#fff',
+  },
+
+  floatingShareChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginRight: 8,
+  },
+
+  floatingShareChipTextLight: {
+    color: '#fff',
+  },
+
+  floatingShareChipTextMuted: {
+    color: '#5C4033',
+  },
+
+  floatingLocateButton: {
+    position: 'absolute',
+    zIndex: 17,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FAEFDD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: PRIMARY_COLOR,
+    shadowColor: PRIMARY_COLOR,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+
+  mapPlaceholderFull: {
     backgroundColor: '#faf0e6',
-    borderWidth: 1,
-    borderColor: '#E0D5C7',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1183,98 +927,88 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#8B7355',
     textAlign: 'center',
+    paddingHorizontal: 24,
   },
 
-  currentUserMarker: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: PRIMARY_COLOR,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#fff',
+  bottomCard: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 0,
+    zIndex: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 10,
   },
 
-  otherUserMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#5C4033',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-
-  // Radius filter styles
-  radiusFilterContainer: {
-    backgroundColor: '#faf0e6',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E0D5C7',
-  },
-
-  radiusHeader: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-
-  radiusTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+  bottomCardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
     color: '#5C4033',
-    marginRight: 8,
     textAlign: 'right',
   },
 
-  usersInRadiusCount: {
-    fontSize: 12,
+  bottomCardMeta: {
+    marginTop: 4,
+    fontSize: 14,
+    color: '#8B7355',
+    textAlign: 'right',
+  },
+
+  bottomCardDistance: {
+    marginTop: 8,
+    fontSize: 14,
     color: PRIMARY_COLOR,
     fontWeight: '600',
-    marginRight: 8,
+    textAlign: 'right',
   },
 
-  radiusSlider: {
-    width: '100%',
-    height: 40,
-  },
-
-  radiusLabels: {
-    flexDirection: 'row',
+  bottomCardActions: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: 14,
+    gap: 10,
+  },
+
+  bottomCardSecondary: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
     paddingHorizontal: 4,
   },
 
-  radiusLabelText: {
-    fontSize: 11,
-    color: '#8B7355',
+  bottomCardSecondaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: PRIMARY_COLOR,
   },
 
-  // Location row for user cards
-  locationRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    marginTop: 2,
+  pingButton: {
+    backgroundColor: PRIMARY_COLOR,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    borderRadius: 12,
   },
 
-  tapToShowText: {
-    fontSize: 10,
-    color: '#8B7355',
-    marginRight: 4,
-    fontStyle: 'italic',
+  pingText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  loadingOverlay: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 18,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    padding: 8,
+    borderRadius: 8,
   },
 });

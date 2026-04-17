@@ -3,6 +3,7 @@ package com.DogMate.Controller;
 import com.DogMate.Domain.DogWalkerUser;
 import com.DogMate.Domain.RegularUser;
 import com.DogMate.Domain.Ping;
+import com.DogMate.Service.DogService;
 import com.DogMate.Service.DogWalkerService;
 import com.DogMate.Service.PendingRegistrationService;
 import com.DogMate.Service.UserService;
@@ -32,6 +33,7 @@ public class UserController {
     
     private final UserService userService;
     private final DogWalkerService dogWalkerService;
+    private final DogService dogService;
     private final PendingRegistrationService pendingRegistrationService;
     private final SimpMessagingTemplate messagingTemplate;
     
@@ -51,10 +53,12 @@ public class UserController {
 
     @Autowired
     public UserController(UserService userService, DogWalkerService dogWalkerService,
+                          DogService dogService,
                           PendingRegistrationService pendingRegistrationService,
                           SimpMessagingTemplate messagingTemplate) {
         this.userService = userService;
         this.dogWalkerService = dogWalkerService;
+        this.dogService = dogService;
         this.pendingRegistrationService = pendingRegistrationService;
         this.messagingTemplate = messagingTemplate;
     }
@@ -623,6 +627,8 @@ public class UserController {
                         userInfo.put("latitude", regularUser.getLatitude());
                         userInfo.put("longitude", regularUser.getLongitude());
                     }
+                    dogService.getFirstMapDogProfileImageUrl(regularUser.getId())
+                            .ifPresent(url -> userInfo.put("mapDogProfileImageUrl", url));
                 } else if (user instanceof com.DogMate.Domain.DogWalkerUser) {
                     com.DogMate.Domain.DogWalkerUser walker = (com.DogMate.Domain.DogWalkerUser) user;
                     userInfo.put("type", "DogWalkerUser");

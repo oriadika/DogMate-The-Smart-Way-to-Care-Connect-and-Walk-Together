@@ -44,7 +44,7 @@ class LocationService {
 
       console.log('📍 Fetching current location...');
       const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
+        accuracy: Location.Accuracy.BestForNavigation,
       });
 
       const userLocation: UserLocation = {
@@ -85,9 +85,10 @@ class LocationService {
       // Watch location with more frequent updates for better nearby user detection
       this.locationWatcher = Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.High, // Higher accuracy for better positioning
-          timeInterval: 2000, // Update every 2 seconds minimum
-          distanceInterval: 5, // Update if location changes by 5 meters
+          // דיוק גבוה לטיול רגלי — נקודה קרובה יותר למיקום האמיתי על המפה
+          accuracy: Location.Accuracy.BestForNavigation,
+          timeInterval: 2000,
+          distanceInterval: 5,
         },
         (location) => {
           const userLocation: UserLocation = {

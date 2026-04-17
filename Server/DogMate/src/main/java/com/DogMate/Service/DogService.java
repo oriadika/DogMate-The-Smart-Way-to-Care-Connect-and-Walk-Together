@@ -331,6 +331,20 @@ public class DogService {
         return userDogs;
     }
 
+    /**
+     * First non-blank dog profile image URL for map markers (e.g. logged-users API).
+     */
+    public Optional<String> getFirstMapDogProfileImageUrl(UUID userId) {
+        List<Dog> userDogs = getDogsForUser(userId);
+        for (Dog dog : userDogs) {
+            String url = dog.getProfileImageURL();
+            if (url != null && !url.isBlank()) {
+                return Optional.of(url.trim());
+            }
+        }
+        return Optional.empty();
+    }
+
     public List<Dog> getAllDogsforUser(UUID userId) {
         return dogRepository.findAll().stream().filter(dog -> dog.getDogRelationships().stream().anyMatch(rel -> rel.getRegularUser().getId().equals(userId))).collect(Collectors.toList());
     }

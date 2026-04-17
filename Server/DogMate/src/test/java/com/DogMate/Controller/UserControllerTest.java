@@ -1,5 +1,6 @@
 package com.DogMate.Controller;
 
+import com.DogMate.Service.DogService;
 import com.DogMate.Service.DogWalkerService;
 import com.DogMate.Service.PendingRegistrationService;
 import com.DogMate.Service.UserService;
@@ -35,6 +36,9 @@ class UserControllerTest {
 
     @MockBean
     private DogWalkerService dogWalkerService;
+
+    @MockBean
+    private DogService dogService;
 
     @MockBean
     private PendingRegistrationService pendingRegistrationService;
