@@ -22,6 +22,9 @@ import java.util.UUID;
 @Service
 public class EmailVerificationService {
     private static final int OTP_LENGTH = 6;
+    /** Plain-text email: force RTL display in most clients (RLE … PDF). */
+    private static final String RTL_EMBED_START = "\u202B";
+    private static final String RTL_EMBED_END = "\u202C";
     private static final Logger log = LoggerFactory.getLogger(EmailVerificationService.class);
 
     private final IUserRepository userRepository;
@@ -78,7 +81,7 @@ public class EmailVerificationService {
         String normalizedLookup = normalizeEmailForLookup(rawEmail);
         UserAccount user = loadUserByEmail(normalizedLookup);
         if (user.isEmailVerified()) {
-            throw new IllegalArgumentException("Email is already verified");
+            throw new IllegalArgumentException("המייל כבר אומת");
         }
 
         String canonicalEmail = user.getEmail();
@@ -106,21 +109,21 @@ public class EmailVerificationService {
         UserAccount user = loadUserByEmail(normalizedLookup);
 
         if (user.isEmailVerified()) {
-            throw new IllegalArgumentException("Email is already verified");
+            throw new IllegalArgumentException("המייל כבר אומת");
         }
 
         String canonicalEmail = user.getEmail();
         VerificationCode verificationCode = verificationCodeRepository
             .findTopByEmailOrderByCreatedAtDesc(canonicalEmail)
-            .orElseThrow(() -> new IllegalArgumentException("Verification code not found"));
+            .orElseThrow(() -> new IllegalArgumentException("לא נמצא קוד אימות"));
 
         if (verificationCode.getCreatedAt().isBefore(LocalDateTime.now().minusMinutes(15))) {
             verificationCodeRepository.deleteByEmail(canonicalEmail);
-            throw new IllegalArgumentException("Verification code expired");
+            throw new IllegalArgumentException("קוד האימות פג תוקף");
         }
 
         if (!verificationCode.getCode().equals(code)) {
-            throw new IllegalArgumentException("Verification code is invalid");
+            throw new IllegalArgumentException("קוד האימות שגוי");
         }
 
         user.setEmailVerified(true);
@@ -143,12 +146,18 @@ public class EmailVerificationService {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(appFromEmail);
             message.setTo(email);
-            message.setSubject("DogMate - Email verification code");
+            message.setSubject("DogMate – קוד אימות למייל");
             message.setText(
-                "Welcome to DogMate!\n\n" +
-                "Your verification code is: " + code + "\n\n" +
-                "The code is valid for 15 minutes.\n\n" +
-                "If you did not create an account, you can ignore this email."
+                RTL_EMBED_START
+                    + "שלום\n\n"
+                    + "DogMate זה קוד האימות שלך באפליקציית\n\n"
+                    + code
+                    + "\n\n"
+                    + ".הקוד תקף ל־15 דקות\n\n"
+                    + ".אם לא ביקשת להירשם, אפשר להתעלם ממייל זה\n\n"
+                    + ",בברכה\n"
+                    + "DogMate צוות"
+                    + RTL_EMBED_END
             );
             mailSender.send(message);
             log.info("Verification email sent successfully to {}", email);
@@ -170,25 +179,25 @@ public class EmailVerificationService {
     private UserAccount loadUserByEmail(String normalizedLookupEmail) {
         Optional<UserAccount> userOpt = userRepository.findByEmailIgnoreCase(normalizedLookupEmail);
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("User not found with email: " + normalizedLookupEmail);
+            throw new IllegalArgumentException("לא נמצא משתמש עם האימייל: " + normalizedLookupEmail);
         }
         return userOpt.get();
     }
 
     private String normalizeEmailForLookup(String email) {
         if (email == null || email.trim().isEmpty()) {
-            throw new IllegalArgumentException("Email is required");
+            throw new IllegalArgumentException("חובה להזין אימייל");
         }
         return email.trim().toLowerCase(Locale.ROOT);
     }
 
     private String normalizeCode(String code) {
         if (code == null) {
-            throw new IllegalArgumentException("Verification code is required");
+            throw new IllegalArgumentException("חובה להזין קוד אימות");
         }
         String normalized = code.trim();
         if (!normalized.matches("\\d{6}")) {
-            throw new IllegalArgumentException("Verification code must contain 6 digits");
+            throw new IllegalArgumentException("קוד האימות חייב להכיל 6 ספרות");
         }
         return normalized;
     }

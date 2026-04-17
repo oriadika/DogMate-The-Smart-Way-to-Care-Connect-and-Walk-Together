@@ -24,7 +24,7 @@ public class SupportRequest {
     @Column(name = "subject", nullable = false)
     private String subject;
 
-    @Column(name = "description", nullable = false, length = 4000)
+    @Column(name = "description", nullable = false, length = 1000)
     private String description;
 
     @Column(name = "contact_email", nullable = false)
@@ -92,6 +92,10 @@ public class SupportRequest {
 
     public String getStatus() {
         return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 
     public LocalDateTime getCreatedAt() {

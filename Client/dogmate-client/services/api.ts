@@ -1,8 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
-import { BASE_URL } from './config';
+import { getApiBaseUrlWithPath } from './config';
 
-// Configure your backend URL here
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.68.101:8080/api';
+const API_BASE_URL = getApiBaseUrlWithPath('api');
 
 let authToken: string | null = null;
 
@@ -39,6 +38,24 @@ export const clearAuthToken = () => {
   authToken = null;
   delete apiClient.defaults.headers.common['Authorization'];
 };
+
+/**
+ * Prefer server `error` body (Hebrew); otherwise map common axios/network text to Hebrew.
+ */
+function getAuthFlowErrorMessage(error: any, fallbackHebrew: string): string {
+  const serverMsg = error?.response?.data?.error;
+  if (typeof serverMsg === 'string' && serverMsg.trim().length > 0) {
+    return serverMsg;
+  }
+  const raw = String(error?.message ?? '');
+  if (raw === 'Network Error' || raw === 'ERR_NETWORK') {
+    return 'אין חיבור לרשת. בדוק את החיבור ונסה שוב.';
+  }
+  if (/timeout/i.test(raw) || raw.includes('10000')) {
+    return 'השרת לא הגיב בזמן. נסה שוב.';
+  }
+  return fallbackHebrew;
+}
 
 // Types for API requests/responses
 export interface RegisterUserPayload {
@@ -136,7 +153,7 @@ export interface ChangePasswordResponse {
 }
 
 export interface SupportRequestPayload {
-  category: 'bug' | 'feature' | 'general';
+  category: 'bug' | 'feature' | 'general' | 'user_report';
   subject: string;
   description: string;
   contactEmail: string;
@@ -147,6 +164,30 @@ export interface SupportRequestResponse {
   success: boolean;
   message: string;
   requestId: string;
+}
+
+export interface SupportRequestItem {
+  id: string;
+  userId: string;
+  category: string;
+  subject: string;
+  description: string;
+  contactEmail: string;
+  contactPhone: string;
+  status: string;
+  createdAt: string;
+  submitterEmail?: string;
+}
+
+export interface SupportRequestsListResponse {
+  success: boolean;
+  requests: SupportRequestItem[];
+}
+
+export interface UpdateSupportRequestStatusResponse {
+  success: boolean;
+  requestId: string;
+  status: string;
 }
 
 export interface ErrorResponse {
@@ -240,8 +281,8 @@ export const userAPI = {
       const response = await apiClient.post('/users/register', payload);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Registration failed';
-      console.error("Registration failed:", errorMessage); // 👈 הדפסה לקונסול
+      const errorMessage = getAuthFlowErrorMessage(error, 'ההרשמה נכשלה');
+      console.error('Registration failed:', errorMessage);
       throw new Error(errorMessage);
     }
   },
@@ -262,7 +303,7 @@ export const userAPI = {
 
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Login failed';
+      const errorMessage = getAuthFlowErrorMessage(error, 'ההתחברות נכשלה');
       throw new Error(errorMessage);
     }
   },
@@ -273,7 +314,7 @@ export const userAPI = {
       const response = await apiClient.post('/auth/verify-registration', payload);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Email verification failed';
+      const errorMessage = getAuthFlowErrorMessage(error, 'אימות המייל נכשל');
       throw new Error(errorMessage);
     }
   },
@@ -283,8 +324,7 @@ export const userAPI = {
       const response = await apiClient.post('/auth/resend-verification', payload);
       return response.data;
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.error || error.message || 'Failed to resend verification code';
+      const errorMessage = getAuthFlowErrorMessage(error, 'שליחת קוד האימות מחדש נכשלה');
       throw new Error(errorMessage);
     }
   },
@@ -297,7 +337,7 @@ export const userAPI = {
       const response = await apiClient.get('/users');
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch users';
+      const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון את רשימת המשתמשים';
       throw new Error(errorMessage);
     }
   },
@@ -310,7 +350,7 @@ export const userAPI = {
       const response = await apiClient.delete(`/users/${userId}`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete user';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה מחיקת המשתמש';
       throw new Error(errorMessage);
     }
   },
@@ -323,7 +363,7 @@ export const userAPI = {
       const response = await apiClient.post(`/users/${userId}/suspend`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to suspend user';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה השעיית המשתמש';
       throw new Error(errorMessage);
     }
   },
@@ -336,7 +376,7 @@ export const userAPI = {
       const response = await apiClient.get('users/logged');
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch logged users';
+      const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון משתמשים מחוברים';
       throw new Error(errorMessage);
     }
   },
@@ -359,7 +399,7 @@ export const userAPI = {
       console.warn('Logout request failed:', error.message);
       clearAuthToken();
       // Return success anyway to allow local logout
-      return { success: true, message: 'Local logout completed' };
+      return { success: true, message: 'ההתנתקות המקומית הושלמה' };
     }
   },
 
@@ -368,7 +408,7 @@ export const userAPI = {
       const response = await apiClient.get(`/users/${userId}/profile`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to load profile';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה טעינת הפרופיל';
       throw new Error(errorMessage);
     }
   },
@@ -378,7 +418,7 @@ export const userAPI = {
       const response = await apiClient.put(`/users/${userId}/profile`, payload);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to update profile';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל עדכון הפרופיל';
       throw new Error(errorMessage);
     }
   },
@@ -391,7 +431,7 @@ export const userAPI = {
       const response = await apiClient.post(`/users/${userId}/change-password`, payload);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to change password';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל עדכון הסיסמה';
       throw new Error(errorMessage);
     }
   },
@@ -405,7 +445,35 @@ export const userAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage =
-        error.response?.data?.error || error.message || 'Failed to submit support request';
+        error.response?.data?.error || error.message || 'שליחת הפנייה נכשלה';
+      throw new Error(errorMessage);
+    }
+  },
+
+  getSupportRequests: async (adminUserId: string): Promise<SupportRequestsListResponse> => {
+    try {
+      const response = await apiClient.get(`/users/${adminUserId}/support-requests`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.error || error.message || 'לא ניתן לטעון את הפניות';
+      throw new Error(errorMessage);
+    }
+  },
+
+  updateSupportRequestStatus: async (
+    adminUserId: string,
+    requestId: string,
+    status: 'OPEN' | 'CLOSED'
+  ): Promise<UpdateSupportRequestStatusResponse> => {
+    try {
+      const response = await apiClient.patch(`/users/${adminUserId}/support-requests/${requestId}`, {
+        status,
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.error || error.message || 'עדכון הסטטוס נכשל';
       throw new Error(errorMessage);
     }
   },
@@ -418,11 +486,11 @@ export const userAPI = {
       const response = await apiClient.post('/users/ping', {
         fromUserId,
         toUserId,
-        fromUserName: fromUserName || 'Unknown User'
+        fromUserName: fromUserName || 'משתמש לא ידוע'
       });
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to send ping';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה שליחת הפינג';
       throw new Error(errorMessage);
     }
   },
@@ -438,7 +506,7 @@ export const userAPI = {
       });
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to update location';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל עדכון המיקום';
       throw new Error(errorMessage);
     }
   },
@@ -451,7 +519,7 @@ export const userAPI = {
       const response = await apiClient.delete(`/users/${userId}/location`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to clear location';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה הסרת המיקום';
       throw new Error(errorMessage);
     }
   },
@@ -461,7 +529,7 @@ export const userAPI = {
       const response = await apiClient.get(`/users/search?query=${query}`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to search users';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה חיפוש המשתמשים';
       throw new Error(errorMessage);
     }
   },
@@ -481,7 +549,7 @@ export const dogAPI = {
       const response = await apiClient.post('/dogs/add', payload);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to add dog';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה הוספת הכלב';
       console.error("Add dog failed:", errorMessage);
       throw new Error(errorMessage);
     }
@@ -495,7 +563,7 @@ export const dogAPI = {
       const response = await apiClient.get(`/dogs/user/${userId}`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch dogs';
+      const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון את רשימת הכלבים';
       console.error("Failed to get dogs:", errorMessage);
       throw new Error(errorMessage);
     }
@@ -509,7 +577,7 @@ export const dogAPI = {
       const response = await apiClient.delete(`/dogs/${userId}/${dogId}`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete dog';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה מחיקת הכלב';
       console.error("Failed to delete dog:", errorMessage);
       throw new Error(errorMessage);
     }
@@ -523,7 +591,7 @@ export const dogAPI = {
       const response = await apiClient.delete(`/dogs/${dogId}`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete dog';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה מחיקת הכלב';
       console.error("Failed to delete dog:", errorMessage);
       throw new Error(errorMessage);
     }
@@ -537,7 +605,7 @@ export const dogAPI = {
       const response = await apiClient.get('/dogs');
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch dogs';
+      const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון את רשימת הכלבים';
       console.error("Failed to get all dogs:", errorMessage);
       throw new Error(errorMessage);
     }
@@ -547,7 +615,7 @@ export const dogAPI = {
       const response = await apiClient.get(`/dogs/search?query=${query}`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to search dogs';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה חיפוש הכלבים';
       throw new Error(errorMessage);
     }
   },
@@ -580,7 +648,7 @@ export const dogWalkerAPI = {
       return list.map(mapProfessionalProfileResponse);
     } catch (error: any) {
       const errorMessage =
-        error.response?.data?.error || error.message || 'Failed to load available dog walkers';
+        error.response?.data?.error || error.message || 'לא ניתן לטעון דוגווקרים זמינים';
       console.error('getWalkersWithProfessionalProfiles failed:', errorMessage);
       throw new Error(errorMessage);
     }
@@ -600,7 +668,7 @@ export const dogWalkerAPI = {
         responseData?.message ||
         responseData?.detail ||
         error.message ||
-        'Failed to create rating';
+        'נכשלה יצירת הדירוג';
       console.error('createWalkerRating failed', {
         url: `${error?.config?.baseURL || API_BASE_URL}${error?.config?.url || ''}`,
         status: error?.response?.status,
@@ -627,7 +695,7 @@ export const dogWalkerAPI = {
         responseData?.message ||
         responseData?.detail ||
         error.message ||
-        'Failed to delete rating';
+        'נכשלה מחיקת הדירוג';
       console.error('deleteWalkerRating failed', {
         url: `${error?.config?.baseURL || API_BASE_URL}${error?.config?.url || ''}`,
         status: error?.response?.status,
@@ -643,7 +711,7 @@ export const dogWalkerAPI = {
       return mapProfessionalProfileResponse(response.data);
     } catch (error: any) {
       const errorMessage =
-        error.response?.data?.error || error.message || 'Failed to load professional profile';
+        error.response?.data?.error || error.message || 'נכשלה טעינת הפרופיל המקצועי';
       console.error('getProfessionalProfile failed:', errorMessage);
       throw new Error(errorMessage);
     }
@@ -658,7 +726,7 @@ export const dogWalkerAPI = {
       return mapProfessionalProfileResponse(response.data);
     } catch (error: any) {
       const errorMessage =
-        error.response?.data?.error || error.message || 'Failed to update professional profile';
+        error.response?.data?.error || error.message || 'נכשל עדכון הפרופיל המקצועי';
       console.error('updateProfessionalProfile failed:', errorMessage);
       throw new Error(errorMessage);
     }
@@ -693,7 +761,7 @@ export const reminderAPI = {
       });
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to create reminder';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה יצירת התזכורת';
       console.error("Failed to create reminder:", errorMessage);
       console.error("Error response status:", error.response?.status);
       console.error("Error response data:", error.response?.data);
@@ -709,7 +777,7 @@ export const reminderAPI = {
       const response = await apiClient.get(`/users/${userId}/reminders`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch reminders';
+      const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון תזכורות';
       console.error("Failed to get reminders:", errorMessage);
       throw new Error(errorMessage);
     }
@@ -723,7 +791,7 @@ export const reminderAPI = {
       const response = await apiClient.delete(`/users/${userId}/reminders/${reminderId}`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete reminder';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה מחיקת התזכורת';
       console.error("Failed to delete reminder:", errorMessage);
       throw new Error(errorMessage);
     }
@@ -740,7 +808,7 @@ export const foodStockAPI = {
       const response = await apiClient.get(`/food-stock/user/${userId}`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch food stocks';
+      const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון את מלאי המזון';
       console.error("Failed to get food stocks:", errorMessage);
       throw new Error(errorMessage);
     }
@@ -759,7 +827,7 @@ export const foodStockAPI = {
       });
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to create food stock';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה יצירת רשומת המזון';
       console.error("Failed to create food stock:", errorMessage);
       throw new Error(errorMessage);
     }
@@ -773,7 +841,7 @@ export const foodStockAPI = {
       const response = await apiClient.post(`/dogs/${dogId}/food-stock/${foodStockId}`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to connect food stock to dog';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה קישור המזון לכלב';
       console.error("Failed to connect food stock:", errorMessage);
       throw new Error(errorMessage);
     }
@@ -787,7 +855,7 @@ export const foodStockAPI = {
       const response = await apiClient.put(`/food-stock/${foodStockId}/renew`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to renew food stock';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה חידוש המלאי';
       console.error("Failed to renew food stock:", errorMessage);
       throw new Error(errorMessage);
     }
@@ -806,7 +874,7 @@ export const foodStockAPI = {
       });
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to update food stock';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל עדכון המלאי';
       console.error("Failed to update food stock:", errorMessage);
       throw new Error(errorMessage);
     }
@@ -820,7 +888,7 @@ export const foodStockAPI = {
       const response = await apiClient.delete(`/food-stock/${foodStockId}`);
       return response.data;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to delete food stock';
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה מחיקת המלאי';
       console.error("Failed to delete food stock:", errorMessage);
       throw new Error(errorMessage);
     }

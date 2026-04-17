@@ -24,26 +24,43 @@ const CATEGORY_OPTIONS: CategoryOption[] = [
   { id: 'bug', label: 'תקלה' },
   { id: 'feature', label: 'הצעת שיפור' },
   { id: 'general', label: 'שאלה כללית' },
+  { id: 'user_report', label: 'דיווח על משתמש' },
 ];
+
+/** ניסוח תמיכה קצר וברור (כמו במסכי עזרה של אפליקציות מובילות) */
+const SUBJECT_PLACEHOLDER: Record<SupportRequestPayload['category'], string> = {
+  bug: 'לדוגמה: תקלה במסך הבריאות',
+  feature: 'לדוגמה: שיפור פיצ׳ר קיים או הצעת פיצ׳ר חדש',
+  general: 'לדוגמה: שאלה כללית על החשבון או האפליקציה',
+  user_report: 'לדוגמה: דיווח על משתמש — פרטים רלוונטיים',
+};
+
+/** תיאור מפורט — ניסוח אחיד לכל סוגי הפנייה */
+const DESCRIPTION_DETAIL_PLACEHOLDER = 'כתוב/י כאן את פירוט הפנייה.';
+
+const DESCRIPTION_MAX_CHARS = 1000;
 
 export default function SupportScreen({ navigation, route }: any) {
   const userId = String(route?.params?.userId || '').trim();
-  const initialEmail = String(route?.params?.email || '').trim();
+  /** אימייל מהחשבון המחובר — לא ניתן לעריכה */
+  const contactEmail = String(route?.params?.email || '').trim();
 
   const [category, setCategory] = useState<SupportRequestPayload['category']>('bug');
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
-  const [contactEmail, setContactEmail] = useState(initialEmail);
   const [contactPhone, setContactPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const descriptionLength = description.length;
 
   const validationError = useMemo(() => {
     if (!subject.trim()) return 'יש למלא כותרת';
     if (!description.trim()) return 'יש למלא תיאור הפנייה';
     if (description.trim().length < 10) return 'תיאור הפנייה צריך להכיל לפחות 10 תווים';
-    if (!contactEmail.trim()) return 'יש למלא אימייל ליצירת קשר';
+    if (descriptionLength > DESCRIPTION_MAX_CHARS) return 'התיאור חייב להכיל לכל היותר 1,000 תווים';
+    if (!contactEmail.trim()) return 'חסר אימייל בחשבון — לא ניתן לשלוח פנייה';
     return null;
-  }, [subject, description, contactEmail]);
+  }, [subject, description, descriptionLength, contactEmail]);
 
   const handleSubmit = async () => {
     if (!userId) {
@@ -63,12 +80,13 @@ export default function SupportScreen({ navigation, route }: any) {
         contactEmail: contactEmail.trim(),
         contactPhone: contactPhone.trim(),
       });
-      Alert.alert('נשלח', 'הפנייה נשלחה בהצלחה. נחזור אליך בהקדם.');
       setCategory('bug');
       setSubject('');
       setDescription('');
       setContactPhone('');
-      navigation.goBack();
+      Alert.alert('נשלח', 'הפנייה נשלחה בהצלחה.\nנחזור אליך בהקדם.', [
+        { text: 'אישור', onPress: () => navigation.goBack() },
+      ]);
     } catch (error: any) {
       Alert.alert('שגיאה', error?.message || 'שליחת הפנייה נכשלה');
     } finally {
@@ -100,39 +118,59 @@ export default function SupportScreen({ navigation, route }: any) {
                 onPress={() => setCategory(item.id)}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.categoryChipText, category === item.id && styles.categoryChipTextActive]}>
+                <Text
+                  style={[styles.categoryChipText, category === item.id && styles.categoryChipTextActive]}
+                  numberOfLines={2}
+                >
                   {item.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={styles.sectionTitle}>כותרת</Text>
+          <Text style={styles.sectionTitle}>
+            כותרת <Text style={styles.requiredStar}>*</Text>
+          </Text>
           <TextInput
             style={styles.input}
             value={subject}
             onChangeText={setSubject}
-            placeholder="לדוגמה: בעיה בשליחת פנייה"
+            placeholder={SUBJECT_PLACEHOLDER[category]}
             textAlign="right"
           />
 
-          <Text style={styles.sectionTitle}>תיאור מפורט</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={description}
-            onChangeText={setDescription}
-            placeholder="תאר/י מה קרה או מה תרצה/י לשפר..."
-            multiline
-            textAlign="right"
-            textAlignVertical="top"
-          />
+          <Text style={styles.sectionTitle}>
+            תיאור מפורט <Text style={styles.requiredStar}>*</Text>
+          </Text>
+          <Text style={styles.remainingCaption}>מינימום 10 תווים בתיאור</Text>
+          <View style={styles.textAreaWrapper}>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={description}
+              onChangeText={setDescription}
+              placeholder={DESCRIPTION_DETAIL_PLACEHOLDER}
+              multiline
+              maxLength={DESCRIPTION_MAX_CHARS}
+              textAlign="right"
+              textAlignVertical="top"
+            />
+            <Text
+              style={[
+                styles.charCountOverlay,
+                descriptionLength >= 900 && styles.charCountOverlayWarning,
+              ]}
+            >
+              {descriptionLength}/{DESCRIPTION_MAX_CHARS}
+            </Text>
+          </View>
 
           <Text style={styles.sectionTitle}>אימייל ליצירת קשר</Text>
+          <Text style={styles.lockedFieldHint}>האימייל מקושר לחשבון שלך ולא ניתן לשינוי</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, styles.inputLocked]}
             value={contactEmail}
-            onChangeText={setContactEmail}
-            placeholder="you@example.com"
+            editable={false}
+            selectTextOnFocus={false}
             autoCapitalize="none"
             keyboardType="email-address"
             textAlign="right"
@@ -148,10 +186,14 @@ export default function SupportScreen({ navigation, route }: any) {
             textAlign="right"
           />
 
+          <Text style={styles.requiredFieldLegend}>
+            <Text style={styles.requiredStar}>*</Text> שדה חובה
+          </Text>
+
           <TouchableOpacity
-            style={[styles.submitButton, (Boolean(validationError) || submitting) && styles.submitButtonDisabled]}
+            style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
             onPress={handleSubmit}
-            disabled={Boolean(validationError) || submitting}
+            disabled={submitting}
             activeOpacity={0.85}
           >
             {submitting ? (
@@ -204,19 +246,35 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     fontWeight: '600',
   },
+  requiredStar: {
+    color: '#D32F2F',
+    fontWeight: '700',
+  },
+  requiredFieldLegend: {
+    marginTop: 10,
+    marginBottom: 8,
+    fontSize: 12,
+    color: '#8B7355',
+    textAlign: 'right',
+    alignSelf: 'stretch',
+  },
   categoryRow: {
     flexDirection: 'row-reverse',
-    gap: 8,
+    flexWrap: 'nowrap',
+    gap: 4,
     marginBottom: 6,
   },
   categoryChip: {
     flex: 1,
-    borderRadius: 11,
+    minWidth: 0,
+    borderRadius: 9,
     borderWidth: 1,
     borderColor: '#DCCFBE',
     backgroundColor: '#F8F0E5',
-    paddingVertical: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   categoryChipActive: {
     borderColor: '#7FB069',
@@ -225,6 +283,9 @@ const styles = StyleSheet.create({
   categoryChipText: {
     color: '#6B5444',
     fontWeight: '600',
+    fontSize: 13,
+    lineHeight: 17,
+    textAlign: 'center',
   },
   categoryChipTextActive: {
     color: '#3E5B2D',
@@ -240,8 +301,43 @@ const styles = StyleSheet.create({
     color: '#5C4033',
     marginBottom: 6,
   },
+  lockedFieldHint: {
+    fontSize: 12,
+    color: '#9A8B7A',
+    textAlign: 'right',
+    marginBottom: 4,
+  },
+  inputLocked: {
+    backgroundColor: '#EFE8DC',
+    color: '#6B5D4F',
+  },
   textArea: {
     minHeight: 120,
+    paddingBottom: 32,
+    marginBottom: 0,
+  },
+  textAreaWrapper: {
+    position: 'relative',
+    marginBottom: 6,
+  },
+  remainingCaption: {
+    fontSize: 12,
+    color: '#8B7355',
+    textAlign: 'right',
+    marginBottom: 6,
+    lineHeight: 18,
+  },
+  charCountOverlay: {
+    position: 'absolute',
+    bottom: 10,
+    right: 14,
+    fontSize: 12,
+    color: '#8B7355',
+    fontWeight: '500',
+  },
+  charCountOverlayWarning: {
+    color: '#D32F2F',
+    fontWeight: '700',
   },
   submitButton: {
     marginTop: 14,

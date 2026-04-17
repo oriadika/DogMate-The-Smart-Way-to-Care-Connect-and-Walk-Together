@@ -16,9 +16,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,6 +37,17 @@ public class UserController {
     
     // In-memory ping storage: Map<toUserId, List<Ping>>
     private static final Map<String, List<Ping>> pingStorage = new ConcurrentHashMap<>();
+
+    /** True when the service message indicates the resource was not found (Hebrew or English). */
+    private static boolean isUserNotFoundMessage(String message) {
+        if (message == null) {
+            return false;
+        }
+        if (message.contains("לא נמצא")) {
+            return true;
+        }
+        return message.toLowerCase(Locale.ROOT).contains("not found");
+    }
 
     @Autowired
     public UserController(UserService userService, DogWalkerService dogWalkerService,
@@ -56,7 +71,7 @@ public class UserController {
             if (request == null || request.getEmail() == null || request.getPassword() == null ||
                 request.getFirstName() == null || request.getLastName() == null) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Missing required fields"));
+                    .body(createErrorResponse("חסרים שדות חובה"));
             }
 
             String role = normalizeRegistrationRole(request.getUserRole());
@@ -78,8 +93,8 @@ public class UserController {
             response.put(
                 "message",
                 verificationEmailSent
-                    ? "Verification code sent to your email. Enter the code to finish creating your account."
-                    : "Registration saved. The server could not send email (configure SPRING_MAIL_PASSWORD for Gmail). Use the code from server logs or tap resend after fixing mail."
+                    ? "נשלח קוד אימות למייל שלך. הזן את הקוד כדי להשלים את יצירת החשבון."
+                    : "ההרשמה נשמרה אך השרת לא הצליח לשלוח מייל (הגדר SPRING_MAIL_PASSWORD ל-Gmail). אפשר לראות את הקוד בלוג השרת או ללחוץ על שליחה מחדש אחרי תיקון המייל."
             );
             response.put("email", request.getEmail().trim());
             response.put("userRole", role);
@@ -91,9 +106,13 @@ public class UserController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest()
                 .body(createErrorResponse(e.getMessage()));
-        } catch (Exception e) {
+        } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to register user: " + e.getMessage()));
+                .body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("אירעה שגיאה בהרשמה. נסה שוב מאוחר יותר."));
         }
     }
 
@@ -103,7 +122,7 @@ public class UserController {
         try {
             parsedId = UUID.fromString(userId);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(createErrorResponse("Invalid user ID format"));
+            return ResponseEntity.badRequest().body(createErrorResponse("מזהה משתמש בפורמט לא תקין"));
         }
 
         try {
@@ -117,12 +136,11 @@ public class UserController {
                 profile.phoneNumber()
             ));
         } catch (IllegalArgumentException e) {
-            String msg = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
-            HttpStatus status = msg.contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            HttpStatus status = isUserNotFoundMessage(e.getMessage()) ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
             return ResponseEntity.status(status).body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to load profile: " + e.getMessage()));
+                .body(createErrorResponse("נכשלה טעינת הפרופיל: " + e.getMessage()));
         }
     }
 
@@ -134,14 +152,14 @@ public class UserController {
         try {
             parsedId = UUID.fromString(userId);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(createErrorResponse("Invalid user ID format"));
+            return ResponseEntity.badRequest().body(createErrorResponse("מזהה משתמש בפורמט לא תקין"));
         }
 
         if (request == null ||
             request.getFirstName() == null ||
             request.getLastName() == null ||
             request.getPhoneNumber() == null) {
-            return ResponseEntity.badRequest().body(createErrorResponse("Missing required fields"));
+            return ResponseEntity.badRequest().body(createErrorResponse("חסרים שדות נדרשים"));
         }
 
         try {
@@ -160,12 +178,11 @@ public class UserController {
                 profile.phoneNumber()
             ));
         } catch (IllegalArgumentException e) {
-            String msg = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
-            HttpStatus status = msg.contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            HttpStatus status = isUserNotFoundMessage(e.getMessage()) ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
             return ResponseEntity.status(status).body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to update profile: " + e.getMessage()));
+                .body(createErrorResponse("נכשל עדכון הפרופיל: " + e.getMessage()));
         }
     }
 
@@ -177,14 +194,14 @@ public class UserController {
         try {
             parsedId = UUID.fromString(userId);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(createErrorResponse("Invalid user ID format"));
+            return ResponseEntity.badRequest().body(createErrorResponse("מזהה משתמש בפורמט לא תקין"));
         }
 
         if (request == null ||
             request.getOldPassword() == null ||
             request.getNewPassword() == null ||
             request.getConfirmNewPassword() == null) {
-            return ResponseEntity.badRequest().body(createErrorResponse("Missing required fields"));
+            return ResponseEntity.badRequest().body(createErrorResponse("חסרים שדות נדרשים"));
         }
 
         try {
@@ -196,34 +213,33 @@ public class UserController {
             );
             return ResponseEntity.ok(Map.of(
                 "success", true,
-                "message", "Password updated successfully"
+                "message", "הסיסמה עודכנה בהצלחה"
             ));
         } catch (IllegalArgumentException e) {
-            String msg = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
-            HttpStatus status = msg.contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            HttpStatus status = isUserNotFoundMessage(e.getMessage()) ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
             return ResponseEntity.status(status).body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to update password: " + e.getMessage()));
+                .body(createErrorResponse("נכשל עדכון הסיסמה: " + e.getMessage()));
         }
     }
 
     @PostMapping("/{userId}/support-requests")
     public ResponseEntity<?> createSupportRequest(
             @PathVariable String userId,
-            @RequestBody SupportRequestCreateRequest request) {
+            @Valid @RequestBody SupportRequestCreateRequest request) {
         UUID parsedId;
         try {
             parsedId = UUID.fromString(userId);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(createErrorResponse("Invalid user ID format"));
+            return ResponseEntity.badRequest().body(createErrorResponse("מזהה משתמש בפורמט לא תקין"));
         }
 
         if (request == null ||
             request.getCategory() == null ||
             request.getSubject() == null ||
             request.getDescription() == null) {
-            return ResponseEntity.badRequest().body(createErrorResponse("Missing required fields"));
+            return ResponseEntity.badRequest().body(createErrorResponse("חסרים שדות נדרשים"));
         }
 
         try {
@@ -237,16 +253,100 @@ public class UserController {
             );
             return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
                 "success", true,
-                "message", "Support request submitted successfully",
+                "message", "הפנייה נשלחה בהצלחה",
                 "requestId", saved.getId().toString()
             ));
         } catch (IllegalArgumentException e) {
-            String msg = e.getMessage() == null ? "" : e.getMessage().toLowerCase();
-            HttpStatus status = msg.contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            HttpStatus status = isUserNotFoundMessage(e.getMessage()) ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
             return ResponseEntity.status(status).body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to submit support request: " + e.getMessage()));
+                .body(createErrorResponse("אירעה שגיאה בשליחת הפנייה. נסה שוב מאוחר יותר."));
+        }
+    }
+
+    /**
+     * Admin: list all customer support requests (newest first).
+     * GET /api/users/{adminUserId}/support-requests
+     */
+    @GetMapping("/{adminUserId}/support-requests")
+    public ResponseEntity<?> listSupportRequestsForAdmin(@PathVariable String adminUserId) {
+        UUID parsedId;
+        try {
+            parsedId = UUID.fromString(adminUserId);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse("מזהה משתמש לא תקין"));
+        }
+        try {
+            List<Map<String, Object>> requests = userService.listSupportRequestsForAdmin(parsedId);
+            Map<String, Object> body = new HashMap<>();
+            body.put("success", true);
+            body.put("requests", requests);
+            return ResponseEntity.ok(body);
+        } catch (IllegalArgumentException e) {
+            String msg = e.getMessage() == null ? "" : e.getMessage();
+            if (msg.contains("לא נמצא")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(createErrorResponse(msg));
+            }
+            if (msg.contains("מנהלים")) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(createErrorResponse(msg));
+            }
+            return ResponseEntity.badRequest().body(createErrorResponse(msg));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("אירעה שגיאה בטעינת הפניות."));
+        }
+    }
+
+    /**
+     * Admin: set support request status (OPEN or CLOSED).
+     * PATCH /api/users/{adminUserId}/support-requests/{requestId}
+     */
+    @PatchMapping("/{adminUserId}/support-requests/{requestId}")
+    public ResponseEntity<?> updateSupportRequestStatus(
+            @PathVariable String adminUserId,
+            @PathVariable String requestId,
+            @RequestBody SupportRequestStatusUpdateRequest request) {
+        UUID parsedAdminId;
+        UUID parsedRequestId;
+        try {
+            parsedAdminId = UUID.fromString(adminUserId);
+            parsedRequestId = UUID.fromString(requestId);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse("מזהה לא תקין"));
+        }
+        if (request == null || request.getStatus() == null || request.getStatus().isBlank()) {
+            return ResponseEntity.badRequest().body(createErrorResponse("חסר סטטוס"));
+        }
+        try {
+            Map<String, Object> updated = userService.updateSupportRequestStatus(
+                parsedAdminId,
+                parsedRequestId,
+                request.getStatus()
+            );
+            Map<String, Object> body = new HashMap<>();
+            body.put("success", true);
+            body.put("requestId", updated.get("id"));
+            body.put("status", updated.get("status"));
+            return ResponseEntity.ok(body);
+        } catch (IllegalArgumentException e) {
+            String msg = e.getMessage() == null ? "" : e.getMessage();
+            if (msg.contains("לא נמצא") && msg.contains("פנייה")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(createErrorResponse(msg));
+            }
+            if (msg.contains("לא נמצא")) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(createErrorResponse(msg));
+            }
+            if (msg.contains("מנהלים")) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(createErrorResponse(msg));
+            }
+            return ResponseEntity.badRequest().body(createErrorResponse(msg));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("אירעה שגיאה בעדכון הפנייה."));
         }
     }
 
@@ -260,7 +360,7 @@ public class UserController {
             // Validate userId parameter
             if (userId == null || userId.trim().isEmpty()) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("User ID is required"));
+                    .body(createErrorResponse("נדרש מזהה משתמש"));
             }
 
             // Parse UUID
@@ -269,7 +369,7 @@ public class UserController {
                 userUuid = UUID.fromString(userId);
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Invalid user ID format"));
+                    .body(createErrorResponse("מזהה משתמש בפורמט לא תקין"));
             }
 
             // Logout user
@@ -278,7 +378,7 @@ public class UserController {
             // Create success response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "User logged out successfully");
+            response.put("message", "התנתקת בהצלחה");
             response.put("userId", userId);
 
             return ResponseEntity.ok(response);
@@ -288,7 +388,7 @@ public class UserController {
                 .body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to log out user: " + e.getMessage()));
+                .body(createErrorResponse("נכשלה ההתנתקות: " + e.getMessage()));
         }
     }
 
@@ -302,7 +402,7 @@ public class UserController {
             // Validate email parameter
             if (email == null || email.trim().isEmpty()) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Email is required"));
+                    .body(createErrorResponse("נדרש אימייל"));
             }
 
             // Logout user
@@ -311,7 +411,7 @@ public class UserController {
             // Create success response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "User logged out successfully");
+            response.put("message", "התנתקת בהצלחה");
             response.put("email", email);
 
             return ResponseEntity.ok(response);
@@ -321,7 +421,7 @@ public class UserController {
                 .body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to log out user: " + e.getMessage()));
+                .body(createErrorResponse("נכשלה ההתנתקות: " + e.getMessage()));
         }
     }
 
@@ -335,7 +435,7 @@ public class UserController {
             // Validate userId parameter
             if (userId == null || userId.trim().isEmpty()) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("User ID is required"));
+                    .body(createErrorResponse("נדרש מזהה משתמש"));
             }
 
             // Parse UUID
@@ -344,7 +444,7 @@ public class UserController {
                 userUuid = java.util.UUID.fromString(userId);
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Invalid user ID format"));
+                    .body(createErrorResponse("מזהה משתמש בפורמט לא תקין"));
             }
 
             // Delete user
@@ -353,7 +453,7 @@ public class UserController {
             // Create success response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "User deleted successfully");
+            response.put("message", "המשתמש נמחק בהצלחה");
             response.put("userId", userId);
             
             return ResponseEntity.ok(response);
@@ -363,7 +463,7 @@ public class UserController {
                 .body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to delete user: " + e.getMessage()));
+                .body(createErrorResponse("נכשלה מחיקת המשתמש: " + e.getMessage()));
         }
     }
 
@@ -377,7 +477,7 @@ public class UserController {
             // Validate userId parameter
             if (userId == null || userId.trim().isEmpty()) {
                 return ResponseEntity.badRequest()
-                        .body(createErrorResponse("User ID is required"));
+                        .body(createErrorResponse("נדרש מזהה משתמש"));
             }
 
             // Parse UUID
@@ -386,7 +486,7 @@ public class UserController {
                 userUuid = java.util.UUID.fromString(userId);
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest()
-                        .body(createErrorResponse("Invalid user ID format"));
+                        .body(createErrorResponse("מזהה משתמש בפורמט לא תקין"));
             }
 
             // Suspend user
@@ -395,7 +495,7 @@ public class UserController {
             // Create success response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "User suspended successfully");
+            response.put("message", "המשתמש הושעה בהצלחה");
             response.put("userId", userId);
 
             return ResponseEntity.ok(response);
@@ -405,7 +505,7 @@ public class UserController {
                     .body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Failed to suspend user: " + e.getMessage()));
+                    .body(createErrorResponse("נכשלה השעיית המשתמש: " + e.getMessage()));
         }
     }
 
@@ -419,7 +519,7 @@ public class UserController {
             // Validate email parameter
             if (email == null || email.trim().isEmpty()) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Email is required"));
+                    .body(createErrorResponse("נדרש אימייל"));
             }
 
             // Delete user
@@ -428,7 +528,7 @@ public class UserController {
             // Create success response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "User deleted successfully");
+            response.put("message", "המשתמש נמחק בהצלחה");
             response.put("email", email);
             
             return ResponseEntity.ok(response);
@@ -438,7 +538,7 @@ public class UserController {
                 .body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to delete user: " + e.getMessage()));
+                .body(createErrorResponse("נכשלה מחיקת המשתמש: " + e.getMessage()));
         }
     }
 
@@ -487,7 +587,7 @@ public class UserController {
             
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to get users: " + e.getMessage()));
+                .body(createErrorResponse("נכשלה טעינת המשתמשים: " + e.getMessage()));
         }
     }
 
@@ -546,7 +646,7 @@ public class UserController {
             
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to get users: " + e.getMessage()));
+                .body(createErrorResponse("נכשלה טעינת המשתמשים: " + e.getMessage()));
         }
     }
 
@@ -560,7 +660,7 @@ public class UserController {
             // Validate request
             if (request == null || request.getFromUserId() == null || request.getToUserId() == null) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("From user ID and to user ID are required"));
+                    .body(createErrorResponse("נדרשים מזהה שולח ומזהה נמען"));
             }
 
             System.out.println("Ping received from: " + request.getFromUserId() + " to: " + request.getToUserId());
@@ -568,7 +668,7 @@ public class UserController {
             // Create and store ping
             Ping ping = new Ping();
             ping.setFromUserId(request.getFromUserId());
-            ping.setFromUserName(request.getFromUserName() != null ? request.getFromUserName() : "Unknown User");
+            ping.setFromUserName(request.getFromUserName() != null ? request.getFromUserName() : "משתמש לא ידוע");
             ping.setToUserId(request.getToUserId());
             ping.setRead(false);
 
@@ -580,7 +680,7 @@ public class UserController {
             PingWebSocketController.PingNotification notification = 
                 new PingWebSocketController.PingNotification(
                     request.getFromUserId(),
-                    request.getFromUserName() != null ? request.getFromUserName() : "Unknown User",
+                    request.getFromUserName() != null ? request.getFromUserName() : "משתמש לא ידוע",
                     request.getToUserId()
                 );
 
@@ -594,7 +694,7 @@ public class UserController {
             // Create response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Ping sent successfully");
+            response.put("message", "הפינג נשלח בהצלחה");
             response.put("fromUserId", request.getFromUserId());
             response.put("toUserId", request.getToUserId());
 
@@ -602,7 +702,7 @@ public class UserController {
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to send ping: " + e.getMessage()));
+                .body(createErrorResponse("נכשלה שליחת הפינג: " + e.getMessage()));
         }
     }
 
@@ -617,7 +717,7 @@ public class UserController {
             // Validate userId parameter
             if (userId == null || userId.trim().isEmpty()) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("User ID is required"));
+                    .body(createErrorResponse("נדרש מזהה משתמש"));
             }
 
             // Retrieve unread pings for this user (fallback for WebSocket disconnections)
@@ -641,7 +741,7 @@ public class UserController {
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to get pending pings: " + e.getMessage()));
+                .body(createErrorResponse("נכשלה טעינת הפינגים: " + e.getMessage()));
         }
     }
 
@@ -656,7 +756,7 @@ public class UserController {
             // Validate pingId parameter
             if (pingId == null || pingId.trim().isEmpty()) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Ping ID is required"));
+                    .body(createErrorResponse("נדרש מזהה פינג"));
             }
 
             // Find and mark ping as read
@@ -675,20 +775,20 @@ public class UserController {
 
             if (!found) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(createErrorResponse("Ping not found"));
+                    .body(createErrorResponse("הפינג לא נמצא"));
             }
 
             // Create response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Ping marked as read");
+            response.put("message", "הפינג סומן כנקרא");
             response.put("pingId", pingId);
 
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to mark ping as read: " + e.getMessage()));
+                .body(createErrorResponse("נכשל סימון הפינג כנקרא: " + e.getMessage()));
         }
     }
 
@@ -704,12 +804,12 @@ public class UserController {
             // Validate inputs
             if (userId == null || userId.trim().isEmpty()) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("User ID is required"));
+                    .body(createErrorResponse("נדרש מזהה משתמש"));
             }
 
             if (request == null || request.getLatitude() == null || request.getLongitude() == null) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Latitude and longitude are required"));
+                    .body(createErrorResponse("נדרשים קו רוחב וקו אורך"));
             }
 
             // Parse UUID
@@ -718,7 +818,7 @@ public class UserController {
                 userUuid = UUID.fromString(userId);
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Invalid user ID format"));
+                    .body(createErrorResponse("מזהה משתמש בפורמט לא תקין"));
             }
 
             // Update user location via service
@@ -727,7 +827,7 @@ public class UserController {
             // Create response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Location updated successfully");
+            response.put("message", "המיקום עודכן בהצלחה");
             response.put("userId", userId);
             response.put("latitude", request.getLatitude());
             response.put("longitude", request.getLongitude());
@@ -736,7 +836,7 @@ public class UserController {
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to update location: " + e.getMessage()));
+                .body(createErrorResponse("נכשל עדכון המיקום: " + e.getMessage()));
         }
     }
 
@@ -750,7 +850,7 @@ public class UserController {
             // Validate inputs
             if (userId == null || userId.trim().isEmpty()) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("User ID is required"));
+                    .body(createErrorResponse("נדרש מזהה משתמש"));
             }
 
             // Parse UUID
@@ -759,7 +859,7 @@ public class UserController {
                 userUuid = UUID.fromString(userId);
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Invalid user ID format"));
+                    .body(createErrorResponse("מזהה משתמש בפורמט לא תקין"));
             }
 
             // Clear user location via service (set to null)
@@ -768,14 +868,14 @@ public class UserController {
             // Create response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Location cleared successfully");
+            response.put("message", "המיקום הוסר מהצגה");
             response.put("userId", userId);
 
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to clear location: " + e.getMessage()));
+                .body(createErrorResponse("נכשלה הסרת המיקום: " + e.getMessage()));
         }
     }
 
@@ -1001,6 +1101,7 @@ public class UserController {
     public static class SupportRequestCreateRequest {
         private String category;
         private String subject;
+        @Size(max = 1000, message = "התיאור חייב להכיל לכל היותר 1,000 תווים")
         private String description;
         private String contactEmail;
         private String contactPhone;
@@ -1046,6 +1147,22 @@ public class UserController {
 
         public void setContactPhone(String contactPhone) {
             this.contactPhone = contactPhone;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class SupportRequestStatusUpdateRequest {
+        private String status;
+
+        public SupportRequestStatusUpdateRequest() {
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
         }
     }
 

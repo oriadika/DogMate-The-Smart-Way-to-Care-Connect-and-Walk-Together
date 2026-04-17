@@ -15,16 +15,16 @@ public final class PhoneValidation {
      */
     public static String requireValidIsraeliMobile(String raw) {
         if (raw == null || raw.isBlank()) {
-            throw new IllegalArgumentException("Phone number is required");
+            throw new IllegalArgumentException("נדרש מספר טלפון");
         }
         String digits = raw.replaceAll("\\D", "");
         if (digits.isEmpty()) {
-            throw new IllegalArgumentException("Phone number is required");
+            throw new IllegalArgumentException("נדרש מספר טלפון");
         }
         boolean validTen = digits.length() == 10 && digits.startsWith("05");
         boolean validNine = digits.length() == 9 && digits.charAt(0) == '5';
         if (!validTen && !validNine) {
-            throw new IllegalArgumentException("Invalid Israeli mobile phone number");
+            throw new IllegalArgumentException("מספר פלאפון ישראלי לא תקין");
         }
         return digits;
     }

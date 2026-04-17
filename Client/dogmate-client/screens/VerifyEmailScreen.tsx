@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,10 +14,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
 
+const CODE_LENGTH = 6;
+
 export default function VerifyEmailScreen({ navigation, route }: any) {
   const [code, setCode] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
+  const codeInputRef = useRef<TextInput>(null);
 
   const email = String(route?.params?.email || '').trim();
   const password = String(route?.params?.password || '');
@@ -30,6 +33,18 @@ export default function VerifyEmailScreen({ navigation, route }: any) {
   const phoneNumber = String(route?.params?.phoneNumber || '').trim();
 
   const isCodeValid = useMemo(() => /^\d{6}$/.test(code), [code]);
+
+  const setCodeDigits = (raw: string) => {
+    setCode(raw.replace(/\D/g, '').slice(0, CODE_LENGTH));
+  };
+
+  useEffect(() => {
+    if (!fromSignUp) return;
+    const t = setTimeout(() => codeInputRef.current?.focus(), 400);
+    return () => clearTimeout(t);
+  }, [fromSignUp]);
+
+  const nextEmptyIndex = code.length < CODE_LENGTH ? code.length : -1;
 
   const handleVerify = async () => {
     if (!email) {
@@ -139,16 +154,33 @@ export default function VerifyEmailScreen({ navigation, route }: any) {
             החשבון ייווצר רק אחרי הזנת הקוד.
           </Text>
 
-          <TextInput
-            style={styles.input}
-            value={code}
-            onChangeText={(text) => setCode(text.replace(/\D/g, '').slice(0, 6))}
-            placeholder="הזן קוד בן 6 ספרות"
-            placeholderTextColor="#A9B5C7"
-            keyboardType="number-pad"
-            textAlign="center"
-            maxLength={6}
-          />
+          <View style={styles.otpTouchable}>
+            <View style={styles.otpRow} pointerEvents="none">
+              {Array.from({ length: CODE_LENGTH }, (_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.otpCell,
+                    nextEmptyIndex === i && styles.otpCellActive,
+                    code[i] ? styles.otpCellFilled : null,
+                  ]}
+                >
+                  <Text style={styles.otpDigit}>{code[i] ?? ''}</Text>
+                </View>
+              ))}
+            </View>
+            <TextInput
+              ref={codeInputRef}
+              value={code}
+              onChangeText={setCodeDigits}
+              keyboardType="number-pad"
+              maxLength={CODE_LENGTH}
+              textContentType="oneTimeCode"
+              autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
+              caretHidden
+              style={styles.otpHiddenInput}
+            />
+          </View>
 
           <TouchableOpacity
             style={[styles.verifyButton, (!isCodeValid || verifying) && styles.buttonDisabled]}
@@ -220,16 +252,47 @@ const styles = StyleSheet.create({
   emailText: {
     fontWeight: '700',
   },
-  input: {
-    backgroundColor: '#faf0e6',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e0d5c7',
-    paddingVertical: 16,
-    fontSize: 24,
-    letterSpacing: 10,
-    color: '#5C4033',
+  otpTouchable: {
     marginBottom: 20,
+    height: 52,
+    position: 'relative',
+  },
+  otpRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 52,
+  },
+  otpCell: {
+    width: 44,
+    height: 48,
+    marginHorizontal: 4,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#D4C4B0',
+    backgroundColor: '#faf0e6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpCellFilled: {
+    borderColor: '#B8A994',
+  },
+  otpCellActive: {
+    borderColor: '#7FB069',
+    borderWidth: 2,
+    backgroundColor: '#fff',
+  },
+  otpDigit: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#5C4033',
+    textAlign: 'center',
+    minWidth: 14,
+  },
+  otpHiddenInput: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.02,
+    color: 'transparent',
   },
   verifyButton: {
     backgroundColor: '#7FB069',

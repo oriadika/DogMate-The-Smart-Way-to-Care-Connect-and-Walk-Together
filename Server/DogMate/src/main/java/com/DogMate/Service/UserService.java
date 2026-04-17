@@ -10,11 +10,15 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.Optional;
 @Service
@@ -88,7 +92,7 @@ public class UserService {
         String phoneNumber
     ) {
         if (userRepository.existsByEmailIgnoreCase(email)) {
-            throw new IllegalArgumentException("Email already exists: " + email);
+            throw new IllegalArgumentException("כתובת המייל כבר קיימת במערכת: " + email);
         }
         RegularUser newUser = RegularUser.createWithHashedPassword(email, passwordHash, firstName, lastName, null);
         if (phoneNumber != null && !phoneNumber.isBlank()) {
@@ -165,7 +169,7 @@ public class UserService {
         
         // Validate user exists (business logic)
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("User not found with email: " + email);
+            throw new IllegalArgumentException("לא נמצא משתמש עם האימייל: " + email);
         }
 
         // Delete user by ID (orchestration - delegate to other service method)
@@ -189,7 +193,7 @@ public class UserService {
         
         // Validate user exists (business logic)
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("User not found with email: " + email);
+            throw new IllegalArgumentException("לא נמצא משתמש עם האימייל: " + email);
         }
 
         // Update user password using domain method (all business logic is in domain)
@@ -217,19 +221,19 @@ public class UserService {
 
         Optional<UserAccount> userOpt = userRepository.findById(userId);
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("User not found with ID: " + userId);
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
         }
 
         UserAccount user = userOpt.get();
         boolean oldPasswordMatches = user.verifyPassword(oldPassword, passwordEncoder::matches);
         if (!oldPasswordMatches) {
-            throw new IllegalArgumentException("Old password is incorrect");
+            throw new IllegalArgumentException("הסיסמה הישנה שגויה");
         }
         if (!newPassword.equals(confirmNewPassword)) {
-            throw new IllegalArgumentException("New password and confirmation do not match");
+            throw new IllegalArgumentException("הסיסמה החדשה ואימות הסיסמה אינם תואמים");
         }
         if (oldPassword.equals(newPassword)) {
-            throw new IllegalArgumentException("New password must be different from old password");
+            throw new IllegalArgumentException("הסיסמה החדשה חייבת להיות שונה מהסיסמה הישנה");
         }
 
         if (user instanceof RegularUser) {
@@ -291,22 +295,22 @@ public class UserService {
         
         // Validate user exists (business logic)
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("Invalid credentials");
+            throw new IllegalArgumentException("אימייל או סיסמה שגויים");
         }
         
         // Verify password using domain method (all business logic is in domain)
         UserAccount user = userOpt.get();
         if (user.isSuspended()){
-            throw new IllegalArgumentException("The user is suspended and cannot log in");
+            throw new IllegalArgumentException("המשתמש מושעה ולא יכול להתחבר");
         }
         boolean passwordMatches = user.verifyPassword(password, passwordEncoder::matches);
         
         if (!passwordMatches) {
-            throw new IllegalArgumentException("Invalid credentials");
+            throw new IllegalArgumentException("אימייל או סיסמה שגויים");
         }
 
         if (user.isLoggedIn()){
-            throw new IllegalArgumentException("User is already logged in");
+            throw new IllegalArgumentException("המשתמש כבר מחובר");
 
         }
         // Set logged in status to true
@@ -331,7 +335,7 @@ public class UserService {
         if (userRepository instanceof com.DogMate.Infrastructure.UserRepository) {
             return ((com.DogMate.Infrastructure.UserRepository) userRepository).findAll();
         }
-        throw new IllegalStateException("UserRepository is not properly configured");
+        throw new IllegalStateException("מאגר המשתמשים לא מוגדר כראוי");
     }
 
     /**
@@ -369,7 +373,7 @@ public class UserService {
         
         // Validate user exists (business logic)
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("User not found with ID: " + userId);
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
         }
         
         // Update user's logged-in status (orchestration)
@@ -404,7 +408,7 @@ public class UserService {
         
         // Validate user exists (business logic)
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("User not found with email: " + email);
+            throw new IllegalArgumentException("לא נמצא משתמש עם האימייל: " + email);
         }
         
         // Update user's logged-in status (orchestration)
@@ -433,7 +437,7 @@ public class UserService {
         Optional<UserAccount> userOpt = userRepository.findById(userId);
 
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("User not found with ID: " + userId);
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
         }
 
         UserAccount user = userOpt.get();
@@ -458,7 +462,7 @@ public class UserService {
         Optional<UserAccount> userOpt = userRepository.findByEmail(email);
 
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("User not found with email: " + email);
+            throw new IllegalArgumentException("לא נמצא משתמש עם האימייל: " + email);
         }
 
         UserAccount user = userOpt.get();
@@ -489,10 +493,10 @@ public class UserService {
 
         // Validate coordinates
         if (latitude == null || latitude < -90 || latitude > 90) {
-            throw new IllegalArgumentException("Latitude must be between -90 and 90");
+            throw new IllegalArgumentException("קו רוחב חייב להיות בין ‎-90‎ ל־‎90");
         }
         if (longitude == null || longitude < -180 || longitude > 180) {
-            throw new IllegalArgumentException("Longitude must be between -180 and 180");
+            throw new IllegalArgumentException("קו אורך חייב להיות בין ‎-180‎ ל־‎180");
         }
 
         // Find user by ID (orchestration)
@@ -500,7 +504,7 @@ public class UserService {
 
         // Validate user exists (business logic)
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("User not found with ID: " + userId);
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
         }
 
         // Update user location (orchestration)
@@ -511,7 +515,7 @@ public class UserService {
             regularUser.setLongitude(longitude);
             userRepository.save(regularUser);
         } else {
-            throw new IllegalArgumentException("Only RegularUser accounts support location tracking");
+            throw new IllegalArgumentException("רק משתמשים מסוג בעל כלב יכולים לעדכן מיקום");
         }
     }
 
@@ -532,7 +536,7 @@ public class UserService {
 
         // Validate user exists (business logic)
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("User not found with ID: " + userId);
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
         }
 
         // Clear user location (orchestration)
@@ -544,7 +548,7 @@ public class UserService {
             userRepository.save(regularUser);
             System.out.println("Location cleared for user: " + userId);
         } else {
-            throw new IllegalArgumentException("Only RegularUser accounts support location tracking");
+            throw new IllegalArgumentException("רק משתמשים מסוג בעל כלב יכולים לעדכן מיקום");
         }
     }
 
@@ -560,11 +564,11 @@ public class UserService {
 
     public boolean hasAtLeastOneDog(String email){
         if(!userRepository.existsByEmail(email)){
-            throw new IllegalArgumentException("user not found with the given email");
+            throw new IllegalArgumentException("לא נמצא משתמש עם האימייל שהוזן");
         }
         Optional<UserAccount> optUser = userRepository.findByEmail(email);
         if (optUser.isEmpty()) {
-            throw new IllegalArgumentException("User not found with email: " + email);
+            throw new IllegalArgumentException("לא נמצא משתמש עם האימייל: " + email);
         }
         UserAccount user = optUser.get();
         if (user instanceof RegularUser) {
@@ -579,11 +583,11 @@ public class UserService {
 
     public List<Dog> getDogs(String email){
         if(!userRepository.existsByEmail(email)){
-            throw new IllegalArgumentException("user not found with the given email");
+            throw new IllegalArgumentException("לא נמצא משתמש עם האימייל שהוזן");
         }
         Optional<UserAccount> optUser = userRepository.findByEmail(email);
         if (optUser.isEmpty()) {
-            throw new IllegalArgumentException("User not found with email: " + email);
+            throw new IllegalArgumentException("לא נמצא משתמש עם האימייל: " + email);
         }
         UserAccount user = optUser.get();
         if (user instanceof RegularUser) {
@@ -602,7 +606,7 @@ public class UserService {
         UserAccount.validateUserId(userId);
         Optional<UserAccount> userOpt = userRepository.findById(userId);
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("User not found with ID: " + userId);
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
         }
         UserAccount user = userOpt.get();
         if (user instanceof RegularUser regularUser) {
@@ -625,7 +629,7 @@ public class UserService {
                 walkerUser.getPhoneNumber()
             );
         }
-        throw new IllegalArgumentException("Only owner/walker accounts support profile editing");
+        throw new IllegalArgumentException("רק חשבונות בעל כלב או דוגווקר יכולים לערוך פרופיל");
     }
 
     @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
@@ -633,7 +637,7 @@ public class UserService {
         UserAccount.validateUserId(userId);
         Optional<UserAccount> userOpt = userRepository.findById(userId);
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("User not found with ID: " + userId);
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
         }
 
         String normalizedPhone = PhoneValidation.requireValidIsraeliMobile(phoneNumber);
@@ -675,7 +679,7 @@ public class UserService {
             );
         }
 
-        throw new IllegalArgumentException("Only owner/walker accounts support profile editing");
+        throw new IllegalArgumentException("רק חשבונות בעל כלב או דוגווקר יכולים לערוך פרופיל");
     }
 
     public record UserProfileData(
@@ -686,6 +690,62 @@ public class UserService {
         String lastName,
         String phoneNumber
     ) {}
+
+    /**
+     * Lists all support requests for an admin dashboard (newest first).
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listSupportRequestsForAdmin(UUID adminUserId) {
+        UserAccount admin = userRepository.findById(adminUserId)
+            .orElseThrow(() -> new IllegalArgumentException("משתמש לא נמצא"));
+        if (!(admin instanceof AdminUser)) {
+            throw new IllegalArgumentException("רק מנהלים יכולים לצפות בפניות התמיכה");
+        }
+        List<SupportRequest> all = supportRequestRepository.findAll(
+            Sort.by(Sort.Direction.DESC, "createdAt")
+        );
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (SupportRequest sr : all) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("id", sr.getId().toString());
+            row.put("userId", sr.getUserId().toString());
+            row.put("category", sr.getCategory());
+            row.put("subject", sr.getSubject());
+            row.put("description", sr.getDescription());
+            row.put("contactEmail", sr.getContactEmail());
+            row.put("contactPhone", sr.getContactPhone() != null ? sr.getContactPhone() : "");
+            row.put("status", sr.getStatus());
+            row.put("createdAt", sr.getCreatedAt().toString());
+            userRepository.findById(sr.getUserId())
+                .ifPresent(u -> row.put("submitterEmail", u.getEmail()));
+            out.add(row);
+        }
+        return out;
+    }
+
+    /**
+     * Admin: update support request status (OPEN / CLOSED).
+     */
+    @Transactional
+    public Map<String, Object> updateSupportRequestStatus(UUID adminUserId, UUID requestId, String newStatus) {
+        UserAccount admin = userRepository.findById(adminUserId)
+            .orElseThrow(() -> new IllegalArgumentException("משתמש לא נמצא"));
+        if (!(admin instanceof AdminUser)) {
+            throw new IllegalArgumentException("רק מנהלים יכולים לעדכן פניות");
+        }
+        String normalized = newStatus == null ? "" : newStatus.trim().toUpperCase();
+        if (!"CLOSED".equals(normalized) && !"OPEN".equals(normalized)) {
+            throw new IllegalArgumentException("סטטוס לא חוקי");
+        }
+        SupportRequest sr = supportRequestRepository.findById(requestId)
+            .orElseThrow(() -> new IllegalArgumentException("פנייה לא נמצאה"));
+        sr.setStatus(normalized);
+        supportRequestRepository.save(sr);
+        Map<String, Object> row = new HashMap<>();
+        row.put("id", sr.getId().toString());
+        row.put("status", sr.getStatus());
+        return row;
+    }
 
     public SupportRequest createSupportRequest(
         UUID userId,
@@ -698,7 +758,7 @@ public class UserService {
         UserAccount.validateUserId(userId);
         Optional<UserAccount> userOpt = userRepository.findById(userId);
         if (userOpt.isEmpty()) {
-            throw new IllegalArgumentException("User not found with ID: " + userId);
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
         }
 
         String normalizedCategory = category == null ? "" : category.trim();
@@ -708,10 +768,13 @@ public class UserService {
         String normalizedContactPhone = contactPhone == null ? "" : contactPhone.trim();
 
         if (normalizedCategory.isEmpty() || normalizedSubject.isEmpty() || normalizedDescription.isEmpty()) {
-            throw new IllegalArgumentException("Category, subject and description are required");
+            throw new IllegalArgumentException("חובה למלא קטגוריה, כותרת ותיאור");
         }
         if (normalizedDescription.length() < 10) {
-            throw new IllegalArgumentException("Description must contain at least 10 characters");
+            throw new IllegalArgumentException("התיאור חייב להכיל לפחות 10 תווים");
+        }
+        if (normalizedDescription.length() > 1000) {
+            throw new IllegalArgumentException("התיאור חייב להכיל לכל היותר 1,000 תווים");
         }
         if (normalizedContactEmail.isEmpty()) {
             normalizedContactEmail = userOpt.get().getEmail();
@@ -740,17 +803,17 @@ public class UserService {
             message.setFrom(user.getEmail());
             message.setReplyTo(user.getEmail());
             message.setTo(supportEmail);
-            message.setSubject("[DogMate Support] " + supportRequest.getSubject());
+            message.setSubject("[DogMate תמיכה] " + supportRequest.getSubject());
             message.setText(
-                "Support request submitted\n" +
-                "Request ID: " + supportRequest.getId() + "\n" +
-                "User ID: " + user.getId() + "\n" +
-                "User Email: " + user.getEmail() + "\n" +
-                "Category: " + supportRequest.getCategory() + "\n" +
-                "Contact Email: " + supportRequest.getContactEmail() + "\n" +
-                "Contact Phone: " + supportRequest.getContactPhone() + "\n" +
-                "Created At: " + supportRequest.getCreatedAt() + "\n\n" +
-                "Description:\n" +
+                "פנייה חדשה התקבלה\n" +
+                "מזהה פנייה: " + supportRequest.getId() + "\n" +
+                "מזהה משתמש: " + user.getId() + "\n" +
+                "אימייל משתמש: " + user.getEmail() + "\n" +
+                "קטגוריה: " + supportRequest.getCategory() + "\n" +
+                "אימייל ליצירת קשר: " + supportRequest.getContactEmail() + "\n" +
+                "טלפון: " + supportRequest.getContactPhone() + "\n" +
+                "נוצר בתאריך: " + supportRequest.getCreatedAt() + "\n\n" +
+                "תיאור:\n" +
                 supportRequest.getDescription()
             );
             mailSender.send(message);

@@ -36,13 +36,13 @@ public class DogWalkerUser extends UserAccount {
 
     public static void validateFirstName(String firstName) {
         if (firstName == null || firstName.trim().isEmpty()) {
-            throw new IllegalArgumentException("First name cannot be null or empty");
+            throw new IllegalArgumentException("חובה להזין שם פרטי");
         }
     }
 
     public static void validateLastName(String lastName) {
         if (lastName == null || lastName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Last name cannot be null or empty");
+            throw new IllegalArgumentException("חובה להזין שם משפחה");
         }
     }
 

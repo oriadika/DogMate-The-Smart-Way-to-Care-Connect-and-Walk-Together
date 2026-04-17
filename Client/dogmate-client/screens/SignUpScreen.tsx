@@ -18,6 +18,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
 import { isValidIsraeliMobileInput } from '../utils/phoneValidation';
 
+/** Basic format check before sending verification email (no spaces in local/domain parts). */
+const EMAIL_FORMAT_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidEmailFormat(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return EMAIL_FORMAT_REGEX.test(normalized);
+}
+
 const SignUpScreen: React.FC = ({ navigation }: any) => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -34,6 +42,15 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
   const handleSignUp = async () => {
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !password || !confirmPassword) {
       Alert.alert('שדות חסרים', 'אנא מלא את כל השדות.');
+      return;
+    }
+
+    const emailTrimmed = email.trim().toLowerCase();
+    if (!isValidEmailFormat(emailTrimmed)) {
+      Alert.alert(
+        'הרשמה נכשלה',
+        'ההרשמה לא הושלמה כי כתובת האימייל לא תקינה. נא להזין כתובת בפורמט תקין (למשל user@example.com).'
+      );
       return;
     }
 
@@ -76,7 +93,7 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
     try {
       // Call the API to register the user
       const response = await userAPI.register({
-        email,
+        email: emailTrimmed,
         password,
         firstName,
         lastName,
@@ -100,7 +117,7 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
     const verifyParams = {
       firstName,
       lastName,
-      email: (response?.email as string | undefined)?.trim() || email.trim(),
+      email: (response?.email as string | undefined)?.trim() || emailTrimmed,
       userRole: registeredRole,
       phoneNumber: phoneTrimmed,
       password,
@@ -109,7 +126,15 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
 
     navigation.navigate('VerifyEmail', verifyParams);
     } catch (error: any) {
-      Alert.alert('הרשמה נכשלה', error.message || 'אירעה שגיאה בעת ההרשמה');
+      const msg = error?.message || 'אירעה שגיאה בעת ההרשמה';
+      const disposableEmail =
+        typeof msg === 'string' && msg.includes('מייל זמני');
+      Alert.alert(
+        'הרשמה נכשלה',
+        disposableEmail
+          ? `ההרשמה לא הושלמה בגלל האימייל: ${msg}`
+          : msg
+      );
       console.error('Sign up error:', error);
     } finally {
       setIsLoading(false);
@@ -517,11 +542,11 @@ const styles = StyleSheet.create({
   },
   termsText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 12,
     color: '#5C4033',
     textAlign: 'right',
     writingDirection: 'rtl',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   termsLink: {
     color: '#1E6BB8',

@@ -29,6 +29,7 @@ import FoodInventoryHubScreen from './screens/Health/FoodInventoryHubScreen';
 import { setupNotificationListeners, requestNotificationPermissions } from './services/notifications';
 import SOSScreen from './screens/SOSScreen';
 import AdminScreen from './screens/AdminScreen';
+import AdminSupportRequestsScreen from './screens/AdminSupportRequestsScreen';
 import ManageUsersScreen from './screens/ManageScreens/Users/ManageUsersScreen';
 import UserDetailsScreen from './screens/ManageScreens/Users/UserDetailsScreen';
 import ManageDogScreens from './screens/ManageScreens/Dogs/ManageDogScreens';
@@ -76,6 +77,7 @@ export default function App() {
           <Stack.Screen name="AddReminder" component={AddReminderScreen} />
           <Stack.Screen name="Emergency" component={SOSScreen} />
           <Stack.Screen name="Admin" component={AdminScreen} />
+          <Stack.Screen name="AdminSupportRequests" component={AdminSupportRequestsScreen} />
           <Stack.Screen name="AdminManageUsers" component={ManageUsersScreen} />
           <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
           <Stack.Screen name="AdminManageDogs" component={ManageDogScreens} />

@@ -40,7 +40,7 @@ public class AdminUser extends UserAccount{
         UserAccount.validatePassword(plainPassword);
         
         if (permissionLevel == null || permissionLevel.trim().isEmpty()) {
-            throw new IllegalArgumentException("Permission level cannot be null or empty");
+            throw new IllegalArgumentException("חובה להגדיר רמת הרשאה");
         }
         
         // Validate email doesn't exist (business logic)

@@ -53,7 +53,7 @@ public class UserAccount {
      */
     public static void validateEmail(String email) {
         if (email == null || email.trim().isEmpty()) {
-            throw new IllegalArgumentException("Email cannot be null or empty");
+            throw new IllegalArgumentException("חובה להזין אימייל");
         }
     }
 
@@ -64,7 +64,7 @@ public class UserAccount {
      */
     public static void validatePassword(String password) {
         if (password == null || password.trim().isEmpty()) {
-            throw new IllegalArgumentException("Password cannot be null or empty");
+            throw new IllegalArgumentException("חובה להזין סיסמה");
         }
     }
 
@@ -75,7 +75,7 @@ public class UserAccount {
      */
     public static void validateUserAccount(UserAccount userAccount) {
         if (userAccount == null) {
-            throw new IllegalArgumentException("User account cannot be null");
+            throw new IllegalArgumentException("חשבון המשתמש חסר");
         }
     }
 
@@ -87,7 +87,7 @@ public class UserAccount {
      */
     public static void validateEmailNotExists(boolean emailExists, String email) {
         if (emailExists) {
-            throw new IllegalArgumentException("Email already exists: " + email);
+            throw new IllegalArgumentException("כתובת המייל כבר קיימת במערכת: " + email);
         }
     }
 
@@ -98,7 +98,7 @@ public class UserAccount {
      */
     public static void validateUserId(UUID userId) {
         if (userId == null) {
-            throw new IllegalArgumentException("User ID cannot be null");
+            throw new IllegalArgumentException("מזהה משתמש חסר");
         }
     }
 
@@ -110,7 +110,7 @@ public class UserAccount {
      */
     public static void validateUserExists(boolean userExists, UUID userId) {
         if (!userExists) {
-            throw new IllegalArgumentException("User not found with ID: " + userId);
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
         }
     }
     
