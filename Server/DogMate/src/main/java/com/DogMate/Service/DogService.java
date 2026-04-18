@@ -13,11 +13,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -343,6 +345,41 @@ public class DogService {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * Same dog as map avatar when possible: first with profile image; otherwise first dog of the user.
+     */
+    public Optional<Dog> getPrimaryDogForMap(UUID userId) {
+        List<Dog> userDogs = getDogsForUser(userId);
+        if (userDogs.isEmpty()) {
+            return Optional.empty();
+        }
+        for (Dog dog : userDogs) {
+            String url = dog.getProfileImageURL();
+            if (url != null && !url.isBlank()) {
+                return Optional.of(dog);
+            }
+        }
+        return Optional.of(userDogs.get(0));
+    }
+
+    /**
+     * Adds mapDogName, mapDogBreed, mapDogBirthdate (ISO), mapDogAgeYears to userInfo when a dog exists.
+     */
+    public void putMapDogSummaryFields(UUID userId, Map<String, Object> userInfo) {
+        getPrimaryDogForMap(userId).ifPresent(dog -> {
+            if (dog.getName() != null && !dog.getName().isBlank()) {
+                userInfo.put("mapDogName", dog.getName().trim());
+            }
+            if (dog.getBreed() != null && !dog.getBreed().isBlank()) {
+                userInfo.put("mapDogBreed", dog.getBreed().trim());
+            }
+            if (dog.getBirthdate() != null) {
+                userInfo.put("mapDogBirthdate", dog.getBirthdate().toString());
+                userInfo.put("mapDogAgeYears", Period.between(dog.getBirthdate(), LocalDate.now()).getYears());
+            }
+        });
     }
 
     public List<Dog> getAllDogsforUser(UUID userId) {

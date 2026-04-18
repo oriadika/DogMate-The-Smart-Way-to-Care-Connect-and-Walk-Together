@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Image,
   Platform,
+  Modal,
+  Pressable,
 } from 'react-native';
 import Constants from 'expo-constants';
 import { BlurView } from 'expo-blur';
@@ -17,7 +19,7 @@ import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { userAPI } from '../services/api';
-import websocketService from '../services/websocket';
+import websocketService, { type PingNotification } from '../services/websocket';
 import locationService, { LocationService } from '../services/location';
 import { dogMateMapStyle } from '../src/constants/MapStyles';
 
@@ -25,8 +27,10 @@ const PRIMARY_COLOR = '#7FB069'; // Sage green
 const USERS_REFRESH_INTERVAL_MS = 5000;
 const LOCATION_PUSH_INTERVAL_MS = 5000;
 const HEADER_OVERLAY_HEIGHT = 56;
-const MARKER_SIZE = 42;
+const MARKER_SIZE = 50;
 const SELECTION_CARD_APPROX_HEIGHT = 168;
+/** גובה משוער של כרטיס טווח החיפוש — לסידור שכבות מעליו בלי לשנות את עיצוב הכרטיס */
+const RANGE_CARD_APPROX_HEIGHT = 132;
 
 /** זום מסחרי — פירוט רחובות (~0.005) */
 const WALK_MAP_LAT_DELTA = 0.005;
@@ -46,11 +50,18 @@ const buildUsersSignature = (users: any[]): string => {
   const usersPart = users
     .map(
       (u: any) =>
-        `${u?.id ?? ''}:${u?.latitude ?? ''}:${u?.longitude ?? ''}:${u?.name ?? ''}:${u?.mapDogProfileImageUrl ?? ''}`
+        `${u?.id ?? ''}:${u?.latitude ?? ''}:${u?.longitude ?? ''}:${u?.name ?? ''}:${u?.mapDogProfileImageUrl ?? ''}:${u?.mapDogName ?? ''}:${u?.mapDogBreed ?? ''}:${u?.mapDogAgeYears ?? ''}`
     )
     .join('|');
   return `${users.length}#${usersPart}`;
 };
+
+function formatDogAgeLine(user: any): string | null {
+  if (user?.mapDogAgeYears != null && user.mapDogAgeYears !== '') {
+    return `${user.mapDogAgeYears} שנים`;
+  }
+  return null;
+}
 
 function MapMarkerAvatar({
   uri,
@@ -108,11 +119,19 @@ const ProfileScreen = ({ navigation, route }: any) => {
   );
   const [currentUserRoleLabel, setCurrentUserRoleLabel] = useState<string>(route?.params?.role || '');
   const [serverAccountType, setServerAccountType] = useState<string | null>(null);
-  const [, setCurrentUserDogImageUrl] = useState<string | null>(null);
+  const [currentUserDogImageUrl, setCurrentUserDogImageUrl] = useState<string | null>(null);
+  const [myPingDog, setMyPingDog] = useState<{
+    name: string | null;
+    breed: string | null;
+    ageLabel: string | null;
+    imageUrl: string | null;
+  }>({ name: null, breed: null, ageLabel: null, imageUrl: null });
+  const [meetDetailUser, setMeetDetailUser] = useState<any | null>(null);
+  const [incomingMeetInvite, setIncomingMeetInvite] = useState<PingNotification | null>(null);
   const [locationTracking, setLocationTracking] = useState(false);
   const [isLocationSharingEnabled, setIsLocationSharingEnabled] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [radiusKm, setRadiusKm] = useState<number>(1);
+  const [radiusKm, setRadiusKm] = useState<number>(0.25);
   const [selectedMarker, setSelectedMarker] = useState<MapSelection>(null);
   const mapRef = useRef<MapView>(null);
 
@@ -260,6 +279,14 @@ const ProfileScreen = ({ navigation, route }: any) => {
   }, [isLocationSharingEnabled, route?.params?.userId, isWalkerProfile]);
 
   useEffect(() => {
+    if (!isLocationSharingEnabled) {
+      setSelectedMarker(null);
+      setMeetDetailUser(null);
+      setIncomingMeetInvite(null);
+    }
+  }, [isLocationSharingEnabled]);
+
+  useEffect(() => {
     if (userLocation && loggedUsers.length > 0) {
       const updatedUsers = loggedUsers.map((user: any) => {
         if (user.latitude && user.longitude) {
@@ -303,8 +330,15 @@ const ProfileScreen = ({ navigation, route }: any) => {
     websocketService.connect(userId, {
       onConnected: () => {},
       onDisconnected: () => {},
-      onPingReceived: (ping: any) => {
-        Alert.alert('פינג חדש! 🐕', `${ping.fromUserName} שלח לך פינג!`, [{ text: 'בסדר' }]);
+      onPingReceived: (ping: PingNotification) => {
+        if (ping.kind === 'MEET_RESPONSE') {
+          Alert.alert(
+            ping.accepted ? 'הזמנה אושרה' : 'הזמנה נדחתה',
+            `${ping.fromUserName || 'משתמש'} ${ping.accepted ? 'אישר/ה את הצעת המפגש' : 'דחה/תה את הצעת המפגש'}.`
+          );
+          return;
+        }
+        setIncomingMeetInvite(ping);
       },
       onError: (error: any) => {
         console.error('WebSocket error:', error);
@@ -342,6 +376,15 @@ const ProfileScreen = ({ navigation, route }: any) => {
               ? currentUser.mapDogProfileImageUrl
               : null
           );
+          setMyPingDog({
+            name: typeof currentUser.mapDogName === 'string' ? currentUser.mapDogName : null,
+            breed: typeof currentUser.mapDogBreed === 'string' ? currentUser.mapDogBreed : null,
+            ageLabel: formatDogAgeLine(currentUser),
+            imageUrl:
+              typeof currentUser.mapDogProfileImageUrl === 'string' && currentUser.mapDogProfileImageUrl
+                ? currentUser.mapDogProfileImageUrl
+                : null,
+          });
         }
 
         const formattedUsers = data.users
@@ -365,6 +408,18 @@ const ProfileScreen = ({ navigation, route }: any) => {
 
             if (typeof user.mapDogProfileImageUrl === 'string' && user.mapDogProfileImageUrl) {
               userObj.mapDogProfileImageUrl = user.mapDogProfileImageUrl;
+            }
+            if (typeof user.mapDogName === 'string' && user.mapDogName) {
+              userObj.mapDogName = user.mapDogName;
+            }
+            if (typeof user.mapDogBreed === 'string' && user.mapDogBreed) {
+              userObj.mapDogBreed = user.mapDogBreed;
+            }
+            if (user.mapDogAgeYears != null) {
+              userObj.mapDogAgeYears = user.mapDogAgeYears;
+            }
+            if (typeof user.mapDogBirthdate === 'string' && user.mapDogBirthdate) {
+              userObj.mapDogBirthdate = user.mapDogBirthdate;
             }
 
             const canHaveLocation =
@@ -451,18 +506,50 @@ const ProfileScreen = ({ navigation, route }: any) => {
   const handlePing = async (toUserId: string, toUserName: string) => {
     try {
       const fromUserId = route?.params?.userId;
-      const fromUserName = `${route?.params?.userFirstName || ''} ${route?.params?.userLastName || ''}`.trim();
+      const fromUserName = currentUserDisplayName?.trim()
+        ? currentUserDisplayName
+        : `${route?.params?.userFirstName || ''} ${route?.params?.userLastName || ''}`.trim();
 
       if (!fromUserId) {
         Alert.alert('שגיאה', 'מזהה משתמש לא נמצא');
         return;
       }
 
-      await userAPI.sendPing(fromUserId, toUserId, fromUserName);
-      Alert.alert('הצלחה', `פינג נשלח ל-${toUserName}!`);
+      await userAPI.sendPing({
+        fromUserId,
+        toUserId,
+        fromUserName: fromUserName || 'משתמש',
+        dogName: myPingDog.name,
+        dogBreed: myPingDog.breed,
+        dogAgeLabel: myPingDog.ageLabel,
+        dogImageUrl: myPingDog.imageUrl,
+      });
+      Alert.alert('הצלחה', `נשלחה הזמנת מפגש ל-${toUserName}`);
     } catch (error: any) {
       Alert.alert('שגיאה', error.message || 'שליחת הפינג נכשלה');
       console.error('Ping error:', error);
+    }
+  };
+
+  const respondToMeetInvite = async (accepted: boolean) => {
+    if (!incomingMeetInvite) return;
+    const myId = route?.params?.userId as string | undefined;
+    if (!myId) {
+      Alert.alert('שגיאה', 'מזהה משתמש לא נמצא');
+      return;
+    }
+    try {
+      await userAPI.respondToPingMeet({
+        originalSenderId: incomingMeetInvite.fromUserId,
+        responderId: myId,
+        responderName: currentUserDisplayName?.trim() || 'משתמש',
+        accepted,
+        pingId: incomingMeetInvite.pingId,
+      });
+      setIncomingMeetInvite(null);
+      Alert.alert(accepted ? 'מעולה' : 'בוצע', accepted ? 'שלחת אישור למארח' : 'סירוב נשלח');
+    } catch (error: any) {
+      Alert.alert('שגיאה', error.message || 'שליחת התגובה נכשלה');
     }
   };
 
@@ -483,8 +570,15 @@ const ProfileScreen = ({ navigation, route }: any) => {
   const headerBottom = insets.top + HEADER_OVERLAY_HEIGHT;
   const floatingTop = headerBottom + 8;
   const bottomInset = insets.bottom + 16;
-  const locateButtonBottom =
-    bottomInset + (selectedMarker ? SELECTION_CARD_APPROX_HEIGHT + 16 : 20);
+  /** הרמה קלה של כרטיס הטווח מעל שפת המסך */
+  const RANGE_PANEL_LIFT = 14;
+  const rangePanelBottom = bottomInset + RANGE_PANEL_LIFT;
+  const selectionCardBottom =
+    selectedMarker === 'self'
+      ? isLocationSharingEnabled
+        ? rangePanelBottom + RANGE_CARD_APPROX_HEIGHT + 12
+        : bottomInset
+      : bottomInset;
 
   const renderHeaderOverlay = () => (
     <View style={styles.headerOverlay} pointerEvents="box-none">
@@ -514,7 +608,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
 
     if (selectedMarker === 'self') {
       return (
-        <View style={[styles.bottomCard, { bottom: bottomInset }]}>
+        <View style={[styles.bottomCard, { bottom: selectionCardBottom }]}>
           <Text style={styles.bottomCardTitle}>{currentUserDisplayName || 'משתמש'}</Text>
           <Text style={styles.bottomCardMeta}>
             {currentUserRoleLabel || 'בעל כלב'} · המיקום שלך
@@ -530,34 +624,144 @@ const ProfileScreen = ({ navigation, route }: any) => {
       );
     }
 
-    const { user } = selectedMarker;
+    return null;
+  };
+
+  const renderDogMeetModal = () => {
+    const u = meetDetailUser;
+    if (!u) return null;
+    const ageLine = formatDogAgeLine(u);
+    const isWalker = u.type === 'DogWalkerUser';
+    const displayDogName = u.mapDogName || (isWalker ? null : 'לא צוין');
     return (
-      <View style={[styles.bottomCard, { bottom: bottomInset }]}>
-        <Text style={styles.bottomCardTitle}>{user.name}</Text>
-        <Text style={styles.bottomCardMeta}>{user.role}</Text>
-        {user.distance != null && (
-          <Text style={styles.bottomCardDistance}>
-            {LocationService.formatDistance(user.distance)} ממך
-          </Text>
-        )}
-        <View style={styles.bottomCardActions}>
-          <TouchableOpacity
-            style={styles.bottomCardSecondary}
-            onPress={() => focusOnUser(user)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="navigate-outline" size={18} color={PRIMARY_COLOR} />
-            <Text style={styles.bottomCardSecondaryText}>התמקד במפה</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.pingButton}
-            onPress={() => handlePing(user.id, user.name)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.pingText}>פינג</Text>
-          </TouchableOpacity>
+      <Modal
+        visible
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMeetDetailUser(null)}
+      >
+        <View style={styles.meetModalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setMeetDetailUser(null)} />
+          <View style={styles.meetModalCard}>
+            <Text style={styles.meetModalTitle}>פרטי {isWalker ? 'משתמש' : 'כלב'}</Text>
+            <View style={styles.meetModalAvatarWrap}>
+              <MapMarkerAvatar uri={u.mapDogProfileImageUrl} size={88} />
+            </View>
+            {!isWalker && (
+              <>
+                <Text style={styles.meetModalLine}>
+                  <Text style={styles.meetModalLabel}>שם: </Text>
+                  {displayDogName}
+                </Text>
+                {!!u.mapDogBreed && (
+                  <Text style={styles.meetModalLine}>
+                    <Text style={styles.meetModalLabel}>גזע: </Text>
+                    {u.mapDogBreed}
+                  </Text>
+                )}
+                {!!ageLine && (
+                  <Text style={styles.meetModalLine}>
+                    <Text style={styles.meetModalLabel}>גיל: </Text>
+                    {ageLine}
+                  </Text>
+                )}
+              </>
+            )}
+            <Text style={styles.meetModalLine}>
+              <Text style={styles.meetModalLabel}>בעלים: </Text>
+              {u.name}
+            </Text>
+            {u.distance != null && (
+              <Text style={styles.meetModalMeta}>{LocationService.formatDistance(u.distance)} ממך</Text>
+            )}
+            {isWalker && (
+              <Text style={styles.meetModalMeta}>אין פרטי כלב למסלול דוגווקר</Text>
+            )}
+            <View style={styles.meetModalActions}>
+              <TouchableOpacity
+                style={styles.bottomCardSecondary}
+                onPress={() => {
+                  focusOnUser(u);
+                  setMeetDetailUser(null);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="navigate-outline" size={18} color={PRIMARY_COLOR} />
+                <Text style={styles.bottomCardSecondaryText}>התמקד במפה</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.pingButton}
+                onPress={() => handlePing(u.id, u.name)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.pingText}>פינג</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity style={styles.meetModalClose} onPress={() => setMeetDetailUser(null)}>
+              <Text style={styles.meetModalCloseText}>סגירה</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </Modal>
+    );
+  };
+
+  const renderIncomingMeetModal = () => {
+    const p = incomingMeetInvite;
+    if (!p) return null;
+    return (
+      <Modal visible transparent animationType="slide" onRequestClose={() => setIncomingMeetInvite(null)}>
+        <View style={styles.meetModalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setIncomingMeetInvite(null)} />
+          <View style={styles.meetModalCard}>
+            <Text style={styles.meetModalTitle}>הצעת מפגש</Text>
+            <Text style={styles.meetModalSubtitle}>{p.fromUserName} מזמין/ה אותך למפגש כלבים</Text>
+            <View style={styles.meetModalAvatarWrap}>
+              {p.dogImageUrl ? (
+                <Image source={{ uri: p.dogImageUrl }} style={styles.meetModalDogImage} />
+              ) : (
+                <View style={styles.meetModalDogImagePlaceholder}>
+                  <FontAwesome5 name="paw" size={36} color="#fff" />
+                </View>
+              )}
+            </View>
+            {!!p.dogName && (
+              <Text style={styles.meetModalLine}>
+                <Text style={styles.meetModalLabel}>שם הכלב: </Text>
+                {p.dogName}
+              </Text>
+            )}
+            {!!p.dogBreed && (
+              <Text style={styles.meetModalLine}>
+                <Text style={styles.meetModalLabel}>גזע: </Text>
+                {p.dogBreed}
+              </Text>
+            )}
+            {!!p.dogAgeLabel && (
+              <Text style={styles.meetModalLine}>
+                <Text style={styles.meetModalLabel}>גיל: </Text>
+                {p.dogAgeLabel}
+              </Text>
+            )}
+            <View style={styles.meetInviteButtons}>
+              <TouchableOpacity
+                style={[styles.meetInviteBtn, styles.meetInviteAccept]}
+                onPress={() => respondToMeetInvite(true)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.meetInviteBtnTextLight}>אישור</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.meetInviteBtn, styles.meetInviteDecline]}
+                onPress={() => respondToMeetInvite(false)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.meetInviteBtnTextDark}>סירוב</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     );
   };
 
@@ -585,52 +789,64 @@ const ProfileScreen = ({ navigation, route }: any) => {
             latitudeDelta: WALK_MAP_LAT_DELTA,
             longitudeDelta: WALK_MAP_LNG_DELTA,
           }}
-          showsUserLocation
+          showsUserLocation={false}
           showsMyLocationButton={false}
           showsPointsOfInterest={useAppleMapsFallback ? false : true}
           toolbarEnabled={false}
           zoomEnabled
           scrollEnabled
           rotateEnabled={false}
-          onPress={() => setSelectedMarker(null)}
+          onPress={() => {
+            setSelectedMarker(null);
+            setMeetDetailUser(null);
+          }}
         >
-          <Circle
-            center={{
-              latitude: userLocation.latitude,
-              longitude: userLocation.longitude,
-            }}
-            radius={radiusKm * 1000}
-            strokeColor="rgba(127, 176, 105, 0.85)"
-            fillColor="rgba(127, 176, 105, 0.14)"
-            strokeWidth={2}
-          />
+          {isLocationSharingEnabled && (
+            <Circle
+              center={{
+                latitude: userLocation.latitude,
+                longitude: userLocation.longitude,
+              }}
+              radius={radiusKm * 1000}
+              strokeColor="rgba(127, 176, 105, 0.85)"
+              fillColor="rgba(127, 176, 105, 0.14)"
+              strokeWidth={2}
+            />
+          )}
 
-          <Marker
-            coordinate={{
-              latitude: userLocation.latitude,
-              longitude: userLocation.longitude,
-            }}
-            onPress={() => setSelectedMarker('self')}
-            tracksViewChanges={false}
-          >
-            <View style={styles.invisibleSelfHitTarget} />
-          </Marker>
-
-          {usersWithLocation.map((user: any) => (
+          {isLocationSharingEnabled && (
             <Marker
-              key={user.id}
               coordinate={{
-                latitude: user.latitude,
-                longitude: user.longitude,
+                latitude: userLocation.latitude,
+                longitude: userLocation.longitude,
               }}
               onPress={() => {
-                setSelectedMarker({ kind: 'other', user });
-              }}
+              setMeetDetailUser(null);
+              setSelectedMarker('self');
+            }}
               tracksViewChanges={false}
             >
-              <MapMarkerAvatar uri={user.mapDogProfileImageUrl} size={MARKER_SIZE - 2} />
+              <MapMarkerAvatar uri={currentUserDogImageUrl} size={MARKER_SIZE - 2} />
             </Marker>
-          ))}
+          )}
+
+          {isLocationSharingEnabled &&
+            usersWithLocation.map((user: any) => (
+              <Marker
+                key={user.id}
+                coordinate={{
+                  latitude: user.latitude,
+                  longitude: user.longitude,
+                }}
+                onPress={() => {
+                  setSelectedMarker(null);
+                  setMeetDetailUser(user);
+                }}
+                tracksViewChanges={false}
+              >
+                <MapMarkerAvatar uri={user.mapDogProfileImageUrl} size={MARKER_SIZE - 2} />
+              </Marker>
+            ))}
         </MapView>
       ) : (
         <View style={[StyleSheet.absoluteFillObject, styles.mapPlaceholderFull]}>
@@ -645,93 +861,109 @@ const ProfileScreen = ({ navigation, route }: any) => {
 
       {userLocation && (
         <>
-          <View
-            style={[
-              styles.floatingRangeCard,
-              {
-                top: floatingTop,
-                left: 16,
-                right: 100,
-              },
-            ]}
-            pointerEvents="box-none"
-          >
-            <View style={styles.radiusHeader}>
-              <Ionicons name="radio-button-on" size={16} color={PRIMARY_COLOR} />
-              <Text style={styles.radiusTitle} numberOfLines={2}>
-                טווח חיפוש מקסימלי:{' '}
-                {radiusKm >= 1 ? `${radiusKm} ק"מ` : `${Math.round(radiusKm * 1000)} מ'`}
-              </Text>
-            </View>
-            <Text style={styles.usersInRadiusCount}>
-              {usersInRadius.length} משתמשים בטווח
-            </Text>
-            <Slider
-              style={styles.radiusSlider}
-              minimumValue={0.05}
-              maximumValue={5}
-              step={0.05}
-              value={radiusKm}
-              onValueChange={(value) => setRadiusKm(Math.round(value * 100) / 100)}
-              minimumTrackTintColor={PRIMARY_COLOR}
-              maximumTrackTintColor="#E0D5C7"
-              thumbTintColor={PRIMARY_COLOR}
-            />
-            <View style={styles.radiusLabels}>
-              <Text style={styles.radiusLabelText}>5 ק"מ</Text>
-              <Text style={styles.radiusLabelText}>50 מ'</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.floatingShareChip,
-              isLocationSharingEnabled ? styles.floatingShareChipOff : styles.floatingShareChipOn,
-              {
-                top: floatingTop,
-                right: 16,
-                zIndex: 16,
-              },
-            ]}
-            onPress={toggleLocationSharing}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={isLocationSharingEnabled ? 'הסתר מיקום' : 'שתף מיקום'}
-          >
-            <Ionicons
-              name={isLocationSharingEnabled ? 'eye-off' : 'eye'}
-              size={22}
-              color={isLocationSharingEnabled ? '#5C4033' : '#fff'}
-            />
-            <Text
+          {isLocationSharingEnabled && (
+            <View
               style={[
-                styles.floatingShareChipText,
-                isLocationSharingEnabled ? styles.floatingShareChipTextMuted : styles.floatingShareChipTextLight,
+                styles.floatingRangeCard,
+                {
+                  bottom: rangePanelBottom,
+                  left: 16,
+                  right: 16,
+                },
               ]}
+              pointerEvents="box-none"
             >
-              {isLocationSharingEnabled ? 'מוסתר' : 'שיתוף'}
-            </Text>
-          </TouchableOpacity>
+              <View style={styles.radiusHeader}>
+                <Ionicons name="radio-button-on" size={16} color={PRIMARY_COLOR} />
+                <Text style={styles.radiusTitle} numberOfLines={2}>
+                  טווח חיפוש מקסימלי:{' '}
+                  {radiusKm >= 1 ? `${radiusKm} ק"מ` : `${Math.round(radiusKm * 1000)} מ'`}
+                </Text>
+              </View>
+              <Text style={styles.usersInRadiusCount}>
+                {usersInRadius.length} משתמשים בטווח
+              </Text>
+              <Slider
+                style={styles.radiusSlider}
+                minimumValue={0.05}
+                maximumValue={1}
+                step={0.05}
+                value={radiusKm}
+                onValueChange={(value) => setRadiusKm(Math.round(value * 100) / 100)}
+                minimumTrackTintColor={PRIMARY_COLOR}
+                maximumTrackTintColor="#E0D5C7"
+                thumbTintColor={PRIMARY_COLOR}
+              />
+              <View style={styles.radiusLabels}>
+                <Text style={styles.radiusLabelText}>1 ק"מ</Text>
+                <Text style={styles.radiusLabelText}>50 מ'</Text>
+              </View>
+            </View>
+          )}
 
-          <TouchableOpacity
-            style={[
-              styles.floatingLocateButton,
-              {
-                bottom: locateButtonBottom,
-                right: 16,
-              },
-            ]}
-            onPress={centerOnMyLocation}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="מרכז אותי"
-          >
-            <Ionicons name="locate" size={26} color={PRIMARY_COLOR} />
-          </TouchableOpacity>
+          <View style={[styles.mapTopControlsRow, { top: floatingTop }]} pointerEvents="box-none">
+            <TouchableOpacity
+              style={[
+                styles.floatingShareChip,
+                isLocationSharingEnabled ? styles.floatingShareChipOn : styles.floatingShareChipOff,
+              ]}
+              onPress={toggleLocationSharing}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isLocationSharingEnabled ? 'מיקום גלוי. לחץ להסתרת המיקום' : 'מיקום מוסתר. לחץ לשיתוף המיקום'
+              }
+            >
+              <Ionicons
+                name={isLocationSharingEnabled ? 'eye' : 'eye-off'}
+                size={22}
+                color={isLocationSharingEnabled ? '#fff' : '#5C4033'}
+              />
+              <Text
+                style={[
+                  styles.floatingShareChipText,
+                  isLocationSharingEnabled ? styles.floatingShareChipTextLight : styles.floatingShareChipTextMuted,
+                ]}
+              >
+                {isLocationSharingEnabled ? 'מיקום גלוי' : 'מיקום מוסתר'}
+              </Text>
+            </TouchableOpacity>
+            {isLocationSharingEnabled ? (
+              <TouchableOpacity
+                style={styles.floatingLocateButton}
+                onPress={centerOnMyLocation}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="מרכז אותי"
+              >
+                <Ionicons name="locate" size={26} color={PRIMARY_COLOR} />
+              </TouchableOpacity>
+            ) : (
+              <View
+                style={styles.hiddenLocationHintWrap}
+                pointerEvents="none"
+                accessible
+                accessibilityRole="text"
+                accessibilityLabel=" לשיתוף מיקום לחץ"
+              >
+                <Ionicons
+                  name="arrow-forward"
+                  size={22}
+                  color="#5C4033"
+                  importantForAccessibility="no"
+                />
+                <Text style={styles.hiddenLocationHintText} numberOfLines={3} importantForAccessibility="no">
+                   לשיתוף מיקום לחץ
+                </Text>
+              </View>
+            )}
+          </View>
         </>
       )}
 
       {renderBottomCard()}
+      {meetDetailUser ? renderDogMeetModal() : null}
+      {incomingMeetInvite ? renderIncomingMeetModal() : null}
 
       {isLoadingUsers && (
         <View style={[styles.loadingOverlay, { top: headerBottom }]}>
@@ -814,12 +1046,6 @@ const styles = StyleSheet.create({
     elevation: 9,
   },
 
-  invisibleSelfHitTarget: {
-    width: 48,
-    height: 48,
-    opacity: 0,
-  },
-
   radiusHeader: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -861,9 +1087,38 @@ const styles = StyleSheet.create({
     color: '#8B7355',
   },
 
-  floatingShareChip: {
+  mapTopControlsRow: {
     position: 'absolute',
-    zIndex: 15,
+    right: 16,
+    zIndex: 16,
+    // שיתוף צמוד לימין, כפתור מיקום משמאל לו (גם תחת RTL)
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  hiddenLocationHintWrap: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
+    maxWidth: '72%',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(250, 239, 221, 0.92)',
+    overflow: 'hidden',
+  },
+
+  hiddenLocationHintText: {
+    flexShrink: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#5C4033',
+    textAlign: 'right',
+  },
+
+  floatingShareChip: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     paddingVertical: 10,
@@ -899,8 +1154,6 @@ const styles = StyleSheet.create({
   },
 
   floatingLocateButton: {
-    position: 'absolute',
-    zIndex: 17,
     width: 52,
     height: 52,
     borderRadius: 26,
@@ -1010,5 +1263,121 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.9)',
     padding: 8,
     borderRadius: 8,
+  },
+
+  meetModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  meetModalCard: {
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '88%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 18,
+    zIndex: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  meetModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#5C4033',
+    textAlign: 'right',
+    marginBottom: 8,
+  },
+  meetModalSubtitle: {
+    fontSize: 14,
+    color: '#8B7355',
+    textAlign: 'right',
+    marginBottom: 10,
+    lineHeight: 20,
+  },
+  meetModalAvatarWrap: {
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  meetModalLine: {
+    fontSize: 15,
+    color: '#5C4033',
+    textAlign: 'right',
+    marginTop: 8,
+  },
+  meetModalLabel: {
+    fontWeight: '700',
+    color: '#5C4033',
+  },
+  meetModalMeta: {
+    fontSize: 13,
+    color: '#8B7355',
+    textAlign: 'right',
+    marginTop: 6,
+  },
+  meetModalActions: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 18,
+    gap: 10,
+  },
+  meetModalClose: {
+    marginTop: 14,
+    alignSelf: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  meetModalCloseText: {
+    color: PRIMARY_COLOR,
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  meetModalDogImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: PRIMARY_COLOR,
+  },
+  meetModalDogImagePlaceholder: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: PRIMARY_COLOR,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+  meetInviteButtons: {
+    marginTop: 16,
+    gap: 10,
+  },
+  meetInviteBtn: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  meetInviteAccept: {
+    backgroundColor: PRIMARY_COLOR,
+  },
+  meetInviteDecline: {
+    backgroundColor: '#E8DED0',
+  },
+  meetInviteBtnTextLight: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  meetInviteBtnTextDark: {
+    color: '#5C4033',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });

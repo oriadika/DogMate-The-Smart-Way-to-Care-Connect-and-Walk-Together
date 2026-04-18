@@ -629,6 +629,7 @@ public class UserController {
                     }
                     dogService.getFirstMapDogProfileImageUrl(regularUser.getId())
                             .ifPresent(url -> userInfo.put("mapDogProfileImageUrl", url));
+                    dogService.putMapDogSummaryFields(regularUser.getId(), userInfo);
                 } else if (user instanceof com.DogMate.Domain.DogWalkerUser) {
                     com.DogMate.Domain.DogWalkerUser walker = (com.DogMate.Domain.DogWalkerUser) user;
                     userInfo.put("type", "DogWalkerUser");
@@ -682,13 +683,16 @@ public class UserController {
             pingStorage.computeIfAbsent(request.getToUserId(), k -> new ArrayList<>()).add(ping);
             System.out.println("Ping stored for user: " + request.getToUserId());
 
-            // Send WebSocket notification to the target user (for real-time fallback)
-            PingWebSocketController.PingNotification notification = 
-                new PingWebSocketController.PingNotification(
-                    request.getFromUserId(),
-                    request.getFromUserName() != null ? request.getFromUserName() : "משתמש לא ידוע",
-                    request.getToUserId()
-                );
+            PingWebSocketController.PingNotification notification = new PingWebSocketController.PingNotification();
+            notification.setKind("PING");
+            notification.setPingId(ping.getId());
+            notification.setFromUserId(request.getFromUserId());
+            notification.setFromUserName(request.getFromUserName() != null ? request.getFromUserName() : "משתמש לא ידוע");
+            notification.setToUserId(request.getToUserId());
+            notification.setDogName(request.getDogName());
+            notification.setDogBreed(request.getDogBreed());
+            notification.setDogAgeLabel(request.getDogAgeLabel());
+            notification.setDogImageUrl(request.getDogImageUrl());
 
             messagingTemplate.convertAndSend(
                 "/topic/ping/" + request.getToUserId(),
@@ -709,6 +713,44 @@ public class UserController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(createErrorResponse("נכשלה שליחת הפינג: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Respond to a meet / ping invite (accept or decline). Notifies the original sender via WebSocket.
+     * POST /api/users/ping/respond
+     */
+    @PostMapping("/ping/respond")
+    public ResponseEntity<?> respondToPing(@RequestBody PingRespondRequest request) {
+        try {
+            if (request == null
+                || request.getOriginalSenderId() == null
+                || request.getResponderId() == null
+                || request.getAccepted() == null) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("נדרשים מזהה שולח מקורי, מזהה משיב והאם אושר"));
+            }
+
+            PingWebSocketController.PingNotification n = new PingWebSocketController.PingNotification();
+            n.setKind("MEET_RESPONSE");
+            n.setPingId(request.getPingId());
+            n.setFromUserId(request.getResponderId());
+            n.setFromUserName(request.getResponderName() != null ? request.getResponderName() : "משתמש");
+            n.setToUserId(request.getOriginalSenderId());
+            n.setAccepted(request.getAccepted());
+
+            messagingTemplate.convertAndSend(
+                "/topic/ping/" + request.getOriginalSenderId(),
+                n
+            );
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "התגובה נשלחה");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("נכשלה שליחת התגובה: " + e.getMessage()));
         }
     }
 
@@ -1187,12 +1229,14 @@ public class UserController {
         private String fromUserId;
         private String fromUserName;
         private String toUserId;
+        private String dogName;
+        private String dogBreed;
+        private String dogAgeLabel;
+        private String dogImageUrl;
 
-        // Default constructor for Jackson
         public PingRequest() {
         }
 
-        // Getters and Setters
         public String getFromUserId() {
             return fromUserId;
         }
@@ -1215,6 +1259,92 @@ public class UserController {
 
         public void setToUserId(String toUserId) {
             this.toUserId = toUserId;
+        }
+
+        public String getDogName() {
+            return dogName;
+        }
+
+        public void setDogName(String dogName) {
+            this.dogName = dogName;
+        }
+
+        public String getDogBreed() {
+            return dogBreed;
+        }
+
+        public void setDogBreed(String dogBreed) {
+            this.dogBreed = dogBreed;
+        }
+
+        public String getDogAgeLabel() {
+            return dogAgeLabel;
+        }
+
+        public void setDogAgeLabel(String dogAgeLabel) {
+            this.dogAgeLabel = dogAgeLabel;
+        }
+
+        public String getDogImageUrl() {
+            return dogImageUrl;
+        }
+
+        public void setDogImageUrl(String dogImageUrl) {
+            this.dogImageUrl = dogImageUrl;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class PingRespondRequest {
+        /** User who sent the original ping (receives WebSocket on their topic). */
+        private String originalSenderId;
+        /** User who responds (the invitee). */
+        private String responderId;
+        private String responderName;
+        private Boolean accepted;
+        private String pingId;
+
+        public PingRespondRequest() {
+        }
+
+        public String getOriginalSenderId() {
+            return originalSenderId;
+        }
+
+        public void setOriginalSenderId(String originalSenderId) {
+            this.originalSenderId = originalSenderId;
+        }
+
+        public String getResponderId() {
+            return responderId;
+        }
+
+        public void setResponderId(String responderId) {
+            this.responderId = responderId;
+        }
+
+        public String getResponderName() {
+            return responderName;
+        }
+
+        public void setResponderName(String responderName) {
+            this.responderName = responderName;
+        }
+
+        public Boolean getAccepted() {
+            return accepted;
+        }
+
+        public void setAccepted(Boolean accepted) {
+            this.accepted = accepted;
+        }
+
+        public String getPingId() {
+            return pingId;
+        }
+
+        public void setPingId(String pingId) {
+            this.pingId = pingId;
         }
     }
 }

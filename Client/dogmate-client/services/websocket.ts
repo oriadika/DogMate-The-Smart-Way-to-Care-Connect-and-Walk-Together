@@ -6,11 +6,18 @@ import { getWebSocketBaseUrl } from './config';
 const { websocketUrl: WEBSOCKET_URL, sockJsUrl: SOCKJS_URL } = getWebSocketBaseUrl('ws-ping');
 
 
-interface PingNotification {
+export interface PingNotification {
+  kind?: string;
+  pingId?: string;
   fromUserId: string;
   fromUserName: string;
   toUserId: string;
   timestamp: number;
+  dogName?: string | null;
+  dogBreed?: string | null;
+  dogAgeLabel?: string | null;
+  dogImageUrl?: string | null;
+  accepted?: boolean | null;
 }
 
 interface WebSocketCallbacks {

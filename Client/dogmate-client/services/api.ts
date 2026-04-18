@@ -479,18 +479,55 @@ export const userAPI = {
   },
 
   /**
-   * Send a ping to another user
+   * Send a ping / meet invite to another user (optional dog snapshot for the recipient UI).
    */
-  sendPing: async (fromUserId: string, toUserId: string, fromUserName?: string): Promise<{ success: boolean; message: string }> => {
+  sendPing: async (payload: {
+    fromUserId: string;
+    toUserId: string;
+    fromUserName?: string;
+    dogName?: string | null;
+    dogBreed?: string | null;
+    dogAgeLabel?: string | null;
+    dogImageUrl?: string | null;
+  }): Promise<{ success: boolean; message: string }> => {
     try {
       const response = await apiClient.post('/users/ping', {
-        fromUserId,
-        toUserId,
-        fromUserName: fromUserName || 'משתמש לא ידוע'
+        fromUserId: payload.fromUserId,
+        toUserId: payload.toUserId,
+        fromUserName: payload.fromUserName || 'משתמש לא ידוע',
+        dogName: payload.dogName ?? undefined,
+        dogBreed: payload.dogBreed ?? undefined,
+        dogAgeLabel: payload.dogAgeLabel ?? undefined,
+        dogImageUrl: payload.dogImageUrl ?? undefined,
       });
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'נכשלה שליחת הפינג';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Accept or decline a meet invite (notifies original sender via WebSocket).
+   */
+  respondToPingMeet: async (payload: {
+    originalSenderId: string;
+    responderId: string;
+    responderName: string;
+    accepted: boolean;
+    pingId?: string | null;
+  }): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await apiClient.post('/users/ping/respond', {
+        originalSenderId: payload.originalSenderId,
+        responderId: payload.responderId,
+        responderName: payload.responderName,
+        accepted: payload.accepted,
+        pingId: payload.pingId ?? undefined,
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה שליחת התגובה';
       throw new Error(errorMessage);
     }
   },
