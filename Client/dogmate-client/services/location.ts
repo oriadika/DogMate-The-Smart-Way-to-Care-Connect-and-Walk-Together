@@ -1,4 +1,10 @@
 import * as Location from 'expo-location';
+const LOCATION_DEBUG_LOGS = false;
+const locationDebug = (...args: any[]) => {
+  if (__DEV__ && LOCATION_DEBUG_LOGS) {
+    console.log(...args);
+  }
+};
 
 export interface UserLocation {
   latitude: number;
@@ -18,16 +24,10 @@ class LocationService {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       this.permissionGranted = status === 'granted';
-      
-      if (this.permissionGranted) {
-        console.log('✅ Location permissions granted');
-      } else {
-        console.log('❌ Location permissions denied');
-      }
-      
+      locationDebug('Location permission status:', status);
       return this.permissionGranted;
     } catch (error) {
-      console.error('❌ Error requesting location permissions:', error);
+      console.error('Error requesting location permissions:', error);
       return false;
     }
   }
@@ -42,7 +42,7 @@ class LocationService {
         if (!granted) return null;
       }
 
-      console.log('📍 Fetching current location...');
+      locationDebug('Fetching current location');
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.BestForNavigation,
       });
@@ -53,10 +53,10 @@ class LocationService {
         timestamp: location.timestamp,
       };
 
-      console.log('✅ Location fetched:', userLocation);
+      locationDebug('Location fetched');
       return userLocation;
     } catch (error) {
-      console.error('❌ Error getting current location:', error);
+      console.error('Error getting current location:', error);
       return null;
     }
   }
@@ -70,17 +70,17 @@ class LocationService {
     onError?: (error: any) => void
   ): boolean {
     if (this.locationWatcher) {
-      console.warn('⚠️ Location watcher already active');
+      // Expected in some re-render paths; keep silent.
       return false;
     }
 
     if (!this.permissionGranted) {
-      console.error('❌ Location permissions not granted');
+      // Avoid noisy error logs when user denied permission.
       return false;
     }
 
     try {
-      console.log('📍 Starting location watcher...');
+      locationDebug('Starting location watcher');
       
       // Watch location with more frequent updates for better nearby user detection
       this.locationWatcher = Location.watchPositionAsync(
@@ -96,14 +96,13 @@ class LocationService {
             longitude: location.coords.longitude,
             timestamp: location.timestamp,
           };
-          console.log('📍 Location updated:', userLocation);
           onLocationUpdate(userLocation);
         }
       );
 
       return true;
     } catch (error) {
-      console.error('❌ Error starting location watcher:', error);
+      console.error('Error starting location watcher:', error);
       if (onError) onError(error);
       return false;
     }
@@ -127,15 +126,14 @@ class LocationService {
           });
         }
         this.locationWatcher = null;
-        console.log('📍 Location watcher stopped');
+        locationDebug('Location watcher stopped');
         return true;
       } catch (error) {
-        console.error('❌ Error stopping location watcher:', error);
+        console.error('Error stopping location watcher:', error);
         this.locationWatcher = null;
         return false;
       }
     }
-    console.warn('⚠️ No active location watcher');
     return false;
   }
 

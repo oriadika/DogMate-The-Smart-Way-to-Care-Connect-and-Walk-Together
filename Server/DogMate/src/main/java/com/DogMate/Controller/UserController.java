@@ -677,6 +677,10 @@ public class UserController {
             ping.setFromUserId(request.getFromUserId());
             ping.setFromUserName(request.getFromUserName() != null ? request.getFromUserName() : "משתמש לא ידוע");
             ping.setToUserId(request.getToUserId());
+            ping.setDogName(request.getDogName());
+            ping.setDogBreed(request.getDogBreed());
+            ping.setDogAgeLabel(request.getDogAgeLabel());
+            ping.setDogImageUrl(request.getDogImageUrl());
             ping.setRead(false);
 
             // Store ping in memory

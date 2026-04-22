@@ -26,8 +26,9 @@ import { dogMateMapStyle } from '../src/constants/MapStyles';
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const USERS_REFRESH_INTERVAL_MS = 5000;
 const LOCATION_PUSH_INTERVAL_MS = 5000;
+const PENDING_PINGS_REFRESH_INTERVAL_MS = 6000;
 const HEADER_OVERLAY_HEIGHT = 56;
-const MARKER_SIZE = 50;
+const MARKER_SIZE = 46;
 const SELECTION_CARD_APPROX_HEIGHT = 168;
 /** גובה משוער של כרטיס טווח החיפוש — לסידור שכבות מעליו בלי לשנות את עיצוב הכרטיס */
 const RANGE_CARD_APPROX_HEIGHT = 132;
@@ -35,6 +36,98 @@ const RANGE_CARD_APPROX_HEIGHT = 132;
 /** זום מסחרי — פירוט רחובות (~0.005) */
 const WALK_MAP_LAT_DELTA = 0.005;
 const WALK_MAP_LNG_DELTA = 0.005;
+
+/** מרחק מקסימימלי (מטר) כדי לחשב נקודות כ"אותו מיקום" ולפרוס סמנים */
+const MAP_MARKER_COINCIDENT_MAX_DISTANCE_M = 14;
+/** רדיוס (מטר) שבו מסודרים סמנים סביב מרכז הקבוצה */
+const MAP_MARKER_SPREAD_RING_RADIUS_M = 16;
+const SELF_MAP_MARKER_ID = '__self__';
+
+type MapClusterPoint = { id: string; latitude: number; longitude: number };
+
+function clusterMapPointsByProximity(points: MapClusterPoint[], maxDistM: number): MapClusterPoint[][] {
+  const n = points.length;
+  if (n === 0) return [];
+  const parent = points.map((_, i) => i);
+  const find = (i: number): number => {
+    if (parent[i] !== i) parent[i] = find(parent[i]);
+    return parent[i];
+  };
+  const union = (i: number, j: number) => {
+    const ri = find(i);
+    const rj = find(j);
+    if (ri !== rj) parent[ri] = rj;
+  };
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const d = LocationService.calculateDistance(
+        points[i].latitude,
+        points[i].longitude,
+        points[j].latitude,
+        points[j].longitude
+      );
+      if (d <= maxDistM) union(i, j);
+    }
+  }
+  const byRoot = new Map<number, MapClusterPoint[]>();
+  for (let i = 0; i < n; i++) {
+    const r = find(i);
+    const arr = byRoot.get(r) ?? [];
+    arr.push(points[i]);
+    byRoot.set(r, arr);
+  }
+  return [...byRoot.values()];
+}
+
+function offsetMetersToLatLng(
+  latRef: number,
+  lngRef: number,
+  northM: number,
+  eastM: number
+): { latitude: number; longitude: number } {
+  const metersPerDegLat = 111_320;
+  const metersPerDegLng = 111_320 * Math.cos((latRef * Math.PI) / 180);
+  const safeLngScale = Math.max(Math.abs(metersPerDegLng), 1e-6);
+  return {
+    latitude: latRef + northM / metersPerDegLat,
+    longitude: lngRef + eastM / safeLngScale,
+  };
+}
+
+/** קואורדינטות תצוגה למפה בלבד — המיקום האמיתי נשמר ב-user / userLocation */
+function buildMapMarkerDisplayCoords(
+  selfLat: number,
+  selfLng: number,
+  others: { id: string; latitude: number; longitude: number }[],
+  coincidentM: number,
+  ringRadiusM: number
+): Map<string, { latitude: number; longitude: number }> {
+  const out = new Map<string, { latitude: number; longitude: number }>();
+  const points: MapClusterPoint[] = [
+    { id: SELF_MAP_MARKER_ID, latitude: selfLat, longitude: selfLng },
+    ...others.map((o) => ({ id: o.id, latitude: o.latitude, longitude: o.longitude })),
+  ];
+  const clusters = clusterMapPointsByProximity(points, coincidentM);
+  for (const cluster of clusters) {
+    if (cluster.length <= 1) {
+      const p = cluster[0];
+      out.set(p.id, { latitude: p.latitude, longitude: p.longitude });
+      continue;
+    }
+    const sorted = [...cluster].sort((a, b) => a.id.localeCompare(b.id));
+    const cLat = sorted.reduce((s, p) => s + p.latitude, 0) / sorted.length;
+    const cLng = sorted.reduce((s, p) => s + p.longitude, 0) / sorted.length;
+    const m = sorted.length;
+    const ringR = ringRadiusM * Math.sqrt(Math.max(1, m / 2));
+    sorted.forEach((p, i) => {
+      const angle = (2 * Math.PI * i) / m - Math.PI / 2;
+      const northM = ringR * Math.cos(angle);
+      const eastM = ringR * Math.sin(angle);
+      out.set(p.id, offsetMetersToLatLng(cLat, cLng, northM, eastM));
+    });
+  }
+  return out;
+}
 
 type ProfileCacheEntry = {
   loggedUsers: any[];
@@ -57,8 +150,30 @@ const buildUsersSignature = (users: any[]): string => {
 };
 
 function formatDogAgeLine(user: any): string | null {
-  if (user?.mapDogAgeYears != null && user.mapDogAgeYears !== '') {
-    return `${user.mapDogAgeYears} שנים`;
+  const yearsRaw = user?.mapDogAgeYears;
+  const years = Number(yearsRaw);
+  if (Number.isFinite(years) && years > 0) {
+    return `${Math.floor(years)} שנים`;
+  }
+
+  const birthdateRaw = user?.mapDogBirthdate;
+  if (typeof birthdateRaw === 'string' && birthdateRaw.trim().length > 0) {
+    const birth = new Date(birthdateRaw);
+    if (!Number.isNaN(birth.getTime())) {
+      const now = new Date();
+      let months =
+        (now.getFullYear() - birth.getFullYear()) * 12 +
+        (now.getMonth() - birth.getMonth());
+      if (now.getDate() < birth.getDate()) {
+        months -= 1;
+      }
+      months = Math.max(0, months);
+      if (months < 12) {
+        return months === 1 ? 'חודש' : `${months} חודשים`;
+      }
+      const computedYears = Math.floor(months / 12);
+      return `${computedYears} שנים`;
+    }
   }
   return null;
 }
@@ -129,11 +244,17 @@ const ProfileScreen = ({ navigation, route }: any) => {
   const [meetDetailUser, setMeetDetailUser] = useState<any | null>(null);
   const [incomingMeetInvite, setIncomingMeetInvite] = useState<PingNotification | null>(null);
   const [locationTracking, setLocationTracking] = useState(false);
-  const [isLocationSharingEnabled, setIsLocationSharingEnabled] = useState(false);
+  /** ברירת מחדל: מיקום גלוי לבעל כלב בטיולים; דוגווקר מהניווט מתחיל מוסתר */
+  const [isLocationSharingEnabled, setIsLocationSharingEnabled] = useState(
+    () => route?.params?.userRole !== 'walker'
+  );
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(0.25);
   const [selectedMarker, setSelectedMarker] = useState<MapSelection>(null);
   const mapRef = useRef<MapView>(null);
+  const isFetchingLoggedUsersRef = useRef(false);
+  /** MapView onPress נורה גם אחרי לחיצה על Marker — בלי זה המודל נסגר מיד */
+  const suppressMeetModalClearUntilRef = useRef(0);
 
   const iosGoogleMapsKey = Constants.expoConfig?.ios?.config?.googleMapsApiKey as string | undefined;
   const useGoogleMapsOnIos =
@@ -145,6 +266,35 @@ const ProfileScreen = ({ navigation, route }: any) => {
     () => route?.params?.userRole === 'walker' || serverAccountType === 'DogWalkerUser',
     [route?.params?.userRole, serverAccountType]
   );
+
+  const fetchPendingMeetInvites = useCallback(async () => {
+    const userId = route?.params?.userId;
+    if (!userId || incomingMeetInvite) {
+      return;
+    }
+    try {
+      const data = await userAPI.getPendingPings(userId);
+      const firstPending = data?.pings?.find((p: any) => p?.fromUserId && p?.toUserId);
+      if (!firstPending) return;
+      setIncomingMeetInvite({
+        kind: 'PING',
+        pingId: firstPending.id,
+        fromUserId: firstPending.fromUserId,
+        fromUserName: firstPending.fromUserName || 'משתמש',
+        toUserId: firstPending.toUserId,
+        dogName: firstPending.dogName ?? null,
+        dogBreed: firstPending.dogBreed ?? null,
+        dogAgeLabel: firstPending.dogAgeLabel ?? null,
+        dogImageUrl: firstPending.dogImageUrl ?? null,
+        timestamp: firstPending.createdAt ? Date.parse(firstPending.createdAt) : Date.now(),
+      });
+      if (firstPending.id) {
+        userAPI.markPingAsRead(firstPending.id).catch(() => {});
+      }
+    } catch {
+      // WebSocket is primary; polling keeps delivery reliable if connection drops.
+    }
+  }, [incomingMeetInvite, route?.params?.userId]);
 
   useEffect(() => {
     if (route?.params?.userRole === 'walker') {
@@ -161,6 +311,24 @@ const ProfileScreen = ({ navigation, route }: any) => {
   const usersWithLocation = usersInRadius.filter(
     (user: any) => user.latitude != null && user.longitude != null
   );
+
+  const mapMarkerDisplayCoords = useMemo(() => {
+    if (!isLocationSharingEnabled || !userLocation) {
+      return new Map<string, { latitude: number; longitude: number }>();
+    }
+    const others = usersWithLocation.map((u: any) => ({
+      id: String(u.id),
+      latitude: u.latitude as number,
+      longitude: u.longitude as number,
+    }));
+    return buildMapMarkerDisplayCoords(
+      userLocation.latitude,
+      userLocation.longitude,
+      others,
+      MAP_MARKER_COINCIDENT_MAX_DISTANCE_M,
+      MAP_MARKER_SPREAD_RING_RADIUS_M
+    );
+  }, [isLocationSharingEnabled, userLocation, usersWithLocation]);
 
   useEffect(() => {
     const currentUserId = route?.params?.userId;
@@ -179,6 +347,9 @@ const ProfileScreen = ({ navigation, route }: any) => {
     const refreshInterval = setInterval(() => {
       fetchLoggedUsers({ showLoader: false });
     }, USERS_REFRESH_INTERVAL_MS);
+    const pendingPingsInterval = setInterval(() => {
+      fetchPendingMeetInvites();
+    }, PENDING_PINGS_REFRESH_INTERVAL_MS);
 
     const initializeLocation = async () => {
       const userId = route?.params?.userId;
@@ -220,6 +391,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
       return () => {
         clearTimeout(timer);
         clearInterval(refreshInterval);
+        clearInterval(pendingPingsInterval);
         locationService.stopWatchingLocation();
         websocketService.disconnect();
       };
@@ -227,10 +399,11 @@ const ProfileScreen = ({ navigation, route }: any) => {
 
     return () => {
       clearInterval(refreshInterval);
+      clearInterval(pendingPingsInterval);
       locationService.stopWatchingLocation();
       websocketService.disconnect();
     };
-  }, [route?.params?.userId, route?.params?.userRole]);
+  }, [route?.params?.userId, route?.params?.userRole, fetchPendingMeetInvites]);
 
   useEffect(() => {
     if (serverAccountType !== 'DogWalkerUser') {
@@ -258,7 +431,6 @@ const ProfileScreen = ({ navigation, route }: any) => {
       if (userLocationRef.current) {
         userAPI
           .updateLocation(userId, userLocationRef.current.latitude, userLocationRef.current.longitude)
-          .then(() => console.log('📍 Location sent to server'))
           .catch((error) => console.error('Failed to update location:', error));
       }
 
@@ -338,6 +510,9 @@ const ProfileScreen = ({ navigation, route }: any) => {
           );
           return;
         }
+        if (ping.pingId) {
+          userAPI.markPingAsRead(ping.pingId).catch(() => {});
+        }
         setIncomingMeetInvite(ping);
       },
       onError: (error: any) => {
@@ -348,6 +523,10 @@ const ProfileScreen = ({ navigation, route }: any) => {
 
   const fetchLoggedUsers = async (options?: { showLoader?: boolean }) => {
     const shouldShowLoader = options?.showLoader ?? true;
+    if (isFetchingLoggedUsersRef.current) {
+      return;
+    }
+    isFetchingLoggedUsersRef.current = true;
 
     try {
       if (shouldShowLoader) {
@@ -481,6 +660,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
         Alert.alert('שגיאה', 'טעינת המשתמשים נכשלה');
       }
     } finally {
+      isFetchingLoggedUsersRef.current = false;
       if (shouldShowLoader) {
         setIsLoadingUsers(false);
       }
@@ -694,7 +874,9 @@ const ProfileScreen = ({ navigation, route }: any) => {
                 onPress={() => handlePing(u.id, u.name)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.pingText}>פינג</Text>
+                <Text style={styles.pingText} numberOfLines={2}>
+                  הצעת מפגש
+                </Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={styles.meetModalClose} onPress={() => setMeetDetailUser(null)}>
@@ -798,6 +980,9 @@ const ProfileScreen = ({ navigation, route }: any) => {
           rotateEnabled={false}
           onPress={() => {
             setSelectedMarker(null);
+            if (Date.now() < suppressMeetModalClearUntilRef.current) {
+              return;
+            }
             setMeetDetailUser(null);
           }}
         >
@@ -816,37 +1001,62 @@ const ProfileScreen = ({ navigation, route }: any) => {
 
           {isLocationSharingEnabled && (
             <Marker
-              coordinate={{
-                latitude: userLocation.latitude,
-                longitude: userLocation.longitude,
-              }}
+              coordinate={
+                mapMarkerDisplayCoords.get(SELF_MAP_MARKER_ID) ?? {
+                  latitude: userLocation.latitude,
+                  longitude: userLocation.longitude,
+                }
+              }
               onPress={() => {
               setMeetDetailUser(null);
               setSelectedMarker('self');
             }}
               tracksViewChanges={false}
+              zIndex={110}
             >
               <MapMarkerAvatar uri={currentUserDogImageUrl} size={MARKER_SIZE - 2} />
             </Marker>
           )}
 
           {isLocationSharingEnabled &&
-            usersWithLocation.map((user: any) => (
-              <Marker
-                key={user.id}
-                coordinate={{
-                  latitude: user.latitude,
-                  longitude: user.longitude,
-                }}
-                onPress={() => {
-                  setSelectedMarker(null);
-                  setMeetDetailUser(user);
-                }}
-                tracksViewChanges={false}
-              >
-                <MapMarkerAvatar uri={user.mapDogProfileImageUrl} size={MARKER_SIZE - 2} />
-              </Marker>
-            ))}
+            usersWithLocation.map((user: any) => {
+              const openOtherUserMeetDetail = () => {
+                suppressMeetModalClearUntilRef.current = Date.now() + 450;
+                setSelectedMarker(null);
+                setMeetDetailUser(user);
+              };
+              return (
+                <Marker
+                  key={user.id}
+                  coordinate={
+                    mapMarkerDisplayCoords.get(String(user.id)) ?? {
+                      latitude: user.latitude,
+                      longitude: user.longitude,
+                    }
+                  }
+                  onPress={(e: any) => {
+                    e?.stopPropagation?.();
+                    openOtherUserMeetDetail();
+                  }}
+                  tracksViewChanges={false}
+                  zIndex={100}
+                >
+                  <Pressable
+                    onPress={(e: any) => {
+                      e?.stopPropagation?.();
+                      openOtherUserMeetDetail();
+                    }}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      user.name ? `פרטי כלב של ${user.name}` : 'פרטי כלב של משתמש אחר'
+                    }
+                  >
+                    <MapMarkerAvatar uri={user.mapDogProfileImageUrl} size={MARKER_SIZE - 2} />
+                  </Pressable>
+                </Marker>
+              );
+            })}
         </MapView>
       ) : (
         <View style={[StyleSheet.absoluteFillObject, styles.mapPlaceholderFull]}>
@@ -1246,14 +1456,18 @@ const styles = StyleSheet.create({
   pingButton: {
     backgroundColor: PRIMARY_COLOR,
     paddingVertical: 10,
-    paddingHorizontal: 22,
+    paddingHorizontal: 14,
     borderRadius: 12,
+    maxWidth: '52%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   pingText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '700',
+    textAlign: 'center',
   },
 
   loadingOverlay: {

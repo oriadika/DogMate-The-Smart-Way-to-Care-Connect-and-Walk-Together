@@ -533,6 +533,45 @@ export const userAPI = {
   },
 
   /**
+   * Get unread pings as a recovery path when WebSocket delivery was missed.
+   */
+  getPendingPings: async (
+    userId: string
+  ): Promise<{
+    success: boolean;
+    pings: Array<{
+      id: string;
+      fromUserId: string;
+      fromUserName: string;
+      toUserId: string;
+      dogName?: string | null;
+      dogBreed?: string | null;
+      dogAgeLabel?: string | null;
+      dogImageUrl?: string | null;
+      createdAt?: string;
+      read?: boolean;
+    }>;
+  }> => {
+    try {
+      const response = await apiClient.get(`/users/pings/pending/${userId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה טעינת פינגים ממתינים';
+      throw new Error(errorMessage);
+    }
+  },
+
+  markPingAsRead: async (pingId: string): Promise<{ success: boolean; message: string; pingId: string }> => {
+    try {
+      const response = await apiClient.post(`/users/pings/${pingId}/read`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל סימון פינג כנקרא';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
    * Update user's current location
    */
   updateLocation: async (userId: string, latitude: number, longitude: number): Promise<{ success: boolean; message: string }> => {
