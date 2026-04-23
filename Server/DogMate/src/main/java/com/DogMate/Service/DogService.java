@@ -58,7 +58,7 @@ public class DogService {
     @Transactional
     @CacheEvict(cacheNames = "dogsByUser", key = "#userId")
     public Dog addDogToUser(UUID userId, String name, String breed, LocalDate birthdate,
-                            char gender, String profileImageURL, RelationshipType relationshipType) {
+                            char gender, String profileImageURL, Double weightKg, RelationshipType relationshipType) {
         
         // Find the user (orchestration)
         Optional<UserAccount> userOptional = userRepository.findById(userId);
@@ -80,7 +80,7 @@ public class DogService {
         }
         // Create new dog (domain logic)
         UUID dogId = UUID.randomUUID();
-        Dog newDog = new Dog(dogId, name, breed, birthdate, gender, profileImageURL);
+        Dog newDog = new Dog(dogId, name, breed, birthdate, gender, profileImageURL, weightKg);
         
         // Save dog to repository (orchestration)
         Dog savedDog = dogRepository.save(newDog);
@@ -101,6 +101,62 @@ public class DogService {
         userRepository.save(user);
         
         return savedDog;
+    }
+
+    /**
+     * Update dog fields for a user who has a relationship with the dog.
+     */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "dogsByUser", key = "#userId"),
+            @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    })
+    public Dog updateDogForUser(
+            UUID userId,
+            UUID dogId,
+            String name,
+            String breed,
+            LocalDate birthdate,
+            char gender,
+            String profileImageUrlOrNull,
+            Double weightKgOrNull
+    ) {
+        Optional<UserAccount> userOptional = userRepository.findById(userId);
+        if (userOptional.isEmpty()) {
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
+        }
+        UserAccount userAccount = userOptional.get();
+        if (!(userAccount instanceof RegularUser)) {
+            throw new IllegalArgumentException("רק משתמשים מסוג בעל כלב יכולים לבצע פעולה זו");
+        }
+        RegularUser user = (RegularUser) userAccount;
+
+        Dog dog = dogRepository.findById(dogId)
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא כלב עם המזהה: " + dogId));
+
+        boolean linked = dog.getDogRelationships().stream()
+                .anyMatch(rel -> rel.getRegularUser() != null && rel.getRegularUser().getId().equals(user.getId()));
+        if (!linked) {
+            throw new IllegalArgumentException("הכלב לא משויך למשתמש זה");
+        }
+
+        if (!(gender == 'M' || gender == 'F')) {
+            throw new IllegalArgumentException("מין הכלב חייב להיות M או F");
+        }
+        if (birthdate.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("תאריך הלידה לא יכול להיות בעתיד");
+        }
+
+        dog.setName(name.trim());
+        dog.setBreed(breed.trim());
+        dog.setBirthdate(birthdate);
+        dog.setGender(gender);
+        if (profileImageUrlOrNull != null && !profileImageUrlOrNull.isBlank()) {
+            dog.setProfileImageURL(profileImageUrlOrNull.trim());
+        }
+        dog.setWeightKg(weightKgOrNull);
+
+        return dogRepository.save(dog);
     }
 
     /**

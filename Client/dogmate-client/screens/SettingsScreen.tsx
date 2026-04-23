@@ -9,6 +9,7 @@ import {
   Switch,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
@@ -54,44 +55,33 @@ const SettingsScreen = ({ navigation, route }: any) => {
   // משתני State לדוגמה
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Get user info from route params
   const userId = route?.params?.userId;
   const email = route?.params?.email;
 
-  // פונקציית התנתקות
   const handleLogout = () => {
-    Alert.alert(
-      'התנתקות',
-      'האם אתה בטוח שברצונך להתנתק מהחשבון?',
-      [
-        { text: 'ביטול', style: 'cancel' },
-        { 
-          text: 'התנתק', 
-          style: 'destructive',
-          onPress: async () => {
-            setIsLoggingOut(true);
-            try {
-              // Call logout API
-              console.log('Logging out user:', { userId, email });
-              await userAPI.logout(userId || '', email || '');
-              console.log('User logged out successfully');
-              
-              // Navigate to login screen
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Start' }],
-              });
-            } catch (error: any) {
-              console.error('Logout error:', error);
-              Alert.alert('שגיאה', 'ההתנתקות נכשלה. נסה שוב.');
-            } finally {
-              setIsLoggingOut(false);
-            }
-          }
-        },
-      ]
-    );
+    setShowLogoutConfirm(true);
+  };
+
+  const performLogout = async () => {
+    setShowLogoutConfirm(false);
+    setIsLoggingOut(true);
+    try {
+      console.log('Logging out user:', { userId, email });
+      await userAPI.logout(userId || '', email || '');
+      console.log('User logged out successfully');
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Start' }],
+      });
+    } catch (error: any) {
+      console.error('Logout error:', error);
+      Alert.alert('שגיאה', 'ההתנתקות נכשלה. נסה שוב.');
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   // רקע עקבות (אותו קוד כמו במסכים הקודמים לשמירה על אחידות)
@@ -111,6 +101,36 @@ const SettingsScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={styles.container}>
+      <Modal
+        visible={showLogoutConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutConfirm(false)}
+      >
+        <View style={styles.logoutModalOverlay}>
+          <View style={styles.logoutModalCard}>
+            <Text style={styles.logoutModalTitle}>התנתקות</Text>
+            <Text style={styles.logoutModalMessage}>האם אתה בטוח שברצונך להתנתק מהחשבון?</Text>
+            <View style={styles.logoutModalActions}>
+              <TouchableOpacity
+                style={styles.logoutModalCancelBtn}
+                onPress={() => setShowLogoutConfirm(false)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.logoutModalCancelText}>ביטול</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.logoutModalConfirmBtn}
+                onPress={performLogout}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.logoutModalConfirmText}>התנתק</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.backgroundOverlay}>
         <PawPattern />
       </View>
@@ -344,5 +364,75 @@ const styles = StyleSheet.create({
     marginTop: 20,
     color: '#A9B5C7',
     fontSize: 12,
+  },
+  logoutModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    paddingHorizontal: 28,
+  },
+  logoutModalCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#faf0e6',
+    borderRadius: 16,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#E0D5C7',
+  },
+  logoutModalTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#5C4033',
+    marginBottom: 10,
+    textAlign: 'center',
+    width: '100%',
+  },
+  logoutModalMessage: {
+    fontSize: 16,
+    color: '#5C4033',
+    lineHeight: 24,
+    marginBottom: 22,
+    textAlign: 'center',
+    width: '100%',
+  },
+  logoutModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+    width: '100%',
+  },
+  logoutModalCancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0D5C7',
+    backgroundColor: '#FFFFFF',
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  logoutModalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#5C4033',
+    textAlign: 'center',
+  },
+  logoutModalConfirmBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    borderRadius: 12,
+    backgroundColor: '#FF6B6B',
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  logoutModalConfirmText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
 });

@@ -35,9 +35,28 @@ type HomeCacheEntry = {
 const homeDataCache = new Map<string, HomeCacheEntry>();
 const dirtyHomeDataUsers = new Set<string>();
 
+/** Fingerprint for profile image so signature changes when photo is replaced without huge strings. */
+const profileImageFingerprint = (url: unknown): string => {
+  const s = typeof url === 'string' ? url : '';
+  if (!s) return '0';
+  const len = s.length;
+  if (len <= 120) return `${len}:${s}`;
+  return `${len}:${s.slice(0, 60)}:${s.slice(-60)}`;
+};
+
 const buildDataSignature = (dogsData: any[], remindersData: any[]): string => {
   const dogsPart = dogsData
-    .map((d: any) => `${d?.id ?? ''}:${d?.name ?? ''}:${d?.birthdate ?? ''}`)
+    .map((d: any) =>
+      [
+        d?.id ?? '',
+        d?.name ?? '',
+        d?.breed ?? '',
+        d?.birthdate ?? '',
+        d?.gender ?? '',
+        profileImageFingerprint(d?.profileImageUrl),
+        d?.weightKg ?? '',
+      ].join(':')
+    )
     .join('|');
   const remindersPart = remindersData
     .map((r: any) => `${r?.id ?? ''}:${r?.title ?? ''}:${r?.remindAt ?? ''}:${r?.sent ?? ''}`)
@@ -81,6 +100,11 @@ const HomeScreen = ({ navigation, route }: any) => {
 
       if (!currentUserId) return;
 
+      if (route?.params?.refresh === true) {
+        homeDataCache.delete(currentUserId);
+        navigation.setParams({ refresh: false });
+      }
+
       const cached = homeDataCache.get(currentUserId);
       if (cached) {
         setUserName(cached.userName || 'חברים');
@@ -103,7 +127,7 @@ const HomeScreen = ({ navigation, route }: any) => {
       return () => {
         clearInterval(intervalId);
       };
-    }, [currentUserId, currentUserName])
+    }, [currentUserId, currentUserName, route?.params?.refresh, navigation])
   );
 
   const loadUserAndDogs = async (
@@ -309,17 +333,12 @@ const HomeScreen = ({ navigation, route }: any) => {
     return `כלבים: ${names.join(', ')}`;
   };
 
-  const handleEditDog = (dogId: string, dogName: string) => {
-    Alert.alert(
-      'עריכת כלב',
-      `פונקציונליות עריכת ${dogName} עדיין לא מומשה.`,
-      [
-        {
-          text: 'בסדר',
-          style: 'default',
-        },
-      ]
-    );
+  const handleEditDog = (dog: any) => {
+    if (!currentUserId) {
+      Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
+      return;
+    }
+    navigation.navigate('EditDog', { userId: currentUserId, dog });
   };
 
   const handleViewDogDetails = (dogId: string, dogName: string) => {
@@ -463,7 +482,7 @@ const HomeScreen = ({ navigation, route }: any) => {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => handleEditDog(dog.id, dog.name)}
+          onPress={() => handleEditDog(dog)}
         >
           <MaterialCommunityIcons name="pencil" size={18} color="#7FB069" />
           <Text style={styles.actionButtonText}>עריכה</Text>

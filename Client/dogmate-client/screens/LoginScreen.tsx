@@ -11,6 +11,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
@@ -20,10 +21,14 @@ const LoginScreen = ({ navigation }: any) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [messageModal, setMessageModal] = useState<{ title: string; message: string } | null>(null);
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
-      Alert.alert('שדות חסרים', 'אנא מלא את האימייל והסיסמה.');
+      setMessageModal({
+        title: 'שדות חסרים',
+        message: 'אנא מלא את האימייל והסיסמה.',
+      });
       return;
     }
 
@@ -61,7 +66,7 @@ const LoginScreen = ({ navigation }: any) => {
     }
     } catch (error: any) {
       const errorMessage = error?.message || 'אירעה שגיאה בעת ההתחברות';
-      Alert.alert('התחברות נכשלה', errorMessage);
+      setMessageModal({ title: 'התחברות נכשלה', message: errorMessage });
       console.error('Login error:', error);
     } finally {
       setIsLoading(false);
@@ -70,6 +75,27 @@ const LoginScreen = ({ navigation }: any) => {
 
   return (
     <View style={styles.background}>
+      <Modal
+        visible={messageModal != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMessageModal(null)}
+      >
+        <View style={styles.messageModalOverlay}>
+          <View style={styles.messageModalCard}>
+            <Text style={styles.messageModalTitle}>{messageModal?.title}</Text>
+            <Text style={styles.messageModalBody}>{messageModal?.message}</Text>
+            <TouchableOpacity
+              style={styles.messageModalButton}
+              onPress={() => setMessageModal(null)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.messageModalButtonText}>בסדר</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Back button */}
       <TouchableOpacity
         style={styles.backButton}
@@ -314,5 +340,51 @@ const styles = StyleSheet.create({
   footerLinkTextBold: {
     fontWeight: '700',
     color: '#5C4033', // Dark brown
+  },
+  messageModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    paddingHorizontal: 28,
+  },
+  messageModalCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#faf0e6',
+    borderRadius: 16,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#E0D5C7',
+  },
+  messageModalTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#5C4033',
+    marginBottom: 10,
+    textAlign: 'center',
+    width: '100%',
+  },
+  messageModalBody: {
+    fontSize: 16,
+    color: '#5C4033',
+    lineHeight: 24,
+    marginBottom: 20,
+    textAlign: 'center',
+    width: '100%',
+  },
+  messageModalButton: {
+    alignSelf: 'center',
+    backgroundColor: PRIMARY_COLOR,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+  },
+  messageModalButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 });

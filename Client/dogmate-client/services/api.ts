@@ -203,6 +203,8 @@ export interface AddDogPayload {
   birthdate: string; // ISO date format (YYYY-MM-DD)
   gender?: string; // 'M' for male, 'F' for female
   profileImageUrl?: string;
+  /** משקל בק״ג; ריק/null — בלי משקל */
+  weightKg?: number | null;
 }
 
 export interface DogData {
@@ -212,9 +214,27 @@ export interface DogData {
   birthdate: string;
   gender: string;
   profileImageUrl: string;
+  weightKg?: number | null;
 }
 
 export interface AddDogResponse {
+  success: boolean;
+  message: string;
+  dog: DogData;
+}
+
+export interface UpdateDogPayload {
+  name: string;
+  breed: string;
+  birthdate: string;
+  gender: string;
+  /** אופציונלי — אם לא נשלח, נשמרת התמונה הקיימת בשרת */
+  profileImageUrl?: string;
+  /** משקל בק״ג; null — מוחק משקל בשרת */
+  weightKg?: number | null;
+}
+
+export interface UpdateDogResponse {
   success: boolean;
   message: string;
   dog: DogData;
@@ -627,6 +647,20 @@ export const dogAPI = {
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'נכשלה הוספת הכלב';
       console.error("Add dog failed:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  updateDog: async (
+    userId: string,
+    dogId: string,
+    payload: UpdateDogPayload
+  ): Promise<UpdateDogResponse> => {
+    try {
+      const response = await apiClient.put(`/dogs/${userId}/${dogId}`, payload);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה עדכון פרטי הכלב';
       throw new Error(errorMessage);
     }
   },

@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { dogAPI, userAPI } from '../services/api';
 import { useUsers } from '../contexts/UsersContext';
@@ -22,6 +23,7 @@ const AdminScreen = ({ navigation, route }: any) => {
   const [loading, setLoading] = useState(true);
   const [loggedOut, setLoggedOut] = useState(false);
   const [openSupportCount, setOpenSupportCount] = useState<number | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const refreshOpenSupportCount = useCallback(async () => {
     const adminId = route.params?.userId;
@@ -107,29 +109,21 @@ const AdminScreen = ({ navigation, route }: any) => {
   };
 
   const handleLogout = () => {
-    Alert.alert('התנתקות', 'בטוח שברצונך להתנתק?', [
-      {
-        text: 'ביטול',
-        onPress: () => {},
-        style: 'cancel',
-      },
-      {
-        text: 'התנתקות',
-        onPress: async () => {
-          try {
-            await userAPI.logout(route?.params?.userId || '', route?.params?.email || '');
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Start' }],
-            });
-          } catch (error: any) {
-            Alert.alert('שגיאה', error.message || 'ההתנתקות נכשלה');
-            console.error('Sign out error:', error);
-          }
-        },
-        style: 'destructive',
-      },
-    ]);
+    setShowLogoutConfirm(true);
+  };
+
+  const performLogout = async () => {
+    setShowLogoutConfirm(false);
+    try {
+      await userAPI.logout(route?.params?.userId || '', route?.params?.email || '');
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Start' }],
+      });
+    } catch (error: any) {
+      Alert.alert('שגיאה', error.message || 'ההתנתקות נכשלה');
+      console.error('Sign out error:', error);
+    }
   };
 
   if (loading) {
@@ -145,6 +139,36 @@ const AdminScreen = ({ navigation, route }: any) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <Modal
+        visible={showLogoutConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutConfirm(false)}
+      >
+        <View style={styles.logoutModalOverlay}>
+          <View style={styles.logoutModalCard}>
+            <Text style={styles.logoutModalTitle}>התנתקות</Text>
+            <Text style={styles.logoutModalMessage}>בטוח שברצונך להתנתק?</Text>
+            <View style={styles.logoutModalActions}>
+              <TouchableOpacity
+                style={styles.logoutModalCancelBtn}
+                onPress={() => setShowLogoutConfirm(false)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.logoutModalCancelText}>ביטול</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.logoutModalConfirmBtn}
+                onPress={performLogout}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.logoutModalConfirmText}>התנתקות</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>לוח בקרה למנהל</Text>
@@ -395,5 +419,75 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '700',
+  },
+  logoutModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    paddingHorizontal: 28,
+  },
+  logoutModalCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  logoutModalTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 10,
+    textAlign: 'center',
+    width: '100%',
+  },
+  logoutModalMessage: {
+    fontSize: 16,
+    color: '#475569',
+    lineHeight: 24,
+    marginBottom: 22,
+    textAlign: 'center',
+    width: '100%',
+  },
+  logoutModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+    width: '100%',
+  },
+  logoutModalCancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  logoutModalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#334155',
+    textAlign: 'center',
+  },
+  logoutModalConfirmBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    borderRadius: 12,
+    backgroundColor: DESTRUCTIVE_COLOR,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  logoutModalConfirmText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
 });

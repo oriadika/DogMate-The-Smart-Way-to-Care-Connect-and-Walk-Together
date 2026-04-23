@@ -18,6 +18,7 @@ import ProfileScreen from './screens/ProfileScreen';
 import OwnerWalkersScreen from './screens/OwnerWalkersScreen';
 import DogProfileScreen from './screens/DogProfileScreen';
 import AddDogScreen from './screens/AddDogScreen';
+import EditDogScreen from './screens/EditDogScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import EditProfileScreen from './screens/EditProfileScreen';
 import ChangePasswordScreen from './screens/ChangePasswordScreen';
@@ -68,6 +69,7 @@ export default function App() {
           <Stack.Screen name="OwnerWalkers" component={OwnerWalkersScreen} />
           <Stack.Screen name="DogProfile" component={DogProfileScreen} />
           <Stack.Screen name="AddDog" component={AddDogScreen} />
+          <Stack.Screen name="EditDog" component={EditDogScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="EditProfile" component={EditProfileScreen} />
           <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
