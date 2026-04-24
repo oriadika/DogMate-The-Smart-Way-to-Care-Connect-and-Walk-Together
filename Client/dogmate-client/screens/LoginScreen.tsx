@@ -101,7 +101,7 @@ const LoginScreen = ({ navigation }: any) => {
         style={styles.backButton}
         onPress={() => navigation.navigate('Start')}
       >
-        <Text style={styles.backIcon}>←</Text>
+        <Text style={styles.backIcon}>→</Text>
       </TouchableOpacity>
 
       <SafeAreaView style={styles.safeArea}>
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   backButton: {
     position: 'absolute',
     top: 50,
-    left: 20,
+    right: 20,
     backgroundColor: 'transparent',
     paddingVertical: 8,
     paddingHorizontal: 8,

@@ -1,6 +1,7 @@
 package com.DogMate.Domain;
 
 import jakarta.persistence.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -33,6 +34,10 @@ public class UserAccount {
     /** Phone from registration (nullable for legacy rows). */
     @Column(name = "phone_number", length = 32)
     private String phoneNumber;
+
+    /** Optional date of birth from signup/profile. */
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
 
     // Default constructor required by JPA
     protected UserAccount() {
@@ -186,5 +191,13 @@ public class UserAccount {
 
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber != null && !phoneNumber.isBlank() ? phoneNumber.trim() : null;
+    }
+
+    public LocalDate getBirthDate() {
+        return birthDate;
+    }
+
+    public void setBirthDate(LocalDate birthDate) {
+        this.birthDate = birthDate;
     }
 }

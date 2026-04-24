@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.time.LocalDate;
 import java.util.concurrent.ConcurrentHashMap;
 @RestController
 @RequestMapping("/api/users")
@@ -73,9 +74,13 @@ public class UserController {
             System.out.println("Received registration request for email: " + request.getEmail());
             // Validate request
             if (request == null || request.getEmail() == null || request.getPassword() == null ||
-                request.getFirstName() == null || request.getLastName() == null) {
+                request.getFirstName() == null || request.getLastName() == null || request.getBirthDate() == null) {
                 return ResponseEntity.badRequest()
                     .body(createErrorResponse("חסרים שדות חובה"));
+            }
+            if (request.getBirthDate().isAfter(LocalDate.now())) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("תאריך הלידה לא יכול להיות בעתיד"));
             }
 
             String role = normalizeRegistrationRole(request.getUserRole());
@@ -89,6 +94,7 @@ public class UserController {
                 request.getFirstName(),
                 request.getLastName(),
                 phoneDigits,
+                request.getBirthDate(),
                 role
             );
 
@@ -137,7 +143,8 @@ public class UserController {
                 profile.userRole(),
                 profile.firstName(),
                 profile.lastName(),
-                profile.phoneNumber()
+                profile.phoneNumber(),
+                profile.birthDate()
             ));
         } catch (IllegalArgumentException e) {
             HttpStatus status = isUserNotFoundMessage(e.getMessage()) ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
@@ -179,7 +186,8 @@ public class UserController {
                 profile.userRole(),
                 profile.firstName(),
                 profile.lastName(),
-                profile.phoneNumber()
+                profile.phoneNumber(),
+                profile.birthDate()
             ));
         } catch (IllegalArgumentException e) {
             HttpStatus status = isUserNotFoundMessage(e.getMessage()) ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
@@ -187,6 +195,44 @@ public class UserController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(createErrorResponse("נכשל עדכון הפרופיל: " + e.getMessage()));
+        }
+    }
+
+    @PutMapping("/{userId}/profile/birth-date")
+    public ResponseEntity<?> updateUserBirthDate(
+            @PathVariable String userId,
+            @RequestBody BirthDateUpdateRequest request) {
+        UUID parsedId;
+        try {
+            parsedId = UUID.fromString(userId);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse("מזהה משתמש בפורמט לא תקין"));
+        }
+
+        if (request == null || request.getBirthDate() == null) {
+            return ResponseEntity.badRequest().body(createErrorResponse("תאריך לידה הוא שדה חובה"));
+        }
+        if (request.getBirthDate().isAfter(LocalDate.now())) {
+            return ResponseEntity.badRequest().body(createErrorResponse("תאריך לידה לא יכול להיות בעתיד"));
+        }
+
+        try {
+            UserService.UserProfileData profile = userService.updateUserBirthDate(parsedId, request.getBirthDate());
+            return ResponseEntity.ok(new UserProfileResponse(
+                profile.userId().toString(),
+                profile.email(),
+                profile.userRole(),
+                profile.firstName(),
+                profile.lastName(),
+                profile.phoneNumber(),
+                profile.birthDate()
+            ));
+        } catch (IllegalArgumentException e) {
+            HttpStatus status = isUserNotFoundMessage(e.getMessage()) ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            return ResponseEntity.status(status).body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("נכשל עדכון תאריך הלידה: " + e.getMessage()));
         }
     }
 
@@ -1015,6 +1061,7 @@ public class UserController {
         private String firstName;
         private String lastName;
         private String phoneNumber;
+        private LocalDate birthDate;
         /** "owner" (default) or "walker" */
         private String userRole;
         private boolean isLoggedIn;
@@ -1062,6 +1109,14 @@ public class UserController {
 
         public void setPhoneNumber(String phoneNumber) {
             this.phoneNumber = phoneNumber;
+        }
+
+        public LocalDate getBirthDate() {
+            return birthDate;
+        }
+
+        public void setBirthDate(LocalDate birthDate) {
+            this.birthDate = birthDate;
         }
 
         public String getUserRole() {
@@ -1112,6 +1167,22 @@ public class UserController {
 
         public void setPhoneNumber(String phoneNumber) {
             this.phoneNumber = phoneNumber;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class BirthDateUpdateRequest {
+        private LocalDate birthDate;
+
+        public BirthDateUpdateRequest() {
+        }
+
+        public LocalDate getBirthDate() {
+            return birthDate;
+        }
+
+        public void setBirthDate(LocalDate birthDate) {
+            this.birthDate = birthDate;
         }
     }
 
@@ -1224,7 +1295,8 @@ public class UserController {
         String userRole,
         String firstName,
         String lastName,
-        String phoneNumber
+        String phoneNumber,
+        LocalDate birthDate
     ) {}
 
     // Inner class for ping request DTO

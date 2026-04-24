@@ -13,7 +13,9 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  Modal,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
 import { isValidIsraeliMobileInput } from '../utils/phoneValidation';
@@ -34,10 +36,30 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [birthDate, setBirthDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  const formatDate = (date: Date): string => {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+      if (event.type !== 'dismissed' && selectedDate) {
+        setBirthDate(selectedDate);
+      }
+    } else if (selectedDate) {
+      setBirthDate(selectedDate);
+    }
+  };
 
   const handleSignUp = async () => {
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !password || !confirmPassword) {
@@ -97,6 +119,7 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
         password,
         firstName,
         lastName,
+        birthDate: `${birthDate.getFullYear()}-${(birthDate.getMonth() + 1).toString().padStart(2, '0')}-${birthDate.getDate().toString().padStart(2, '0')}`,
         phoneNumber: phoneTrimmed || undefined,
         userRole: role,
       });
@@ -148,8 +171,8 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
         style={styles.backButton}
         onPress={() => navigation.navigate('Start')}
       >
-        <Text style={styles.backIcon}>←</Text>
-      </TouchableOpacity>
+        <Text style={styles.backIcon}>→</Text>
+        </TouchableOpacity>
 
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
@@ -231,6 +254,62 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
                       בעל כלב
                     </Text>
                   </TouchableOpacity>
+                </View>
+
+                {/* Birth Date */}
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    תאריך לידה <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.input, styles.inputInField]}
+                    onPress={() => setShowDatePicker(true)}
+                    activeOpacity={0.7}
+                    disabled={isLoading}
+                  >
+                    <View style={styles.datePickerContent}>
+                      <Text style={styles.dateText}>{formatDate(birthDate)}</Text>
+                      <Ionicons name="calendar-outline" size={20} color="#8B7355" />
+                    </View>
+                  </TouchableOpacity>
+
+                  {Platform.OS === 'ios' && (
+                    <Modal
+                      visible={showDatePicker}
+                      transparent
+                      animationType="slide"
+                      onRequestClose={() => setShowDatePicker(false)}
+                    >
+                      <View style={styles.modalContainer}>
+                        <View style={styles.modalContent}>
+                          <View style={styles.modalHeader}>
+                            <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                              <Text style={styles.modalDoneText}>סיום</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <DateTimePicker
+                            value={birthDate}
+                            mode="date"
+                            display="spinner"
+                            onChange={onDateChange}
+                            maximumDate={new Date()}
+                            textColor="#5C4033"
+                            style={styles.datePicker}
+                          />
+                        </View>
+                      </View>
+                    </Modal>
+                  )}
+
+                  {Platform.OS === 'android' && showDatePicker && (
+                    <DateTimePicker
+                      value={birthDate}
+                      mode="date"
+                      display="default"
+                      onChange={onDateChange}
+                      maximumDate={new Date()}
+                    />
+                  )}
                 </View>
 
                 {/* Phone Number */}
@@ -608,5 +687,47 @@ const styles = StyleSheet.create({
     color: '#8B7355',
     textAlign: 'right',
     alignSelf: 'stretch',
+  },
+  datePickerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  dateText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'right',
+    flex: 1,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: '#faf0e6',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    alignItems: 'center',
+  },
+  modalHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0D5C7',
+  },
+  modalDoneText: {
+    color: PRIMARY_COLOR,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  datePicker: {
+    width: '100%',
+    height: 200,
   },
 });

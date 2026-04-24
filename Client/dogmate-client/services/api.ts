@@ -63,6 +63,7 @@ export interface RegisterUserPayload {
   password: string;
   firstName: string;
   lastName: string;
+  birthDate: string; // YYYY-MM-DD
   /** Israeli mobile; required for walkers, optional for owners (validated on server) */
   phoneNumber?: string;
   profileImageUrl?: string;
@@ -133,12 +134,18 @@ export interface UserProfileResponse {
   firstName: string;
   lastName: string;
   phoneNumber: string;
+  birthDate?: string;
 }
 
 export interface UpdateUserProfilePayload {
   firstName: string;
   lastName: string;
   phoneNumber: string;
+  birthDate?: string;
+}
+
+export interface UpdateBirthDatePayload {
+  birthDate: string;
 }
 
 export interface ChangePasswordPayload {
@@ -439,6 +446,19 @@ export const userAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'נכשל עדכון הפרופיל';
+      throw new Error(errorMessage);
+    }
+  },
+
+  updateBirthDate: async (
+    userId: string,
+    payload: UpdateBirthDatePayload
+  ): Promise<UserProfileResponse> => {
+    try {
+      const response = await apiClient.put(`/users/${userId}/profile/birth-date`, payload);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל עדכון תאריך הלידה';
       throw new Error(errorMessage);
     }
   },

@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.time.LocalDate;
 
 @Service
 public class DogWalkerService {
@@ -69,7 +70,8 @@ public class DogWalkerService {
         String passwordHash,
         String firstName,
         String lastName,
-        String phoneNumber
+        String phoneNumber,
+        LocalDate birthDate
     ) {
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new IllegalArgumentException("כתובת המייל כבר קיימת במערכת: " + email);
@@ -78,6 +80,7 @@ public class DogWalkerService {
         if (phoneNumber != null && !phoneNumber.isBlank()) {
             newUser.setPhoneNumber(phoneNumber);
         }
+        newUser.setBirthDate(birthDate);
         return dogWalkerRepository.save(newUser);
     }
 
