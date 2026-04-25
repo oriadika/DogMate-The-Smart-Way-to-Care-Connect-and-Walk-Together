@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Dog</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        input, select { display: block; margin: 10px 0; padding: 8px; }
+        button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+        #success { color: green; margin-top: 10px; }
+        #error { color: red; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Add Dog</h1>
+    <input type="text" data-testid="dog-name-input" placeholder="Dog Name">
+    <input type="text" data-testid="dog-breed-input" placeholder="Dog Breed">
+    <input type="date" data-testid="dog-birthdate-input" placeholder="Birth Date">
+    <select data-testid="dog-gender-select">
+        <option value="">Select Gender</option>
+        <option value="M">Male</option>
+        <option value="F">Female</option>
+    </select>
+    <button data-testid="save-dog-button">Save</button>
+    <div data-testid="success-message" id="success"></div>
+    <div data-testid="error-message" id="error"></div>
+
+    <script>
+        document.querySelector('[data-testid="save-dog-button"]').addEventListener('click', async function() {
+            const name = document.querySelector('[data-testid="dog-name-input"]').value;
+            const breed = document.querySelector('[data-testid="dog-breed-input"]').value;
+            const birthdate = document.querySelector('[data-testid="dog-birthdate-input"]').value;
+            const gender = document.querySelector('[data-testid="dog-gender-select"]').value;
+            const successDiv = document.querySelector('[data-testid="success-message"]');
+            const errorDiv = document.querySelector('[data-testid="error-message"]');
+
+            // Clear previous messages
+            successDiv.textContent = '';
+            errorDiv.textContent = '';
+
+            // Get user info from localStorage
+            const userData = JSON.parse(localStorage.getItem('user'));
+            if (!userData || !userData.userId) {
+                errorDiv.textContent = 'User not logged in';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/dogs/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        userId: userData.userId,
+                        name: name,
+                        breed: breed,
+                        birthdate: birthdate,
+                        gender: gender
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    successDiv.textContent = data.message || 'Dog added successfully';
+                } else {
+                    errorDiv.textContent = data.message || 'Failed to add dog';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Network error: ' + error.message;
+            }
+        });
+    </script>
+</body>
+</html>

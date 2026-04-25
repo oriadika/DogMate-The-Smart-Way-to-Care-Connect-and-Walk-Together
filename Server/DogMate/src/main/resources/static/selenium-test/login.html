@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DogMate Login</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        input { display: block; margin: 10px 0; padding: 8px; }
+        button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+        #error { color: red; margin-top: 10px; }
+        #success { color: green; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>DogMate Login</h1>
+    <input type="email" data-testid="email-input" placeholder="Email">
+    <input type="password" data-testid="password-input" placeholder="Password">
+    <button data-testid="login-button">Login</button>
+    <div data-testid="login-error" id="error"></div>
+    <div data-testid="login-success" id="success"></div>
+
+    <script>
+        document.querySelector('[data-testid="login-button"]').addEventListener('click', async function() {
+            const email = document.querySelector('[data-testid="email-input"]').value;
+            const password = document.querySelector('[data-testid="password-input"]').value;
+            const errorDiv = document.querySelector('[data-testid="login-error"]');
+            const successDiv = document.querySelector('[data-testid="login-success"]');
+
+            // Clear previous messages
+            errorDiv.textContent = '';
+            successDiv.textContent = '';
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    successDiv.textContent = 'Login successful! User: ' + data.firstName + ' ' + data.lastName + ' (' + data.userRole + ')';
+                    // Store user info in localStorage for other pages
+                    localStorage.setItem('user', JSON.stringify(data));
+                    // Redirect to home after a short delay
+                    setTimeout(() => {
+                        window.location.href = 'home.html';
+                    }, 1000);
+                } else {
+                    errorDiv.textContent = data.message || 'Login failed';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Network error: ' + error.message;
+            }
+        });
+    </script>
+</body>
+</html>
