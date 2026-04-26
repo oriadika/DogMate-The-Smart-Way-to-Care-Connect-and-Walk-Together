@@ -93,12 +93,7 @@ public class PendingRegistrationService {
                 LocalDateTime.now()
             ));
         pendingRegistrationRepository.save(pending);
-        boolean sent = emailVerificationService.sendOtpEmail(norm, otp);
-        if (!sent) {
-            // Prevent stale pending rows from blocking retries when SMTP fails.
-            pendingRegistrationRepository.deleteByEmail(norm);
-            throw new IllegalStateException("שליחת מייל עם קוד האימות נכשלה. נסה שוב בעוד רגע.");
-        }
+        emailVerificationService.sendOtpEmailAsync(norm, otp);
         return true;
     }
 
@@ -182,11 +177,7 @@ public class PendingRegistrationService {
         pending.setOtpCode(otp);
         pending.setCreatedAt(LocalDateTime.now());
         pendingRegistrationRepository.save(pending);
-        boolean sent = emailVerificationService.sendOtpEmail(norm, otp);
-        if (!sent) {
-            pendingRegistrationRepository.deleteById(pending.getId());
-            throw new IllegalStateException("שליחת קוד אימות מחדש נכשלה. נא להירשם מחדש.");
-        }
+        emailVerificationService.sendOtpEmailAsync(norm, otp);
     }
 
     private String normalizeEmail(String email) {
