@@ -11,6 +11,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { userAPI } from '../../services/api';
+import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
@@ -48,10 +49,7 @@ const HealthScreen = ({ navigation }: any) => {
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Home', params: { userId } }],
-              });
+              navigation.navigate(OWNER_MAIN_TAB.Dashboard);
             }}
           >
             <Ionicons name="arrow-forward" size={28} color="#5C4033" />

@@ -65,7 +65,6 @@ const buildDataSignature = (dogsData: any[], remindersData: any[]): string => {
 };
 
 const HomeScreen = ({ navigation, route }: any) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'health' | 'walks' | 'profile'>('home');
   const [userName, setUserName] = useState<string>(route?.params?.userFirstName || '');
   const [userLastName, setUserLastName] = useState<string>(route?.params?.userLastName || '');
   const [userId, setUserId] = useState<string | null>(route?.params?.userId || null);
@@ -96,8 +95,6 @@ const HomeScreen = ({ navigation, route }: any) => {
   // Load data when screen is focused (including when returning from AddDog screen)
   useFocusEffect(
     React.useCallback(() => {
-      setActiveTab('home');
-
       if (!currentUserId) return;
 
       if (route?.params?.refresh === true) {
@@ -258,19 +255,39 @@ const HomeScreen = ({ navigation, route }: any) => {
     }
   };
 
+  /** חודש בלי הספרה 1; חודשיים לגיל שניים; N חודשים אחרת */
+  const hebrewMonthsPart = (months: number): string => {
+    if (months <= 0) return '';
+    if (months === 1) return 'חודש';
+    if (months === 2) return 'חודשיים';
+    return `${months} חודשים`;
+  };
+
+  /** שנה בלי "1"; N שנים אחרת */
+  const hebrewYearsPart = (years: number): string => {
+    if (years <= 0) return '';
+    if (years === 1) return 'שנה';
+    return `${years} שנים`;
+  };
+
   // Calculate age from birth date
   const calculateAge = (birthdate: string): string => {
+    if (!birthdate || !String(birthdate).trim()) return '';
     const today = new Date();
     const birth = new Date(birthdate);
-    
+    if (Number.isNaN(birth.getTime())) return 'תאריך לא תקין';
+
+    const daysDiff = Math.floor((today.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysDiff < 0) return 'תאריך לא תקין';
+
     let years = today.getFullYear() - birth.getFullYear();
     let months = today.getMonth() - birth.getMonth();
-    
+
     if (months < 0) {
       years--;
       months += 12;
     }
-    
+
     if (today.getDate() < birth.getDate()) {
       months--;
       if (months < 0) {
@@ -278,26 +295,36 @@ const HomeScreen = ({ navigation, route }: any) => {
         months += 11;
       }
     }
-    
-    // Check if it's a very young puppy (less than 1 month)
-    const daysDiff = Math.floor((today.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysDiff < 30) {
+
+    /** גור חדש — פחות מחודש לוחזי (~30 יום) */
+    if (years === 0 && months === 0 && daysDiff < 30) {
       return 'גור חדש';
     }
-    
+
     if (years === 0 && months === 0) {
-      return 'חודש אחד';
+      return 'חודש';
     }
-    
+
     if (years === 0) {
-      return `${months} חודשים`;
+      return hebrewMonthsPart(months);
     }
-    
+
     if (months === 0) {
-      return `${years} ${years === 1 ? 'שנה' : 'שנים'}`;
+      return hebrewYearsPart(years);
     }
-    
-    return `${years} ${years === 1 ? 'שנה' : 'שנים'} ו-${months} חודשים`;
+
+    return `${hebrewYearsPart(years)} ו-${hebrewMonthsPart(months)}`;
+  };
+
+  /** משקל לתצוגה בכרטיס (למשל 5.8 ק״ג); null אם לא צוין */
+  const formatDogWeightLabel = (dog: any): string | null => {
+    const raw = dog?.weightKg ?? dog?.weight;
+    if (raw == null || raw === '') return null;
+    const n = typeof raw === 'number' ? raw : Number(String(raw).replace(',', '.'));
+    if (!Number.isFinite(n) || n < 0) return null;
+    const rounded = Math.round(n * 10) / 10;
+    const text = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    return `${text} ק״ג`;
   };
 
   // Get dog names from dog IDs
@@ -339,19 +366,6 @@ const HomeScreen = ({ navigation, route }: any) => {
       return;
     }
     navigation.navigate('EditDog', { userId: currentUserId, dog });
-  };
-
-  const handleViewDogDetails = (dogId: string, dogName: string) => {
-    Alert.alert(
-      'פרטי כלב',
-      `פונקציונליות הצגת פרטי ${dogName} עדיין לא מומשה.`,
-      [
-        {
-          text: 'בסדר',
-          style: 'default',
-        },
-      ]
-    );
   };
 
   const handleDeleteDog = (dogId: string, dogName: string) => {
@@ -434,69 +448,71 @@ const HomeScreen = ({ navigation, route }: any) => {
     );
   };
 
-  const renderDogCard = ({ item: dog }: { item: any }) => (
-    <View style={styles.dogCard}>
-      <View style={styles.dogCardHeader}>
-        <View style={styles.dogImageContainer}>
-          {dog.profileImageUrl ? (
-            <Image 
-              source={{ uri: dog.profileImageUrl }}
-              style={styles.dogImage}
-            />
-          ) : (
-            <View style={styles.dogImagePlaceholder}>
-              <FontAwesome5 name="dog" size={50} color="#8B7355" />
+  const renderDogCard = ({ item: dog }: { item: any }) => {
+    const weightLabel = formatDogWeightLabel(dog);
+    return (
+      <View style={styles.dogCard}>
+        <View style={styles.dogCardHeader}>
+          <View style={styles.dogImageContainer}>
+            {dog.profileImageUrl ? (
+              <Image 
+                source={{ uri: dog.profileImageUrl }}
+                style={styles.dogImage}
+              />
+            ) : (
+              <View style={styles.dogImagePlaceholder}>
+                <FontAwesome5 name="dog" size={50} color="#8B7355" />
+              </View>
+            )}
+            <View style={[
+              styles.genderBadge,
+              { backgroundColor: dog.gender === 'M' ? '#4A90E2' : '#FF69B4' }
+            ]}>
+              <MaterialCommunityIcons 
+                name={dog.gender === 'M' ? 'gender-male' : 'gender-female'}
+                size={16}
+                color="#fff"
+              />
             </View>
-          )}
-          <View style={[
-            styles.genderBadge,
-            { backgroundColor: dog.gender === 'M' ? '#4A90E2' : '#FF69B4' }
-          ]}>
-            <MaterialCommunityIcons 
-              name={dog.gender === 'M' ? 'gender-male' : 'gender-female'}
-              size={16}
-              color="#fff"
-            />
+          </View>
+
+          <View style={styles.dogInfoContainer}>
+            <Text style={styles.dogName}>{dog.name}</Text>
+            <Text style={styles.dogBreed}>{dog.breed}</Text>
+            <View style={styles.dogMetaRow}>
+              <Ionicons name="calendar-outline" size={14} color="#8B7355" />
+              <Text style={styles.dogMeta}>
+                {calculateAge(dog.birthdate)}
+              </Text>
+            </View>
+            {weightLabel != null ? (
+              <View style={[styles.dogMetaRow, styles.dogWeightRow]}>
+                <MaterialCommunityIcons name="scale-bathroom" size={14} color="#8B7355" />
+                <Text style={styles.dogMeta}>{weightLabel}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
-        <View style={styles.dogInfoContainer}>
-          <Text style={styles.dogName}>{dog.name}</Text>
-          <Text style={styles.dogBreed}>{dog.breed}</Text>
-          <View style={styles.dogMetaRow}>
-            <Ionicons name="calendar-outline" size={14} color="#8B7355" />
-            <Text style={styles.dogMeta}>
-              {calculateAge(dog.birthdate)}
-            </Text>
-          </View>
+        <View style={styles.dogActions}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => handleDeleteDog(dog.id, dog.name)}
+          >
+            <MaterialCommunityIcons name="trash-can-outline" size={15} color="#E74C3C" />
+            <Text style={[styles.actionButtonText, { color: '#E74C3C' }]}>מחיקה</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleEditDog(dog)}
+          >
+            <MaterialCommunityIcons name="pencil" size={15} color="#7FB069" />
+            <Text style={styles.actionButtonText}>עריכה</Text>
+          </TouchableOpacity>
         </View>
       </View>
-
-      <View style={styles.dogActions}>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleDeleteDog(dog.id, dog.name)}
-        >
-          <MaterialCommunityIcons name="trash-can-outline" size={18} color="#E74C3C" />
-          <Text style={[styles.actionButtonText, { color: '#E74C3C' }]}>מחיקה</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleEditDog(dog)}
-        >
-          <MaterialCommunityIcons name="pencil" size={18} color="#7FB069" />
-          <Text style={styles.actionButtonText}>עריכה</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => handleViewDogDetails(dog.id, dog.name)}
-        >
-          <MaterialCommunityIcons name="information-outline" size={18} color="#7FB069" />
-          <Text style={styles.actionButtonText}>פרטים</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -704,114 +720,6 @@ const HomeScreen = ({ navigation, route }: any) => {
           </SafeAreaView>
         </Modal>
 
-        {/* Bottom Navigation Bar */}
-        <View style={styles.bottomNav}>
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => {
-              Alert.alert(
-                'מצב חירום',
-                `האם הכלב שלך זקוק לעזרה דחופה?`,
-                [
-                  { text: 'ביטול', style: 'cancel' },
-                  {
-                    text: 'עזרה',
-                    style: 'destructive',
-                    onPress: async () => {
-                      navigation.navigate('Emergency');
-                    },
-                  },
-                ],
-                { cancelable: true }
-              );
-            }}
-          >
-            <MaterialCommunityIcons name="alarm-light" size={24} color="#E53935" />
-            <Text style={styles.navLabel}>
-             עזרה
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.navItem, activeTab === 'profile' && styles.navItemActive]}
-            onPress={() => {
-              setActiveTab('profile');
-              navigation.navigate('OwnerWalkers', {
-                userId: currentUserId,
-                userFirstName: currentUserName,
-                userLastName: currentUserLastName,
-                userRole: route?.params?.userRole,
-                email: route?.params?.email,
-              });
-            }}
-          >
-            <FontAwesome5
-              name="dog"
-              size={24}
-              color={activeTab === 'profile' ? PRIMARY_COLOR : '#9CA3AF'}
-            />
-            <Text style={[styles.navLabel, activeTab === 'profile' && styles.navLabelActive]}>
-              דוגווקרים
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.navItem, activeTab === 'health' && styles.navItemActive]}
-            onPress={() => {
-              setActiveTab('health');
-              navigation.navigate('Health');
-            }}
-          >
-            <Ionicons
-              name={activeTab === 'health' ? 'heart' : 'heart-outline'}
-              size={24}
-              color={activeTab === 'health' ? PRIMARY_COLOR : '#9CA3AF'}
-            />
-            <Text style={[styles.navLabel, activeTab === 'health' && styles.navLabelActive]}>
-              בריאות
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.navItem, activeTab === 'walks' && styles.navItemActive]}
-            onPress={() => {
-              setActiveTab('walks');
-              navigation.navigate('Profile', {
-                userId: currentUserId,
-                userFirstName: currentUserName,
-                userLastName: currentUserLastName,
-                userRole: route?.params?.userRole,
-                email: route?.params?.email,
-              });
-            }}
-          >
-            <MaterialCommunityIcons
-              name={activeTab === 'walks' ? 'walk' : 'walk'}
-              size={24}
-              color={activeTab === 'walks' ? PRIMARY_COLOR : '#9CA3AF'}
-            />
-            <Text style={[styles.navLabel, activeTab === 'walks' && styles.navLabelActive]}>
-              טיולים
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.navItem, activeTab === 'home' && styles.navItemActive]}
-            onPress={() => {
-              setActiveTab('home');
-              navigation.navigate('Home');
-            }}
-          >
-            <Ionicons
-              name={activeTab === 'home' ? 'home' : 'home-outline'}
-              size={24}
-              color={activeTab === 'home' ? PRIMARY_COLOR : '#9CA3AF'}
-            />
-            <Text style={[styles.navLabel, activeTab === 'home' && styles.navLabelActive]}>
-              בית
-            </Text>
-          </TouchableOpacity>
-        </View>
       </View>
     </SafeAreaView>
   );
@@ -1127,33 +1035,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-  bottomNav: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'space-around',
-  },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  navItemActive: {
-    // Active state styling
-  },
-  navLabel: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  navLabelActive: {
-    color: PRIMARY_COLOR,
-    fontWeight: '600',
-  },
   // New styles for dogs display
   loadingContainer: {
     flex: 1,
@@ -1280,6 +1161,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  dogWeightRow: {
+    marginTop: 6,
+  },
   dogMeta: {
     fontSize: 12,
     color: '#8B7355',
@@ -1290,14 +1174,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     borderTopWidth: 1,
     borderTopColor: '#E0D5C7',
-    paddingTop: 12,
+    paddingTop: 10,
   },
   actionButton: {
     flexDirection: 'row-reverse', // RTL support - icon on right, text on left
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    gap: 4,
   },
   actionButtonText: {
     fontSize: 14,

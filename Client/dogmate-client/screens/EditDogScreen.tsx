@@ -19,6 +19,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { dogAPI } from '../services/api';
+import { OWNER_MAIN_TAB } from '../navigation/ownerTabRoutes';
 
 function parseDogBirthdateToDate(raw: unknown): Date {
   if (typeof raw !== 'string' || !raw.trim()) {
@@ -267,7 +268,10 @@ const EditDogScreen = ({ navigation, route }: any) => {
 
   const dismissSaveSuccessAndGoHome = () => {
     setShowSaveSuccessModal(false);
-    navigation.navigate('Home', { userId: userIdFromParams, refresh: true });
+    navigation.navigate('Home', {
+      screen: OWNER_MAIN_TAB.Dashboard,
+      params: { userId: userIdFromParams, refresh: true },
+    });
   };
 
   return (

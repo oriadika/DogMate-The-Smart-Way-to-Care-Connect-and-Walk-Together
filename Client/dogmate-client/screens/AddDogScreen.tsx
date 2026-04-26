@@ -19,6 +19,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { dogAPI } from '../services/api';
+import { OWNER_MAIN_TAB } from '../navigation/ownerTabRoutes';
 
 function parseWeightKgInput(raw: string): number | null {
   const t = raw.trim().replace(',', '.');
@@ -214,7 +215,10 @@ const AddDogScreen = ({ navigation, route }: any) => {
             text: 'בסדר',
             onPress: () => {
               // Navigate to Home screen to refresh the dogs list - pass userId back
-              navigation.navigate('Home', { userId: userIdFromParams, refresh: true });
+              navigation.navigate('Home', {
+                screen: OWNER_MAIN_TAB.Dashboard,
+                params: { userId: userIdFromParams, refresh: true },
+              });
             },
           },
         ]);

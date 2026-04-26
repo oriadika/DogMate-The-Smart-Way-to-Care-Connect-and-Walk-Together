@@ -22,6 +22,7 @@ import { userAPI } from '../services/api';
 import websocketService, { type PingNotification } from '../services/websocket';
 import locationService, { LocationService } from '../services/location';
 import { dogMateMapStyle } from '../src/constants/MapStyles';
+import { OWNER_MAIN_TAB } from '../navigation/ownerTabRoutes';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const USERS_REFRESH_INTERVAL_MS = 5000;
@@ -765,7 +766,17 @@ const ProfileScreen = ({ navigation, route }: any) => {
       <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFillObject} />
       <View style={[styles.headerTint, { paddingTop: insets.top }]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <TouchableOpacity
+            onPress={() => {
+              const parent = navigation.getParent();
+              if (parent && (parent as any).getState?.()?.type === 'tab') {
+                navigation.navigate(OWNER_MAIN_TAB.Dashboard);
+                return;
+              }
+              navigation.goBack();
+            }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
             <Ionicons name="arrow-forward" size={28} color="#5C4033" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>טיולים</Text>
