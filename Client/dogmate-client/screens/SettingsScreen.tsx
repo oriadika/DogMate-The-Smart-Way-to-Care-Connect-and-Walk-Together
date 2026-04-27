@@ -134,13 +134,25 @@ const SettingsScreen = ({ navigation, route }: any) => {
               <SettingItem 
                 label="ערוך פרופיל" 
                 icon="account-edit-outline" 
-                onPress={() => Alert.alert('ערוך פרופיל', 'פונקציונליות זו תתווסף בקרוב')} 
+                onPress={() =>
+                  navigation.navigate('EditProfile', {
+                    userId,
+                    email,
+                    userFirstName: route?.params?.userFirstName || '',
+                    userLastName: route?.params?.userLastName || '',
+                  })
+                }
               />
               <View style={styles.divider} />
               <SettingItem 
                 label="שינוי סיסמה" 
                 icon="lock-reset" 
-                onPress={() => Alert.alert('שינוי סיסמה', 'פונקציונליות זו תתווסף בקרוב')} 
+                onPress={() =>
+                  navigation.navigate('ChangePassword', {
+                    userId,
+                    email,
+                  })
+                }
               />
             </View>
           </View>
@@ -165,13 +177,18 @@ const SettingsScreen = ({ navigation, route }: any) => {
               <SettingItem 
                 label="תנאי שימוש ופרטיות" 
                 icon="file-document-outline" 
-                onPress={() => Alert.alert('תנאי שימוש ופרטיות', 'פונקציונליות זו תתווסף בקרוב')} 
+                onPress={() => navigation.navigate('TermsPrivacy')}
               />
               <View style={styles.divider} />
               <SettingItem 
                 label="צור קשר / תמיכה" 
                 icon="help-circle-outline" 
-                onPress={() => Alert.alert('צור קשר / תמיכה', 'פונקציונליות זו תתווסף בקרוב')} 
+                onPress={() =>
+                  navigation.navigate('Support', {
+                    userId,
+                    email,
+                  })
+                }
               />
             </View>
           </View>

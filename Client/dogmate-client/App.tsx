@@ -5,6 +5,7 @@ import { UsersProvider } from './contexts/UsersContext';
 
 import StartScreen from './screens/StartScreen';
 import SignUpScreen from './screens/SignUpScreen';
+import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import HomeScreen from './screens/HomeScreen';
 import WalkerHomeScreen from './screens/WalkerHomeScreen';
 import WalkerProfessionalProfileScreen from './screens/WalkerProfessionalProfileScreen';
@@ -17,6 +18,10 @@ import OwnerWalkersScreen from './screens/OwnerWalkersScreen';
 import DogProfileScreen from './screens/DogProfileScreen';
 import AddDogScreen from './screens/AddDogScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import EditProfileScreen from './screens/EditProfileScreen';
+import ChangePasswordScreen from './screens/ChangePasswordScreen';
+import TermsPrivacyScreen from './screens/TermsPrivacyScreen';
+import SupportScreen from './screens/SupportScreen';
 import FoodIntakeScreen from './screens/Health/FoodIntakeScreen';
 import AddReminderScreen from './screens/AddReminderScreen';
 import HealthScreen from './screens/Health/HealthScreen';
@@ -24,6 +29,7 @@ import FoodInventoryHubScreen from './screens/Health/FoodInventoryHubScreen';
 import { setupNotificationListeners, requestNotificationPermissions } from './services/notifications';
 import SOSScreen from './screens/SOSScreen';
 import AdminScreen from './screens/AdminScreen';
+import AdminSupportRequestsScreen from './screens/AdminSupportRequestsScreen';
 import ManageUsersScreen from './screens/ManageScreens/Users/ManageUsersScreen';
 import UserDetailsScreen from './screens/ManageScreens/Users/UserDetailsScreen';
 import ManageDogScreens from './screens/ManageScreens/Dogs/ManageDogScreens';
@@ -49,6 +55,7 @@ export default function App() {
           <Stack.Screen name="Start" component={StartScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="SignUp" component={SignUpScreen} />
+          <Stack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
           <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="WalkerHome" component={WalkerHomeScreen} />
@@ -60,12 +67,17 @@ export default function App() {
           <Stack.Screen name="DogProfile" component={DogProfileScreen} />
           <Stack.Screen name="AddDog" component={AddDogScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+          <Stack.Screen name="TermsPrivacy" component={TermsPrivacyScreen} />
+          <Stack.Screen name="Support" component={SupportScreen} />
           <Stack.Screen name="Health" component={HealthScreen} />
           <Stack.Screen name="FoodInventoryHub" component={FoodInventoryHubScreen} />
           <Stack.Screen name="FoodIntake" component={FoodIntakeScreen} />
           <Stack.Screen name="AddReminder" component={AddReminderScreen} />
           <Stack.Screen name="Emergency" component={SOSScreen} />
           <Stack.Screen name="Admin" component={AdminScreen} />
+          <Stack.Screen name="AdminSupportRequests" component={AdminSupportRequestsScreen} />
           <Stack.Screen name="AdminManageUsers" component={ManageUsersScreen} />
           <Stack.Screen name="UserDetails" component={UserDetailsScreen} />
           <Stack.Screen name="AdminManageDogs" component={ManageDogScreens} />

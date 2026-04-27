@@ -1,6 +1,7 @@
 package com.DogMate.Controller;
 
 import com.DogMate.Domain.UserAccount;
+import com.DogMate.Service.PendingRegistrationService;
 import com.DogMate.Service.UserService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,10 +17,12 @@ import java.util.Map;
 public class AuthController {
     
     private final UserService userService;
+    private final PendingRegistrationService pendingRegistrationService;
 
     @Autowired
-    public AuthController(UserService userService) {
+    public AuthController(UserService userService, PendingRegistrationService pendingRegistrationService) {
         this.userService = userService;
+        this.pendingRegistrationService = pendingRegistrationService;
     }
 
     /**
@@ -32,7 +35,7 @@ public class AuthController {
             // Validate request
             if (request == null || request.getEmail() == null || request.getPassword() == null) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Email and password are required"));
+                    .body(createErrorResponse("נדרשים אימייל וסיסמה"));
             }
 
             // Authenticate user
@@ -41,7 +44,7 @@ public class AuthController {
             // Create response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Login successful");
+            response.put("message", "התחברות הצליחה");
             response.put("userId", user.getId());
             response.put("email", user.getEmail());
             response.put("suspended", user.isSuspended());
@@ -69,8 +72,9 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to login: " + e.getMessage()));
+                .body(createErrorResponse("אירעה שגיאה בהתחברות. נסה שוב מאוחר יותר."));
         }
     }
 
@@ -85,12 +89,18 @@ public class AuthController {
             // Validate request
             if (request == null || (request.getUserId() == null && request.getEmail() == null)) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("User ID or email is required"));
+                    .body(createErrorResponse("נדרש מזהה משתמש או אימייל"));
             }
 
             // Logout by ID or email
             if (request.getUserId() != null && !request.getUserId().isEmpty()) {
-                java.util.UUID userId = java.util.UUID.fromString(request.getUserId());
+                java.util.UUID userId;
+                try {
+                    userId = java.util.UUID.fromString(request.getUserId());
+                } catch (IllegalArgumentException ex) {
+                    return ResponseEntity.badRequest()
+                        .body(createErrorResponse("מזהה משתמש לא תקין"));
+                }
                 userService.logout(userId);
             } else if (request.getEmail() != null && !request.getEmail().isEmpty()) {
                 userService.logoutByEmail(request.getEmail());
@@ -99,16 +109,87 @@ public class AuthController {
             // Create response
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Logout successful");
+            response.put("message", "התנתקות הצליחה");
             
             return ResponseEntity.ok(response);
 
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(createErrorResponse("User not found: " + e.getMessage()));
+                .body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to logout: " + e.getMessage()));
+                .body(createErrorResponse("אירעה שגיאה בהתנתקות. נסה שוב מאוחר יותר."));
+        }
+    }
+
+    /**
+     * Finishes signup after OTP: creates the user account (email already verified).
+     */
+    @PostMapping("/verify-registration")
+    public ResponseEntity<?> verifyRegistration(@RequestBody VerifyEmailRequest request) {
+        try {
+            if (request == null || request.getEmail() == null || request.getCode() == null) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("נדרשים אימייל וקוד אימות"));
+            }
+            UserAccount user = pendingRegistrationService.completeRegistration(
+                request.getEmail(),
+                request.getCode()
+            );
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "החשבון נוצר בהצלחה");
+            response.put("userId", user.getId().toString());
+            response.put("email", user.getEmail());
+            if (user instanceof com.DogMate.Domain.RegularUser ru) {
+                response.put("userRole", "owner");
+                response.put("firstName", ru.getFirst_name());
+                response.put("lastName", ru.getLast_name());
+                response.put("phoneNumber", ru.getPhoneNumber() != null ? ru.getPhoneNumber() : "");
+            } else if (user instanceof com.DogMate.Domain.DogWalkerUser w) {
+                response.put("userRole", "walker");
+                response.put("firstName", w.getFirst_name());
+                response.put("lastName", w.getLast_name());
+                response.put("phoneNumber", w.getPhoneNumber() != null ? w.getPhoneNumber() : "");
+            }
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("אירעה שגיאה באימות ההרשמה. נסה שוב מאוחר יותר."));
+        }
+    }
+
+    /**
+     * Resend OTP only for an in-progress signup ({@link PendingRegistrationService}).
+     * Already-registered users do not receive verification codes here — they sign in instead.
+     */
+    @PostMapping("/resend-verification")
+    public ResponseEntity<?> resendVerification(@RequestBody ResendVerificationRequest request) {
+        try {
+            if (request == null || request.getEmail() == null) {
+                return ResponseEntity.badRequest().body(createErrorResponse("נדרש מייל"));
+            }
+            pendingRegistrationService.resendOtp(request.getEmail());
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "קוד אימות נשלח בהצלחה");
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("אירעה שגיאה בשליחת קוד האימות. נסה שוב מאוחר יותר."));
         }
     }
 
@@ -164,6 +245,47 @@ public class AuthController {
 
         public void setUserId(String userId) {
             this.userId = userId;
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class VerifyEmailRequest {
+        private String email;
+        private String code;
+
+        public VerifyEmailRequest() {
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+
+        public String getCode() {
+            return code;
+        }
+
+        public void setCode(String code) {
+            this.code = code;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ResendVerificationRequest {
+        private String email;
+
+        public ResendVerificationRequest() {
         }
 
         public String getEmail() {

@@ -32,7 +32,7 @@ public class ReminderService {
     public Reminder createReminder(UUID userId, LinkedList<UUID> dogIds, String title,
                                    LocalDateTime remindAt, String description) {
         if (userRepo.findById(userId).isEmpty()){
-            throw new IllegalArgumentException("User with id " + userId + " not found");
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
         }
 
         RegularUser user = (RegularUser) userRepo.findById(userId).get();
@@ -41,23 +41,23 @@ public class ReminderService {
 
         for (UUID dogId : dogIds){
             if (!dogIdsRepo.contains(dogId)){
-                throw new IllegalArgumentException("One or more dog ids are not found");
+                throw new IllegalArgumentException("אחד או יותר מהכלבים לא נמצאו במערכת");
             }
             else{
                 if (!user.getDogRelationships().stream()
                         .map(DogRelationship::getDogID)
                         .toList().contains(dogId)){
-                    throw new IllegalArgumentException("One or more dogs are not associated with the user");
+                    throw new IllegalArgumentException("אחד או יותר מהכלבים אינם משויכים למשתמש");
                 }
             }
         }
 
         if (title == null || title.trim().isEmpty()) {
-            throw new IllegalArgumentException("Title cannot be empty");
+            throw new IllegalArgumentException("חובה להזין כותרת");
         }
 
         if (remindAt == null || remindAt.isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("remindAt must be in the future");
+            throw new IllegalArgumentException("מועד התזכורת חייב להיות בעתיד");
         }
 
 //        if (description  == null || description.trim().isEmpty()) {
@@ -86,10 +86,10 @@ public class ReminderService {
     @Cacheable(cacheNames = "remindersByUser", key = "#userId")
     public List<Reminder> getRemindersForUser(UUID userId) {
         var userAcc = userRepo.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User with id " + userId + " not found"));
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId));
 
         if (!(userAcc instanceof RegularUser)) {
-            throw new IllegalArgumentException("User must be a RegularUser");
+            throw new IllegalArgumentException("רק משתמשים מסוג בעל כלב יכולים לצפות בתזכורות");
         }
 
         RegularUser regularUser = (RegularUser) userAcc;

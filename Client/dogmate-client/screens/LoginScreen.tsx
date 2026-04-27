@@ -12,11 +12,13 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
 
 const LoginScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
@@ -58,7 +60,8 @@ const LoginScreen = ({ navigation }: any) => {
           });
     }
     } catch (error: any) {
-      Alert.alert('התחברות נכשלה', error.message || 'אירעה שגיאה בעת ההתחברות');
+      const errorMessage = error?.message || 'אירעה שגיאה בעת ההתחברות';
+      Alert.alert('התחברות נכשלה', errorMessage);
       console.error('Login error:', error);
     } finally {
       setIsLoading(false);
@@ -87,27 +90,45 @@ const LoginScreen = ({ navigation }: any) => {
             </View>
 
             {/* Email */}
-            <TextInput
-              style={styles.input}
-              placeholder="אימייל"
-              placeholderTextColor="#A9B5C7"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-              textAlign="right"
-            />
+            <View style={styles.fieldBlock}>
+              <Text style={styles.fieldLabel}>אימייל</Text>
+              <TextInput
+                style={[styles.input, styles.inputInField]}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+                textAlign="right"
+              />
+            </View>
 
             {/* Password */}
-            <TextInput
-              style={styles.input}
-              placeholder="סיסמה"
-              placeholderTextColor="#A9B5C7"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-              textAlign="right"
-            />
+            <View style={styles.fieldBlock}>
+              <Text style={styles.fieldLabel}>סיסמה</Text>
+              <View style={styles.passwordInputRow}>
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword((prev) => !prev)}
+                  activeOpacity={0.8}
+                  accessibilityLabel={showPassword ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color="#8B7355"
+                  />
+                </TouchableOpacity>
+                <TextInput
+                  style={styles.passwordInputInner}
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textAlign="right"
+                />
+              </View>
+            </View>
 
             {/* Forgot password link */}
             <TouchableOpacity
@@ -191,6 +212,16 @@ const styles = StyleSheet.create({
     color: '#000000',
     textAlign: 'right',
   },
+  fieldBlock: {
+    marginBottom: 14,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5C4033',
+    textAlign: 'right',
+    marginBottom: 6,
+  },
   input: {
     backgroundColor: '#faf0e6', // Light beige
     borderRadius: 12,
@@ -203,8 +234,32 @@ const styles = StyleSheet.create({
     borderColor: '#e0d5c7', // Subtle border
     minHeight: 50,
   },
+  inputInField: {
+    marginBottom: 0,
+  },
+  passwordInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0d5c7',
+    borderRadius: 12,
+    backgroundColor: '#faf0e6',
+    paddingHorizontal: 10,
+    minHeight: 50,
+  },
+  eyeButton: {
+    padding: 6,
+  },
+  passwordInputInner: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    fontSize: 16,
+    color: '#000000',
+  },
   forgotPasswordLink: {
-    marginTop: 8,
+    marginTop: 2,
+    marginBottom: 4,
     alignSelf: 'flex-end',
   },
   forgotPasswordText: {
@@ -214,7 +269,7 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
   primaryButton: {
-    marginTop: 30,
+    marginTop: 24,
     backgroundColor: PRIMARY_COLOR,
     borderRadius: 25,
     paddingVertical: 18,

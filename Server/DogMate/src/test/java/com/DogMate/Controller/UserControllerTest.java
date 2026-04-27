@@ -1,8 +1,7 @@
 package com.DogMate.Controller;
 
-import com.DogMate.Domain.DogWalkerUser;
-import com.DogMate.Domain.RegularUser;
 import com.DogMate.Service.DogWalkerService;
+import com.DogMate.Service.PendingRegistrationService;
 import com.DogMate.Service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +37,9 @@ class UserControllerTest {
     private DogWalkerService dogWalkerService;
 
     @MockBean
+    private PendingRegistrationService pendingRegistrationService;
+
+    @MockBean
     private SimpMessagingTemplate messagingTemplate;
 
     @Autowired
@@ -63,13 +65,9 @@ class UserControllerTest {
 
     @Test
     void GivenValidUserData_WhenRegisterUser_ThenReturnCreated() throws Exception {
-        // Arrange
-        RegularUser mockUser = new RegularUser(
-            testUserId, testEmail, "hashedPassword", testFirstName, testLastName
-        );
-        when(userService.registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone)
-        )).thenReturn(mockUser);
+        when(pendingRegistrationService.startRegistration(
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone), eq("owner"))
+        ).thenReturn(true);
 
         UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
         request.setEmail(testEmail);
@@ -78,34 +76,28 @@ class UserControllerTest {
         request.setLastName(testLastName);
         request.setPhoneNumber(testValidPhone);
 
-        // Act & Assert
         mockMvc.perform(post("/api/users/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
+                .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("User registered successfully"))
-                .andExpect(jsonPath("$.userId").value(testUserId.toString()))
+                .andExpect(jsonPath("$.pendingVerification").value(true))
                 .andExpect(jsonPath("$.email").value(testEmail))
                 .andExpect(jsonPath("$.userRole").value("owner"));
 
-        verify(userService, times(1)).registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone)
-        );
+        verify(pendingRegistrationService, times(1)).startRegistration(
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone), eq("owner"));
+        verify(userService, never()).registerUser(
+            anyString(), anyString(), anyString(), anyString(), any());
         verify(dogWalkerService, never()).registerDogWalker(
             anyString(), anyString(), anyString(), anyString(), any());
     }
 
     @Test
     void GivenValidUserDataWithProfileImageUrl_WhenRegisterUser_ThenReturnCreated() throws Exception {
-        // Arrange
-        String profileImageUrl = "https://example.com/image.jpg";
-        RegularUser mockUser = new RegularUser(
-            testUserId, testEmail, "hashedPassword", testFirstName, testLastName
-        );
-        when(userService.registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone)
-        )).thenReturn(mockUser);
+        when(pendingRegistrationService.startRegistration(
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone), eq("owner"))
+        ).thenReturn(true);
 
         UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
         request.setEmail(testEmail);
@@ -114,32 +106,24 @@ class UserControllerTest {
         request.setLastName(testLastName);
         request.setPhoneNumber(testValidPhone);
 
-        // Act & Assert
         mockMvc.perform(post("/api/users/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
+                .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("User registered successfully"))
-                .andExpect(jsonPath("$.userId").value(testUserId.toString()))
-                .andExpect(jsonPath("$.email").value(testEmail))
-                .andExpect(jsonPath("$.userRole").value("owner"));
+                .andExpect(jsonPath("$.pendingVerification").value(true));
 
-        verify(userService, times(1)).registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone)
-        );
+        verify(pendingRegistrationService, times(1)).startRegistration(
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone), eq("owner"));
         verify(dogWalkerService, never()).registerDogWalker(
             anyString(), anyString(), anyString(), anyString(), any());
     }
 
     @Test
     void GivenUserRoleWalker_WhenRegisterUser_ThenCallsDogWalkerServiceAndReturnsWalkerRole() throws Exception {
-        DogWalkerUser mockWalker = new DogWalkerUser(
-            testUserId, testEmail, "hashedPassword", testFirstName, testLastName
-        );
-        when(dogWalkerService.registerDogWalker(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone)
-        )).thenReturn(mockWalker);
+        when(pendingRegistrationService.startRegistration(
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone), eq("walker"))
+        ).thenReturn(true);
 
         UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
         request.setEmail(testEmail);
@@ -152,16 +136,16 @@ class UserControllerTest {
         mockMvc.perform(post("/api/users/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
+                .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.userId").value(testUserId.toString()))
-                .andExpect(jsonPath("$.email").value(testEmail))
-                .andExpect(jsonPath("$.userRole").value("walker"));
+                .andExpect(jsonPath("$.userRole").value("walker"))
+                .andExpect(jsonPath("$.pendingVerification").value(true));
 
-        verify(dogWalkerService, times(1)).registerDogWalker(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone)
-        );
+        verify(pendingRegistrationService, times(1)).startRegistration(
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone), eq("walker"));
         verify(userService, never()).registerUser(
+            anyString(), anyString(), anyString(), anyString(), any());
+        verify(dogWalkerService, never()).registerDogWalker(
             anyString(), anyString(), anyString(), anyString(), any());
     }
 
@@ -181,9 +165,8 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error").value("Missing required fields"));
 
-        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString(), any());
-        verify(dogWalkerService, never()).registerDogWalker(
-            anyString(), anyString(), anyString(), anyString(), any());
+        verify(pendingRegistrationService, never()).startRegistration(
+            anyString(), anyString(), anyString(), anyString(), any(), anyString());
     }
 
     @Test
@@ -202,9 +185,8 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error").value("Missing required fields"));
 
-        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString(), any());
-        verify(dogWalkerService, never()).registerDogWalker(
-            anyString(), anyString(), anyString(), anyString(), any());
+        verify(pendingRegistrationService, never()).startRegistration(
+            anyString(), anyString(), anyString(), anyString(), any(), anyString());
     }
 
     @Test
@@ -223,9 +205,8 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error").value("Missing required fields"));
 
-        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString(), any());
-        verify(dogWalkerService, never()).registerDogWalker(
-            anyString(), anyString(), anyString(), anyString(), any());
+        verify(pendingRegistrationService, never()).startRegistration(
+            anyString(), anyString(), anyString(), anyString(), any(), anyString());
     }
 
     @Test
@@ -244,17 +225,15 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error").value("Missing required fields"));
 
-        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString(), any());
-        verify(dogWalkerService, never()).registerDogWalker(
-            anyString(), anyString(), anyString(), anyString(), any());
+        verify(pendingRegistrationService, never()).startRegistration(
+            anyString(), anyString(), anyString(), anyString(), any(), anyString());
     }
 
     @Test
     void GivenEmailAlreadyExists_WhenRegisterUser_ThenReturnBadRequest() throws Exception {
-        // Arrange
-        when(userService.registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone)
-        )).thenThrow(new IllegalArgumentException("Email already exists: " + testEmail));
+        doThrow(new IllegalArgumentException("Email already exists: " + testEmail))
+            .when(pendingRegistrationService).startRegistration(
+                eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone), eq("owner"));
 
         UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
         request.setEmail(testEmail);
@@ -263,7 +242,6 @@ class UserControllerTest {
         request.setLastName(testLastName);
         request.setPhoneNumber(testValidPhone);
 
-        // Act & Assert
         mockMvc.perform(post("/api/users/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -271,19 +249,17 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error").value("Email already exists: " + testEmail));
 
-        verify(userService, times(1)).registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone)
-        );
+        verify(pendingRegistrationService, times(1)).startRegistration(
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone), eq("owner"));
         verify(dogWalkerService, never()).registerDogWalker(
             anyString(), anyString(), anyString(), anyString(), any());
     }
 
     @Test
     void GivenInvalidEmail_WhenRegisterUser_ThenReturnBadRequest() throws Exception {
-        // Arrange
-        when(userService.registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone)
-        )).thenThrow(new IllegalArgumentException("Email cannot be null or empty"));
+        doThrow(new IllegalArgumentException("Email cannot be null or empty"))
+            .when(pendingRegistrationService).startRegistration(
+                eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone), eq("owner"));
 
         UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
         request.setEmail(testEmail);
@@ -292,7 +268,6 @@ class UserControllerTest {
         request.setLastName(testLastName);
         request.setPhoneNumber(testValidPhone);
 
-        // Act & Assert
         mockMvc.perform(post("/api/users/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -300,19 +275,17 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error").value("Email cannot be null or empty"));
 
-        verify(userService, times(1)).registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone)
-        );
+        verify(pendingRegistrationService, times(1)).startRegistration(
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone), eq("owner"));
         verify(dogWalkerService, never()).registerDogWalker(
             anyString(), anyString(), anyString(), anyString(), any());
     }
 
     @Test
     void GivenDatabaseConnectionFailure_WhenRegisterUser_ThenReturnInternalServerError() throws Exception {
-        // Arrange
-        when(userService.registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone)
-        )).thenThrow(new RuntimeException("Database connection failed"));
+        doThrow(new RuntimeException("Database connection failed"))
+            .when(pendingRegistrationService).startRegistration(
+                eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone), eq("owner"));
 
         UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
         request.setEmail(testEmail);
@@ -321,7 +294,6 @@ class UserControllerTest {
         request.setLastName(testLastName);
         request.setPhoneNumber(testValidPhone);
 
-        // Act & Assert
         mockMvc.perform(post("/api/users/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
@@ -329,20 +301,20 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error", containsString("Failed to register user")));
 
-        verify(userService, times(1)).registerUser(
-            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone)
-        );
+        verify(pendingRegistrationService, times(1)).startRegistration(
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), eq(testValidPhone), eq("owner"));
         verify(dogWalkerService, never()).registerDogWalker(
             anyString(), anyString(), anyString(), anyString(), any());
     }
 
     @Test
-    void GivenMissingPhone_WhenRegisterUser_ThenReturnBadRequest() throws Exception {
+    void GivenWalkerMissingPhone_WhenRegisterUser_ThenReturnBadRequest() throws Exception {
         UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
         request.setEmail(testEmail);
         request.setPassword(testPassword);
         request.setFirstName(testFirstName);
         request.setLastName(testLastName);
+        request.setUserRole("walker");
 
         mockMvc.perform(post("/api/users/register")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -351,7 +323,31 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error").value("Phone number is required"));
 
-        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString(), any());
+        verify(pendingRegistrationService, never()).startRegistration(
+            anyString(), anyString(), anyString(), anyString(), any(), anyString());
+    }
+
+    @Test
+    void GivenOwnerMissingPhone_WhenRegisterUser_ThenReturnCreated() throws Exception {
+        when(pendingRegistrationService.startRegistration(
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), isNull(), eq("owner"))
+        ).thenReturn(true);
+
+        UserController.RegisterUserRequest request = new UserController.RegisterUserRequest();
+        request.setEmail(testEmail);
+        request.setPassword(testPassword);
+        request.setFirstName(testFirstName);
+        request.setLastName(testLastName);
+
+        mockMvc.perform(post("/api/users/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.userRole").value("owner"));
+
+        verify(pendingRegistrationService, times(1)).startRegistration(
+            eq(testEmail), eq(testPassword), eq(testFirstName), eq(testLastName), isNull(), eq("owner"));
         verify(dogWalkerService, never()).registerDogWalker(
             anyString(), anyString(), anyString(), anyString(), any());
     }
@@ -372,9 +368,8 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error").value("Invalid Israeli mobile phone number"));
 
-        verify(userService, never()).registerUser(anyString(), anyString(), anyString(), anyString(), any());
-        verify(dogWalkerService, never()).registerDogWalker(
-            anyString(), anyString(), anyString(), anyString(), any());
+        verify(pendingRegistrationService, never()).startRegistration(
+            anyString(), anyString(), anyString(), anyString(), any(), anyString());
     }
 
     @Test

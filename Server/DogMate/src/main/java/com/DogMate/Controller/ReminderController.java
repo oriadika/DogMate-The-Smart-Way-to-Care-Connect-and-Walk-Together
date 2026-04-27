@@ -41,7 +41,7 @@ public class ReminderController {
                     .body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(500)
-                    .body(createErrorResponse("Failed to create reminder: " + e.getMessage()));
+                    .body(createErrorResponse("נכשלה יצירת התזכורת: " + e.getMessage()));
         }
     }
 
