@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DogMate Admin Login</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        input { display: block; margin: 10px 0; padding: 8px; }
+        button { padding: 10px 20px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+        #error { color: red; margin-top: 10px; }
+        #success { color: green; margin-top: 10px; }
+        #login-section { display: block; }
+        #users-section { display: none; }
+        table { border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #4CAF50; color: white; }
+    </style>
+</head>
+<body>
+    <h1>DogMate Admin Portal</h1>
+    
+    <!-- Login Section -->
+    <div id="login-section">
+        <h2>Admin Login</h2>
+        <input type="email" data-testid="admin-email-input" placeholder="Email">
+        <input type="password" data-testid="admin-password-input" placeholder="Password">
+        <button data-testid="admin-login-button">Login</button>
+        <div data-testid="admin-login-error" id="error"></div>
+        <div data-testid="admin-login-success" id="success"></div>
+    </div>
+
+    <!-- Users List Section -->
+    <div id="users-section">
+        <h2>Users List</h2>
+        <button data-testid="logout-button">Logout</button>
+        <table data-testid="users-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Email</th>
+                    <th>First Name</th>
+                    <th>Last Name</th>
+                    <th>Role</th>
+                </tr>
+            </thead>
+            <tbody id="users-tbody">
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        document.querySelector('[data-testid="admin-login-button"]').addEventListener('click', async function() {
+            const email = document.querySelector('[data-testid="admin-email-input"]').value;
+            const password = document.querySelector('[data-testid="admin-password-input"]').value;
+            const errorDiv = document.querySelector('[data-testid="admin-login-error"]');
+            const successDiv = document.querySelector('[data-testid="admin-login-success"]');
+
+            // Clear previous messages
+            errorDiv.textContent = '';
+            successDiv.textContent = '';
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    successDiv.textContent = 'Login successful! Welcome Admin: ' + data.firstName + ' ' + data.lastName;
+                    localStorage.setItem('user', JSON.stringify(data));
+                    
+                    // Hide login section and show users section
+                    document.getElementById('login-section').style.display = 'none';
+                    document.getElementById('users-section').style.display = 'block';
+                    
+                    // Load users list
+                    loadUsersList();
+                } else {
+                    errorDiv.textContent = 'Invalid credentials';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Network error: ' + error.message;
+            }
+        });
+
+        document.querySelector('[data-testid="logout-button"]').addEventListener('click', async function() {
+            try {
+                const user = JSON.parse(localStorage.getItem('user'));
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: user.email
+                    })
+                });
+                localStorage.removeItem('user');
+                location.reload();
+            } catch (error) {
+                console.error('Logout error:', error);
+                location.reload();
+            }
+        });
+
+        async function loadUsersList() {
+            try {
+                const response = await fetch('/api/users', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const users = data.users || [];
+                    const tbody = document.getElementById('users-tbody');
+                    tbody.innerHTML = '';
+
+                    users.filter(user => user.type !== 'AdminUser').forEach(user => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${user.id}</td>
+                            <td>${user.email}</td>
+                            <td>${user.firstName}</td>
+                            <td>${user.lastName}</td>
+                            <td>${user.type}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                } else {
+                    console.error('Failed to load users');
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+    </script>
+</body>
+</html>

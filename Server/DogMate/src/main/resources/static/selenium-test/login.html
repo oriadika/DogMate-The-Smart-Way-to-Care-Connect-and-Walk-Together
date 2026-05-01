@@ -54,7 +54,7 @@
                         window.location.href = 'home.html';
                     }, 1000);
                 } else {
-                    errorDiv.textContent = data.message || 'Login failed';
+                    errorDiv.textContent = 'Invalid credentials';
                 }
             } catch (error) {
                 errorDiv.textContent = 'Network error: ' + error.message;

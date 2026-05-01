@@ -77,4 +77,50 @@ public class LoginSeleniumTest extends BaseSeleniumTest {
         ));
         assertTrue(errorAppeared);
     }
+
+    @Test
+    public void testEmptyUser() {
+        driver.get(baseUrl + "/login.html");
+
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+
+        WebElement emailInput = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("[data-testid='email-input']")));
+        emailInput.sendKeys("");
+
+        WebElement passwordInput = driver.findElement(By.cssSelector("[data-testid='password-input']"));
+        passwordInput.sendKeys("123456");
+
+        WebElement loginButton = driver.findElement(By.cssSelector("[data-testid='login-button']"));
+        loginButton.click();
+
+        // Wait for the server error message to appear
+        boolean errorAppeared = wait.until(ExpectedConditions.textToBePresentInElementLocated(
+            By.cssSelector("[data-testid='login-error']"),
+            "Invalid credentials"
+        ));
+        assertTrue(errorAppeared);
+    }
+
+    @Test
+    public void testEmptyPassword() {
+        driver.get(baseUrl + "/login.html");
+
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+
+        WebElement emailInput = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("[data-testid='email-input']")));
+        emailInput.sendKeys("g@g.com");
+
+        WebElement passwordInput = driver.findElement(By.cssSelector("[data-testid='password-input']"));
+        passwordInput.sendKeys("");
+
+        WebElement loginButton = driver.findElement(By.cssSelector("[data-testid='login-button']"));
+        loginButton.click();
+
+        // Wait for the server error message to appear
+        boolean errorAppeared = wait.until(ExpectedConditions.textToBePresentInElementLocated(
+            By.cssSelector("[data-testid='login-error']"),
+            "Invalid credentials"
+        ));
+        assertTrue(errorAppeared);
+    }
 }
