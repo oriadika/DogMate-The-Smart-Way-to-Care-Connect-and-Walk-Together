@@ -11,6 +11,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.util.StringUtils;
 
 import java.security.SecureRandom;
@@ -73,6 +74,14 @@ public class EmailVerificationService {
     }
 
     /**
+     * Fire-and-forget OTP dispatch used by signup flows so the HTTP request does not block on SMTP.
+     */
+    @Async
+    public void sendOtpEmailAsync(String email, String code) {
+        sendVerificationMail(email, code);
+    }
+
+    /**
      * Persists the OTP in its own committed transaction before attempting SMTP.
      * Otherwise a failed {@code mailSender.send()} rolls back the whole transaction and no code is stored,
      * while the user row may already be committed — verification then always fails with "code not found".
@@ -83,7 +92,6 @@ public class EmailVerificationService {
         if (user.isEmailVerified()) {
             throw new IllegalArgumentException("המייל כבר אומת");
         }
-
         String canonicalEmail = user.getEmail();
         String code = transactionTemplate.execute(status -> {
             verificationCodeRepository.deleteByEmail(canonicalEmail);
@@ -99,7 +107,7 @@ public class EmailVerificationService {
             verificationCodeRepository.save(verificationCode);
             return generated;
         });
-        sendVerificationMail(canonicalEmail, code);
+        sendOtpEmailAsync(canonicalEmail, code);
     }
 
     @Transactional
