@@ -1,4 +1,4 @@
-// screens/AddDogScreen.tsx
+// screens/EditDogScreen.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -21,6 +21,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { dogAPI } from '../services/api';
 import { OWNER_MAIN_TAB } from '../navigation/ownerTabRoutes';
 
+function parseDogBirthdateToDate(raw: unknown): Date {
+  if (typeof raw !== 'string' || !raw.trim()) {
+    return new Date();
+  }
+  const d = new Date(raw.trim());
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
 function parseWeightKgInput(raw: string): number | null {
   const t = raw.trim().replace(',', '.');
   if (!t) return null;
@@ -28,11 +36,24 @@ function parseWeightKgInput(raw: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-const AddDogScreen = ({ navigation, route }: any) => {
-  // Get userId from route params (passed from HomeScreen)
+const EditDogScreen = ({ navigation, route }: any) => {
   const userIdFromParams = route?.params?.userId;
+  const dogFromParams = route?.params?.dog as
+    | {
+        id: string;
+        name?: string;
+        breed?: string;
+        birthdate?: string;
+        gender?: string;
+        profileImageUrl?: string;
+        weightKg?: number | null;
+        weight?: number | null;
+      }
+    | undefined;
+
   const [userId, setUserId] = useState<string | null>(userIdFromParams || null);
-  const [loadingUser, setLoadingUser] = useState(!userIdFromParams);
+  const [dogId, setDogId] = useState<string | null>(dogFromParams?.id || null);
+  const [loadingUser, setLoadingUser] = useState(true);
   const [name, setName] = useState('');
   const [breed, setBreed] = useState('');
   const [birthDate, setBirthDate] = useState(new Date());
@@ -40,7 +61,11 @@ const AddDogScreen = ({ navigation, route }: any) => {
   const [weight, setWeight] = useState('');
   const [gender, setGender] = useState<'M' | 'F' | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showSaveSuccessModal, setShowSaveSuccessModal] = useState(false);
+  /** תמונה חדשה (base64) אחרי בחירה מהגלריה */
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  /** תמונה קיימת מהשרת (URL או base64) */
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
   const [permissionGranted, setPermissionGranted] = useState(true);
 
   const requestPhotoPermission = async () => {
@@ -48,19 +73,33 @@ const AddDogScreen = ({ navigation, route }: any) => {
     setPermissionGranted(status === 'granted');
   };
 
-  // Fetch current user on screen mount (only if userId not provided in params)
   useEffect(() => {
-    if (!userIdFromParams) {
-      // If no userId provided, show error and go back
-      Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
+    if (!userIdFromParams || !dogFromParams?.id) {
+      Alert.alert('שגיאה', 'לא נמצאו פרטי כלב לעריכה');
       navigation.goBack();
-    } else {
-      setUserId(userIdFromParams);
-      setLoadingUser(false);
+      return;
     }
+    setUserId(userIdFromParams);
+    setDogId(dogFromParams.id);
+    setName(typeof dogFromParams.name === 'string' ? dogFromParams.name : '');
+    setBreed(typeof dogFromParams.breed === 'string' ? dogFromParams.breed : '');
+    setBirthDate(parseDogBirthdateToDate(dogFromParams.birthdate));
+    const g = String(dogFromParams.gender || '').toUpperCase();
+    setGender(g === 'F' ? 'F' : g === 'M' ? 'M' : null);
+    if (typeof dogFromParams.profileImageUrl === 'string' && dogFromParams.profileImageUrl.trim()) {
+      setExistingImageUrl(dogFromParams.profileImageUrl.trim());
+    }
+    const rawW = dogFromParams.weightKg ?? dogFromParams.weight;
+    if (rawW != null) {
+      const n = typeof rawW === 'number' ? rawW : parseFloat(String(rawW).replace(',', '.'));
+      if (Number.isFinite(n)) {
+        setWeight(String(n));
+      }
+    }
+    setLoadingUser(false);
     requestPhotoPermission();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userIdFromParams]);
+  }, [userIdFromParams, dogFromParams?.id]);
 
   // Format date to DD/MM/YYYY
   const formatDate = (date: Date): string => {
@@ -157,7 +196,6 @@ const AddDogScreen = ({ navigation, route }: any) => {
           }
           
           setSelectedImage(base64);
-          Alert.alert('הצלחה', 'התמונה נבחרה בהצלחה');
         };
         reader.readAsDataURL(blob);
       }
@@ -186,8 +224,8 @@ const AddDogScreen = ({ navigation, route }: any) => {
 
     try {
       // Use the userId that was fetched on mount
-      if (!userId) {
-        Alert.alert('שגיאה', 'לא נמצא משתמש. אנא התחבר מחדש');
+      if (!userId || !dogId) {
+        Alert.alert('שגיאה', 'לא נמצא משתמש או כלב. אנא התחבר מחדש');
         setLoading(false);
         return;
       }
@@ -198,34 +236,21 @@ const AddDogScreen = ({ navigation, route }: any) => {
       const day = birthDate.getDate().toString().padStart(2, '0');
       const birthdate = `${year}-${month}-${day}`;
 
-      // Call API to add dog
-      const response = await dogAPI.addDog({
-        userId,
+      const response = await dogAPI.updateDog(userId, dogId, {
         name: name.trim(),
         breed: breed.trim(),
         birthdate,
         gender,
-        profileImageUrl: selectedImage || undefined, // Include base64 image if selected
+        profileImageUrl: selectedImage || undefined,
         weightKg: parseWeightKgInput(weight),
       });
 
       if (response.success) {
-        Alert.alert('הצלחה', `${name} נוסף בהצלחה! 🐕`, [
-          {
-            text: 'בסדר',
-            onPress: () => {
-              // Navigate to Home screen to refresh the dogs list - pass userId back
-              navigation.navigate('Home', {
-                screen: OWNER_MAIN_TAB.Dashboard,
-                params: { userId: userIdFromParams, refresh: true },
-              });
-            },
-          },
-        ]);
+        setShowSaveSuccessModal(true);
       }
     } catch (error: any) {
-      console.error('Error adding dog:', error);
-      Alert.alert('שגיאה', error.message || 'שגיאה בהוספת הכלב');
+      console.error('Error updating dog:', error);
+      Alert.alert('שגיאה', error.message || 'שגיאה בעדכון פרטי הכלב');
     } finally {
       setLoading(false);
     }
@@ -241,15 +266,46 @@ const AddDogScreen = ({ navigation, route }: any) => {
     );
   }
 
+  const dismissSaveSuccessAndGoHome = () => {
+    setShowSaveSuccessModal(false);
+    navigation.navigate('Home', {
+      screen: OWNER_MAIN_TAB.Dashboard,
+      params: { userId: userIdFromParams, refresh: true },
+    });
+  };
+
   return (
     <View style={styles.container}>
+      <Modal
+        visible={showSaveSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={dismissSaveSuccessAndGoHome}
+      >
+        <View style={styles.successModalOverlay}>
+          <View style={styles.successModalCard}>
+            <Text style={styles.successModalTitle}>הצלחה</Text>
+            <Text style={styles.successModalMessage}>פרטי הכלב עודכנו</Text>
+            <View style={styles.successModalActions}>
+              <TouchableOpacity
+                style={styles.successModalButton}
+                onPress={dismissSaveSuccessAndGoHome}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.successModalButtonText}>בסדר</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <SafeAreaView style={styles.safeArea}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeButton}>
             <Ionicons name="close" size={28} color="#5C4033" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>הוספת חבר חדש</Text>
+          <Text style={styles.headerTitle}>עריכת פרטי כלב</Text>
           <View style={{ width: 28 }} />
         </View>
 
@@ -265,9 +321,9 @@ const AddDogScreen = ({ navigation, route }: any) => {
               onPress={pickImage}
             >
               <View style={styles.imageCircle}>
-                {selectedImage ? (
+                {selectedImage || existingImageUrl ? (
                   <Image
-                    source={{ uri: selectedImage }}
+                    source={{ uri: selectedImage || existingImageUrl || '' }}
                     style={styles.selectedImage}
                   />
                 ) : (
@@ -278,7 +334,7 @@ const AddDogScreen = ({ navigation, route }: any) => {
                 )}
               </View>
               <Text style={styles.imageLabel}>
-                {selectedImage ? 'בחר תמונה אחרת' : 'הוסף תמונה'}
+                {selectedImage || existingImageUrl ? 'בחר תמונה אחרת' : 'הוסף תמונה'}
               </Text>
             </TouchableOpacity>
 
@@ -418,7 +474,7 @@ const AddDogScreen = ({ navigation, route }: any) => {
               {loading ? (
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.saveButtonText}>שמור וצא לדרך!</Text>
+                <Text style={styles.saveButtonText}>שמור שינויים</Text>
               )}
             </TouchableOpacity>
 
@@ -429,7 +485,7 @@ const AddDogScreen = ({ navigation, route }: any) => {
   );
 };
 
-export default AddDogScreen;
+export default EditDogScreen;
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const MALE_COLOR = '#4A90E2';
@@ -621,5 +677,55 @@ const styles = StyleSheet.create({
   datePicker: {
     width: '100%',
     height: 200,
+  },
+  successModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    paddingHorizontal: 28,
+  },
+  successModalCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#faf0e6',
+    borderRadius: 16,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#E0D5C7',
+  },
+  successModalTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#5C4033',
+    marginBottom: 10,
+    textAlign: 'center',
+    width: '100%',
+  },
+  successModalMessage: {
+    fontSize: 16,
+    color: '#5C4033',
+    lineHeight: 24,
+    marginBottom: 20,
+    textAlign: 'center',
+    width: '100%',
+  },
+  successModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  successModalButton: {
+    backgroundColor: PRIMARY_COLOR,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+  },
+  successModalButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 });

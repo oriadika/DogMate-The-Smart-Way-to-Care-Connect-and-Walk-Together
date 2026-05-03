@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Optional;
@@ -60,6 +61,22 @@ public class PendingRegistrationService {
         String phoneNumber,
         String userRole
     ) {
+        return startRegistration(email, password, firstName, lastName, phoneNumber, null, userRole);
+    }
+
+    /**
+     * Stores signup data and sends OTP, including optional birth date.
+     */
+    @Transactional
+    public boolean startRegistration(
+        String email,
+        String password,
+        String firstName,
+        String lastName,
+        String phoneNumber,
+        LocalDate birthDate,
+        String userRole
+    ) {
         String norm = normalizeEmail(email);
         DisposableEmailDomainBlacklist.assertEmailDomainAllowed(norm);
         if (userRepository.existsByEmailIgnoreCase(norm)) {
@@ -76,6 +93,7 @@ public class PendingRegistrationService {
                 existing.setFirstName(trimmedFirstName);
                 existing.setLastName(trimmedLastName);
                 existing.setPhoneNumber(normalizedPhone);
+                existing.setBirthDate(birthDate);
                 existing.setUserRole(userRole);
                 existing.setOtpCode(otp);
                 existing.setCreatedAt(LocalDateTime.now());
@@ -88,6 +106,7 @@ public class PendingRegistrationService {
                 trimmedFirstName,
                 trimmedLastName,
                 normalizedPhone,
+                birthDate,
                 userRole,
                 otp,
                 LocalDateTime.now()
@@ -135,7 +154,8 @@ public class PendingRegistrationService {
                 pending.getPasswordHash(),
                 pending.getFirstName(),
                 pending.getLastName(),
-                pending.getPhoneNumber()
+                pending.getPhoneNumber(),
+                pending.getBirthDate()
             );
         } else {
             user = userService.registerRegularUserFromPending(
@@ -143,7 +163,8 @@ public class PendingRegistrationService {
                 pending.getPasswordHash(),
                 pending.getFirstName(),
                 pending.getLastName(),
-                pending.getPhoneNumber()
+                pending.getPhoneNumber(),
+                pending.getBirthDate()
             );
         }
         user.setEmailVerified(true);

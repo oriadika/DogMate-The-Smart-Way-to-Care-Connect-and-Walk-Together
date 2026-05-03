@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   SafeAreaView,
   ScrollView,
@@ -13,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { userAPI } from '../services/api';
 
 function normalizePhoneToDigits(raw: string): string {
@@ -24,6 +26,27 @@ function isValidIsraeliMobile(raw: string): boolean {
   return /^05\d{8}$/.test(digits) || /^5\d{8}$/.test(digits);
 }
 
+function formatDateDDMMYYYY(date: Date | null): string {
+  if (!date) return '';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function formatDateYYYYMMDD(date: Date): string {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${year}-${month}-${day}`;
+}
+
+function parseBirthDate(raw: unknown): Date | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export default function EditProfileScreen({ navigation, route }: any) {
   const userId = String(route?.params?.userId || '').trim();
 
@@ -33,6 +56,11 @@ export default function EditProfileScreen({ navigation, route }: any) {
   const [initialFirstName, setInitialFirstName] = useState('');
   const [initialLastName, setInitialLastName] = useState('');
   const [initialPhoneNumber, setInitialPhoneNumber] = useState('');
+  const [birthDate, setBirthDate] = useState<Date | null>(null);
+  const [initialBirthDate, setInitialBirthDate] = useState<Date | null>(null);
+  const [editingBirthDate, setEditingBirthDate] = useState(false);
+  const [savingBirthDate, setSavingBirthDate] = useState(false);
+  const [showBirthDatePicker, setShowBirthDatePicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingNames, setSavingNames] = useState(false);
   const [savingPhone, setSavingPhone] = useState(false);
@@ -52,9 +80,12 @@ export default function EditProfileScreen({ navigation, route }: any) {
       setFirstName(profile.firstName ?? '');
       setLastName(profile.lastName ?? '');
       setPhoneNumber(profile.phoneNumber ?? '');
+      const parsedBirthDate = parseBirthDate(profile.birthDate);
+      setBirthDate(parsedBirthDate);
       setInitialFirstName(profile.firstName ?? '');
       setInitialLastName(profile.lastName ?? '');
       setInitialPhoneNumber(profile.phoneNumber ?? '');
+      setInitialBirthDate(parsedBirthDate);
     } catch (error: any) {
       Alert.alert('שגיאה', error?.message || 'טעינת הפרופיל נכשלה');
     } finally {
@@ -132,6 +163,49 @@ export default function EditProfileScreen({ navigation, route }: any) {
       Alert.alert('שגיאה', error?.message || 'שמירת הטלפון נכשלה');
     } finally {
       setSavingPhone(false);
+    }
+  };
+
+  const onBirthDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowBirthDatePicker(false);
+    }
+    if (event.type === 'dismissed' || !selectedDate) {
+      return;
+    }
+    setBirthDate(selectedDate);
+  };
+
+  const handleSaveBirthDate = async () => {
+    if (!userId) {
+      Alert.alert('שגיאה', 'חסר מזהה משתמש');
+      return;
+    }
+    if (!birthDate) {
+      Alert.alert('שגיאה', 'יש לבחור תאריך לידה');
+      return;
+    }
+    const today = new Date();
+    if (birthDate.getTime() > today.getTime()) {
+      Alert.alert('שגיאה', 'תאריך לידה לא יכול להיות בעתיד');
+      return;
+    }
+
+    try {
+      setSavingBirthDate(true);
+      const updated = await userAPI.updateBirthDate(userId, {
+        birthDate: formatDateYYYYMMDD(birthDate),
+      });
+      const persistedBirthDate = parseBirthDate(updated.birthDate) || birthDate;
+      setBirthDate(persistedBirthDate);
+      setInitialBirthDate(persistedBirthDate);
+      setEditingBirthDate(false);
+      setShowBirthDatePicker(false);
+      Alert.alert('נשמר', 'תאריך הלידה עודכן בהצלחה');
+    } catch (error: any) {
+      Alert.alert('שגיאה', error?.message || 'שמירת תאריך הלידה נכשלה');
+    } finally {
+      setSavingBirthDate(false);
     }
   };
 
@@ -276,6 +350,96 @@ export default function EditProfileScreen({ navigation, route }: any) {
               </TouchableOpacity>
             )}
           </View>
+
+          <View style={styles.card}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>תאריך לידה</Text>
+              {!editingBirthDate ? (
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => {
+                    setEditingNames(false);
+                    setEditingPhone(false);
+                    setEditingBirthDate(true);
+                  }}
+                >
+                  <Text style={styles.secondaryButtonText}>עריכה</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => {
+                    setBirthDate(initialBirthDate);
+                    setShowBirthDatePicker(false);
+                    setEditingBirthDate(false);
+                  }}
+                >
+                  <Text style={styles.secondaryButtonText}>ביטול</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <Text style={styles.label}>תאריך לידה</Text>
+            <TouchableOpacity
+              style={[styles.input, !editingBirthDate && styles.inputDisabled]}
+              onPress={() => {
+                if (editingBirthDate) setShowBirthDatePicker(true);
+              }}
+              activeOpacity={editingBirthDate ? 0.85 : 1}
+              disabled={!editingBirthDate}
+            >
+              <Text style={[styles.dateText, !editingBirthDate && styles.dateTextDisabled]}>
+                {birthDate ? formatDateDDMMYYYY(birthDate) : 'לא הוגדר'}
+              </Text>
+            </TouchableOpacity>
+
+            {editingBirthDate && showBirthDatePicker && (
+              Platform.OS === 'ios' ? (
+                <Modal transparent animationType="fade" onRequestClose={() => setShowBirthDatePicker(false)}>
+                  <View style={styles.datePickerOverlay}>
+                    <View style={styles.datePickerCard}>
+                      <DateTimePicker
+                        value={birthDate || new Date(2000, 0, 1)}
+                        mode="date"
+                        display="spinner"
+                        onChange={onBirthDateChange}
+                        maximumDate={new Date()}
+                      />
+                      <TouchableOpacity
+                        style={styles.secondaryButton}
+                        onPress={() => setShowBirthDatePicker(false)}
+                      >
+                        <Text style={styles.secondaryButtonText}>סגירה</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </Modal>
+              ) : (
+                <DateTimePicker
+                  value={birthDate || new Date(2000, 0, 1)}
+                  mode="date"
+                  display="default"
+                  onChange={onBirthDateChange}
+                  maximumDate={new Date()}
+                />
+              )
+            )}
+
+            {editingBirthDate && (
+              <TouchableOpacity
+                style={[styles.saveButton, (savingBirthDate || !birthDate) && styles.saveButtonDisabled]}
+                onPress={handleSaveBirthDate}
+                disabled={savingBirthDate || !birthDate}
+                activeOpacity={0.85}
+              >
+                {savingBirthDate ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.saveButtonText}>שמור תאריך לידה</Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -373,6 +537,32 @@ const styles = StyleSheet.create({
   inputDisabled: {
     backgroundColor: '#F4EEE6',
     color: '#8B7355',
+  },
+  dateText: {
+    fontSize: 16,
+    color: '#5C4033',
+    textAlign: 'right',
+  },
+  dateTextDisabled: {
+    color: '#8B7355',
+  },
+  datePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  datePickerCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E0D5C7',
+    alignItems: 'center',
+    gap: 10,
   },
   helperText: {
     textAlign: 'right',

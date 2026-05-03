@@ -13,11 +13,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -56,7 +58,7 @@ public class DogService {
     @Transactional
     @CacheEvict(cacheNames = "dogsByUser", key = "#userId")
     public Dog addDogToUser(UUID userId, String name, String breed, LocalDate birthdate,
-                            char gender, String profileImageURL, RelationshipType relationshipType) {
+                            char gender, String profileImageURL, Double weightKg, RelationshipType relationshipType) {
         
         // Find the user (orchestration)
         Optional<UserAccount> userOptional = userRepository.findById(userId);
@@ -78,7 +80,7 @@ public class DogService {
         }
         // Create new dog (domain logic)
         UUID dogId = UUID.randomUUID();
-        Dog newDog = new Dog(dogId, name, breed, birthdate, gender, profileImageURL);
+        Dog newDog = new Dog(dogId, name, breed, birthdate, gender, profileImageURL, weightKg);
         
         // Save dog to repository (orchestration)
         Dog savedDog = dogRepository.save(newDog);
@@ -99,6 +101,62 @@ public class DogService {
         userRepository.save(user);
         
         return savedDog;
+    }
+
+    /**
+     * Update dog fields for a user who has a relationship with the dog.
+     */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "dogsByUser", key = "#userId"),
+            @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    })
+    public Dog updateDogForUser(
+            UUID userId,
+            UUID dogId,
+            String name,
+            String breed,
+            LocalDate birthdate,
+            char gender,
+            String profileImageUrlOrNull,
+            Double weightKgOrNull
+    ) {
+        Optional<UserAccount> userOptional = userRepository.findById(userId);
+        if (userOptional.isEmpty()) {
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
+        }
+        UserAccount userAccount = userOptional.get();
+        if (!(userAccount instanceof RegularUser)) {
+            throw new IllegalArgumentException("רק משתמשים מסוג בעל כלב יכולים לבצע פעולה זו");
+        }
+        RegularUser user = (RegularUser) userAccount;
+
+        Dog dog = dogRepository.findById(dogId)
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא כלב עם המזהה: " + dogId));
+
+        boolean linked = dog.getDogRelationships().stream()
+                .anyMatch(rel -> rel.getRegularUser() != null && rel.getRegularUser().getId().equals(user.getId()));
+        if (!linked) {
+            throw new IllegalArgumentException("הכלב לא משויך למשתמש זה");
+        }
+
+        if (!(gender == 'M' || gender == 'F')) {
+            throw new IllegalArgumentException("מין הכלב חייב להיות M או F");
+        }
+        if (birthdate.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("תאריך הלידה לא יכול להיות בעתיד");
+        }
+
+        dog.setName(name.trim());
+        dog.setBreed(breed.trim());
+        dog.setBirthdate(birthdate);
+        dog.setGender(gender);
+        if (profileImageUrlOrNull != null && !profileImageUrlOrNull.isBlank()) {
+            dog.setProfileImageURL(profileImageUrlOrNull.trim());
+        }
+        dog.setWeightKg(weightKgOrNull);
+
+        return dogRepository.save(dog);
     }
 
     /**
@@ -329,6 +387,55 @@ public class DogService {
         }
 
         return userDogs;
+    }
+
+    /**
+     * First non-blank dog profile image URL for map markers (e.g. logged-users API).
+     */
+    public Optional<String> getFirstMapDogProfileImageUrl(UUID userId) {
+        List<Dog> userDogs = getDogsForUser(userId);
+        for (Dog dog : userDogs) {
+            String url = dog.getProfileImageURL();
+            if (url != null && !url.isBlank()) {
+                return Optional.of(url.trim());
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Same dog as map avatar when possible: first with profile image; otherwise first dog of the user.
+     */
+    public Optional<Dog> getPrimaryDogForMap(UUID userId) {
+        List<Dog> userDogs = getDogsForUser(userId);
+        if (userDogs.isEmpty()) {
+            return Optional.empty();
+        }
+        for (Dog dog : userDogs) {
+            String url = dog.getProfileImageURL();
+            if (url != null && !url.isBlank()) {
+                return Optional.of(dog);
+            }
+        }
+        return Optional.of(userDogs.get(0));
+    }
+
+    /**
+     * Adds mapDogName, mapDogBreed, mapDogBirthdate (ISO), mapDogAgeYears to userInfo when a dog exists.
+     */
+    public void putMapDogSummaryFields(UUID userId, Map<String, Object> userInfo) {
+        getPrimaryDogForMap(userId).ifPresent(dog -> {
+            if (dog.getName() != null && !dog.getName().isBlank()) {
+                userInfo.put("mapDogName", dog.getName().trim());
+            }
+            if (dog.getBreed() != null && !dog.getBreed().isBlank()) {
+                userInfo.put("mapDogBreed", dog.getBreed().trim());
+            }
+            if (dog.getBirthdate() != null) {
+                userInfo.put("mapDogBirthdate", dog.getBirthdate().toString());
+                userInfo.put("mapDogAgeYears", Period.between(dog.getBirthdate(), LocalDate.now()).getYears());
+            }
+        });
     }
 
     public List<Dog> getAllDogsforUser(UUID userId) {

@@ -38,7 +38,8 @@ interface Dog {
   name: string;
   breed: string;
   gender: string;
-  weight: number;
+  weight?: number | null;
+  weightKg?: number | null;
   birthDate: string;
   profileImageUrl?: string;
   foodStock?: FoodStock;
@@ -66,7 +67,10 @@ const buildDogProfileSignature = (
   foodStocksData: FoodStock[]
 ): string => {
   const dogsPart = dogsData
-    .map((d) => `${d?.id ?? ''}:${d?.name ?? ''}:${d?.breed ?? ''}`)
+    .map(
+      (d) =>
+        `${d?.id ?? ''}:${d?.name ?? ''}:${d?.breed ?? ''}:${d?.weightKg ?? d?.weight ?? ''}`
+    )
     .join('|');
   const remindersPart = remindersData
     .map((r) => `${r?.id ?? ''}:${r?.title ?? ''}:${r?.remindAt ?? ''}`)
@@ -119,7 +123,16 @@ const DogProfileScreen = ({ navigation, route }: any) => {
         reminderAPI.getRemindersForUser(userId),
       ]);
 
-      const nextDogs: Dog[] = dogsResponse.success && dogsResponse.dogs ? dogsResponse.dogs : [];
+      const rawDogs = dogsResponse.success && dogsResponse.dogs ? dogsResponse.dogs : [];
+      const nextDogs: Dog[] = rawDogs.map((d: any) => ({
+        ...d,
+        weight:
+          typeof d.weightKg === 'number'
+            ? d.weightKg
+            : typeof d.weight === 'number'
+              ? d.weight
+              : null,
+      }));
       const nextReminders: Reminder[] = remindersResponse.success && remindersResponse.reminders
         ? remindersResponse.reminders
         : [];
@@ -375,7 +388,9 @@ const DogProfileScreen = ({ navigation, route }: any) => {
               </View>
               <View style={styles.dogDetailItem}>
                 <MaterialCommunityIcons name="weight" size={14} color={TEXT_DARK} />
-                <Text style={styles.dogDetailText}>{dog.weight} ק"ג</Text>
+                <Text style={styles.dogDetailText}>
+                  {dog.weight != null ? `${dog.weight} ק"ג` : 'לא צוין'}
+                </Text>
               </View>
             </View>
           </View>

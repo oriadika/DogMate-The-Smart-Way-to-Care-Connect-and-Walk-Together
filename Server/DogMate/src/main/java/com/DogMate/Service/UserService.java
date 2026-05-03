@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -89,7 +90,8 @@ public class UserService {
         String passwordHash,
         String firstName,
         String lastName,
-        String phoneNumber
+        String phoneNumber,
+        LocalDate birthDate
     ) {
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new IllegalArgumentException("כתובת המייל כבר קיימת במערכת: " + email);
@@ -98,6 +100,7 @@ public class UserService {
         if (phoneNumber != null && !phoneNumber.isBlank()) {
             newUser.setPhoneNumber(phoneNumber);
         }
+        newUser.setBirthDate(birthDate);
         UserAccount savedUser = userRepository.save(newUser);
         return (RegularUser) savedUser;
     }
@@ -616,7 +619,8 @@ public class UserService {
                 "owner",
                 regularUser.getFirst_name(),
                 regularUser.getLast_name(),
-                regularUser.getPhoneNumber()
+                regularUser.getPhoneNumber(),
+                regularUser.getBirthDate()
             );
         }
         if (user instanceof DogWalkerUser walkerUser) {
@@ -626,7 +630,8 @@ public class UserService {
                 "walker",
                 walkerUser.getFirst_name(),
                 walkerUser.getLast_name(),
-                walkerUser.getPhoneNumber()
+                walkerUser.getPhoneNumber(),
+                walkerUser.getBirthDate()
             );
         }
         throw new IllegalArgumentException("רק חשבונות בעל כלב או דוגווקר יכולים לערוך פרופיל");
@@ -657,7 +662,8 @@ public class UserService {
                 "owner",
                 persisted.getFirst_name(),
                 persisted.getLast_name(),
-                persisted.getPhoneNumber()
+                persisted.getPhoneNumber(),
+                persisted.getBirthDate()
             );
         }
 
@@ -675,10 +681,52 @@ public class UserService {
                 "walker",
                 persisted.getFirst_name(),
                 persisted.getLast_name(),
-                persisted.getPhoneNumber()
+                persisted.getPhoneNumber(),
+                persisted.getBirthDate()
             );
         }
 
+        throw new IllegalArgumentException("רק חשבונות בעל כלב או דוגווקר יכולים לערוך פרופיל");
+    }
+
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    public UserProfileData updateUserBirthDate(UUID userId, LocalDate birthDate) {
+        UserAccount.validateUserId(userId);
+        if (birthDate == null) {
+            throw new IllegalArgumentException("תאריך לידה הוא שדה חובה");
+        }
+        if (birthDate.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("תאריך לידה לא יכול להיות בעתיד");
+        }
+        Optional<UserAccount> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) {
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
+        }
+        UserAccount user = userOpt.get();
+        user.setBirthDate(birthDate);
+        UserAccount saved = userRepository.save(user);
+        if (saved instanceof RegularUser persistedRegular) {
+            return new UserProfileData(
+                persistedRegular.getId(),
+                persistedRegular.getEmail(),
+                "owner",
+                persistedRegular.getFirst_name(),
+                persistedRegular.getLast_name(),
+                persistedRegular.getPhoneNumber(),
+                persistedRegular.getBirthDate()
+            );
+        }
+        if (saved instanceof DogWalkerUser persistedWalker) {
+            return new UserProfileData(
+                persistedWalker.getId(),
+                persistedWalker.getEmail(),
+                "walker",
+                persistedWalker.getFirst_name(),
+                persistedWalker.getLast_name(),
+                persistedWalker.getPhoneNumber(),
+                persistedWalker.getBirthDate()
+            );
+        }
         throw new IllegalArgumentException("רק חשבונות בעל כלב או דוגווקר יכולים לערוך פרופיל");
     }
 
@@ -688,7 +736,8 @@ public class UserService {
         String userRole,
         String firstName,
         String lastName,
-        String phoneNumber
+        String phoneNumber,
+        LocalDate birthDate
     ) {}
 
     /**

@@ -2,13 +2,12 @@ package com.DogMate.Controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
-import java.util.HashMap;
-import java.util.Map;
-
+/**
+ * WebSocket ping / meet-response notifications.
+ */
 @Controller
 public class PingWebSocketController {
 
@@ -16,17 +15,14 @@ public class PingWebSocketController {
     private SimpMessagingTemplate messagingTemplate;
 
     /**
-     * Handle ping notifications via WebSocket
-     * Client sends ping to /app/ping
-     * Server broadcasts to /topic/ping/{toUserId}
+     * Handle ping notifications via WebSocket — client sends to /app/ping (optional path).
      */
     @MessageMapping("/ping")
     public void handlePing(PingNotification notification) {
         try {
-            System.out.println("WebSocket Ping received from: " + notification.getFromUserId() 
+            System.out.println("WebSocket Ping received from: " + notification.getFromUserId()
                 + " to: " + notification.getToUserId());
 
-            // Send notification to the target user
             messagingTemplate.convertAndSend(
                 "/topic/ping/" + notification.getToUserId(),
                 notification
@@ -40,27 +36,53 @@ public class PingWebSocketController {
     }
 
     /**
-     * DTO for ping notification
+     * Broadcasts to /topic/ping/{targetUserId}. Used by UserController for PING and MEET_RESPONSE.
+     */
+    public void sendToUserTopic(String targetUserId, PingNotification notification) {
+        messagingTemplate.convertAndSend("/topic/ping/" + targetUserId, notification);
+    }
+
+    /**
+     * DTO for WebSocket JSON — kinds: PING (meet invite), MEET_RESPONSE (accept/decline).
      */
     public static class PingNotification {
+        /** PING or MEET_RESPONSE */
+        private String kind;
+        private String pingId;
         private String fromUserId;
         private String fromUserName;
         private String toUserId;
         private long timestamp;
 
-        // Constructors
+        private String dogName;
+        private String dogBreed;
+        private String dogAgeLabel;
+        private String dogImageUrl;
+
+        /** MEET_RESPONSE: did the recipient accept */
+        private Boolean accepted;
+
         public PingNotification() {
             this.timestamp = System.currentTimeMillis();
+            this.kind = "PING";
         }
 
-        public PingNotification(String fromUserId, String fromUserName, String toUserId) {
-            this.fromUserId = fromUserId;
-            this.fromUserName = fromUserName;
-            this.toUserId = toUserId;
-            this.timestamp = System.currentTimeMillis();
+        public String getKind() {
+            return kind;
         }
 
-        // Getters and Setters
+        public void setKind(String kind) {
+            this.kind = kind;
+        }
+
+        public String getPingId() {
+            return pingId;
+        }
+
+        public void setPingId(String pingId) {
+            this.pingId = pingId;
+        }
+
         public String getFromUserId() {
             return fromUserId;
         }
@@ -91,6 +113,46 @@ public class PingWebSocketController {
 
         public void setTimestamp(long timestamp) {
             this.timestamp = timestamp;
+        }
+
+        public String getDogName() {
+            return dogName;
+        }
+
+        public void setDogName(String dogName) {
+            this.dogName = dogName;
+        }
+
+        public String getDogBreed() {
+            return dogBreed;
+        }
+
+        public void setDogBreed(String dogBreed) {
+            this.dogBreed = dogBreed;
+        }
+
+        public String getDogAgeLabel() {
+            return dogAgeLabel;
+        }
+
+        public void setDogAgeLabel(String dogAgeLabel) {
+            this.dogAgeLabel = dogAgeLabel;
+        }
+
+        public String getDogImageUrl() {
+            return dogImageUrl;
+        }
+
+        public void setDogImageUrl(String dogImageUrl) {
+            this.dogImageUrl = dogImageUrl;
+        }
+
+        public Boolean getAccepted() {
+            return accepted;
+        }
+
+        public void setAccepted(Boolean accepted) {
+            this.accepted = accepted;
         }
     }
 }

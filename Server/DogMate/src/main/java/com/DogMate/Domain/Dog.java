@@ -29,6 +29,10 @@ public class Dog {
 
     @Column(name = "profile_image_url", length = 1000000) // Increased size to handle base64 images
     private String profileImageURL;
+
+    /** משקל בק״ג; אופציונלי */
+    @Column(name = "weight_kg")
+    private Double weightKg;
     
     @OneToMany(mappedBy = "dog", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DogEvent> dogEvents;
@@ -55,14 +59,19 @@ public class Dog {
         this.dogRelationships = new LinkedList<>();
     }
 
-    public Dog(UUID ID, String name, String breed, LocalDate  birthdate, char gender,
-               String profileImageURL){
+    public Dog(UUID ID, String name, String breed, LocalDate birthdate, char gender, String profileImageURL) {
+        this(ID, name, breed, birthdate, gender, profileImageURL, null);
+    }
+
+    public Dog(UUID ID, String name, String breed, LocalDate birthdate, char gender,
+               String profileImageURL, Double weightKg) {
         this.ID = ID;
         this.name = name;
         this.breed = breed;
         this.birthdate = birthdate;
         this.gender = gender;
         this.profileImageURL = profileImageURL;
+        this.weightKg = weightKg;
         this.dogEvents = new LinkedList<>();
         this.foodStock = null;
         this.dogMoodLogs = new LinkedList<>();
@@ -117,6 +126,14 @@ public class Dog {
 
     public void setProfileImageURL(String profileImageURL) {
         this.profileImageURL = profileImageURL;
+    }
+
+    public Double getWeightKg() {
+        return weightKg;
+    }
+
+    public void setWeightKg(Double weightKg) {
+        this.weightKg = weightKg;
     }
 
     public List<DogEvent> getDogEvents(){

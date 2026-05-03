@@ -7,6 +7,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -41,6 +42,9 @@ public class PendingRegistration {
     @Column(name = "phone_number", length = 32)
     private String phoneNumber;
 
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
+
     /** "owner" or "walker" */
     @Column(name = "user_role", nullable = false, length = 16)
     private String userRole;
@@ -62,6 +66,7 @@ public class PendingRegistration {
         String firstName,
         String lastName,
         String phoneNumber,
+        LocalDate birthDate,
         String userRole,
         String otpCode,
         LocalDateTime createdAt
@@ -72,6 +77,7 @@ public class PendingRegistration {
         this.firstName = firstName;
         this.lastName = lastName;
         this.phoneNumber = phoneNumber;
+        this.birthDate = birthDate;
         this.userRole = userRole;
         this.otpCode = otpCode;
         this.createdAt = createdAt;
@@ -105,6 +111,10 @@ public class PendingRegistration {
         return userRole;
     }
 
+    public LocalDate getBirthDate() {
+        return birthDate;
+    }
+
     public String getOtpCode() {
         return otpCode;
     }
@@ -135,6 +145,10 @@ public class PendingRegistration {
 
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+    }
+
+    public void setBirthDate(LocalDate birthDate) {
+        this.birthDate = birthDate;
     }
 
     public void setUserRole(String userRole) {

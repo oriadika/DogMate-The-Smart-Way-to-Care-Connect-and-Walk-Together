@@ -111,7 +111,7 @@ const ManageDogScreens = ({ navigation, route }: any) => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backIcon}>←</Text>
+        <Text style={styles.backIcon}>→</Text>
         </TouchableOpacity>
 
         <View style={styles.header}>

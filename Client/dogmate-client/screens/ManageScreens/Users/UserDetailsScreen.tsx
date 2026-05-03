@@ -63,7 +63,7 @@ const UserDetailsScreen = ({ navigation, route }: any) => {
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backIcon}>←</Text>
+        <Text style={styles.backIcon}>→</Text>
         </TouchableOpacity>
 
         <ScrollView contentContainerStyle={styles.container}>

@@ -63,6 +63,7 @@ export interface RegisterUserPayload {
   password: string;
   firstName: string;
   lastName: string;
+  birthDate: string; // YYYY-MM-DD
   /** Israeli mobile; required for walkers, optional for owners (validated on server) */
   phoneNumber?: string;
   profileImageUrl?: string;
@@ -133,12 +134,18 @@ export interface UserProfileResponse {
   firstName: string;
   lastName: string;
   phoneNumber: string;
+  birthDate?: string;
 }
 
 export interface UpdateUserProfilePayload {
   firstName: string;
   lastName: string;
   phoneNumber: string;
+  birthDate?: string;
+}
+
+export interface UpdateBirthDatePayload {
+  birthDate: string;
 }
 
 export interface ChangePasswordPayload {
@@ -203,6 +210,8 @@ export interface AddDogPayload {
   birthdate: string; // ISO date format (YYYY-MM-DD)
   gender?: string; // 'M' for male, 'F' for female
   profileImageUrl?: string;
+  /** משקל בק״ג; ריק/null — בלי משקל */
+  weightKg?: number | null;
 }
 
 export interface DogData {
@@ -212,9 +221,27 @@ export interface DogData {
   birthdate: string;
   gender: string;
   profileImageUrl: string;
+  weightKg?: number | null;
 }
 
 export interface AddDogResponse {
+  success: boolean;
+  message: string;
+  dog: DogData;
+}
+
+export interface UpdateDogPayload {
+  name: string;
+  breed: string;
+  birthdate: string;
+  gender: string;
+  /** אופציונלי — אם לא נשלח, נשמרת התמונה הקיימת בשרת */
+  profileImageUrl?: string;
+  /** משקל בק״ג; null — מוחק משקל בשרת */
+  weightKg?: number | null;
+}
+
+export interface UpdateDogResponse {
   success: boolean;
   message: string;
   dog: DogData;
@@ -423,6 +450,19 @@ export const userAPI = {
     }
   },
 
+  updateBirthDate: async (
+    userId: string,
+    payload: UpdateBirthDatePayload
+  ): Promise<UserProfileResponse> => {
+    try {
+      const response = await apiClient.put(`/users/${userId}/profile/birth-date`, payload);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל עדכון תאריך הלידה';
+      throw new Error(errorMessage);
+    }
+  },
+
   changePassword: async (
     userId: string,
     payload: ChangePasswordPayload
@@ -479,18 +519,94 @@ export const userAPI = {
   },
 
   /**
-   * Send a ping to another user
+   * Send a ping / meet invite to another user (optional dog snapshot for the recipient UI).
    */
-  sendPing: async (fromUserId: string, toUserId: string, fromUserName?: string): Promise<{ success: boolean; message: string }> => {
+  sendPing: async (payload: {
+    fromUserId: string;
+    toUserId: string;
+    fromUserName?: string;
+    dogName?: string | null;
+    dogBreed?: string | null;
+    dogAgeLabel?: string | null;
+    dogImageUrl?: string | null;
+  }): Promise<{ success: boolean; message: string }> => {
     try {
       const response = await apiClient.post('/users/ping', {
-        fromUserId,
-        toUserId,
-        fromUserName: fromUserName || 'משתמש לא ידוע'
+        fromUserId: payload.fromUserId,
+        toUserId: payload.toUserId,
+        fromUserName: payload.fromUserName || 'משתמש לא ידוע',
+        dogName: payload.dogName ?? undefined,
+        dogBreed: payload.dogBreed ?? undefined,
+        dogAgeLabel: payload.dogAgeLabel ?? undefined,
+        dogImageUrl: payload.dogImageUrl ?? undefined,
       });
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'נכשלה שליחת הפינג';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Accept or decline a meet invite (notifies original sender via WebSocket).
+   */
+  respondToPingMeet: async (payload: {
+    originalSenderId: string;
+    responderId: string;
+    responderName: string;
+    accepted: boolean;
+    pingId?: string | null;
+  }): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await apiClient.post('/users/ping/respond', {
+        originalSenderId: payload.originalSenderId,
+        responderId: payload.responderId,
+        responderName: payload.responderName,
+        accepted: payload.accepted,
+        pingId: payload.pingId ?? undefined,
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה שליחת התגובה';
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Get unread pings as a recovery path when WebSocket delivery was missed.
+   */
+  getPendingPings: async (
+    userId: string
+  ): Promise<{
+    success: boolean;
+    pings: Array<{
+      id: string;
+      fromUserId: string;
+      fromUserName: string;
+      toUserId: string;
+      dogName?: string | null;
+      dogBreed?: string | null;
+      dogAgeLabel?: string | null;
+      dogImageUrl?: string | null;
+      createdAt?: string;
+      read?: boolean;
+    }>;
+  }> => {
+    try {
+      const response = await apiClient.get(`/users/pings/pending/${userId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה טעינת פינגים ממתינים';
+      throw new Error(errorMessage);
+    }
+  },
+
+  markPingAsRead: async (pingId: string): Promise<{ success: boolean; message: string; pingId: string }> => {
+    try {
+      const response = await apiClient.post(`/users/pings/${pingId}/read`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל סימון פינג כנקרא';
       throw new Error(errorMessage);
     }
   },
@@ -551,6 +667,20 @@ export const dogAPI = {
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'נכשלה הוספת הכלב';
       console.error("Add dog failed:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  updateDog: async (
+    userId: string,
+    dogId: string,
+    payload: UpdateDogPayload
+  ): Promise<UpdateDogResponse> => {
+    try {
+      const response = await apiClient.put(`/dogs/${userId}/${dogId}`, payload);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה עדכון פרטי הכלב';
       throw new Error(errorMessage);
     }
   },

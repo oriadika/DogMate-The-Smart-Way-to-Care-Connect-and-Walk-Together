@@ -4,13 +4,26 @@ import { getWebSocketBaseUrl } from './config';
 
 
 const { websocketUrl: WEBSOCKET_URL, sockJsUrl: SOCKJS_URL } = getWebSocketBaseUrl('ws-ping');
+const WS_DEBUG_LOGS = false;
+const wsDebug = (...args: any[]) => {
+  if (__DEV__ && WS_DEBUG_LOGS) {
+    console.log(...args);
+  }
+};
 
 
-interface PingNotification {
+export interface PingNotification {
+  kind?: string;
+  pingId?: string;
   fromUserId: string;
   fromUserName: string;
   toUserId: string;
   timestamp: number;
+  dogName?: string | null;
+  dogBreed?: string | null;
+  dogAgeLabel?: string | null;
+  dogImageUrl?: string | null;
+  accepted?: boolean | null;
 }
 
 interface WebSocketCallbacks {
@@ -33,13 +46,11 @@ class WebSocketService {
    */
   connect(userId: string, callbacks: WebSocketCallbacks) {
     if (this.client?.connected) {
-      console.log('Already connected to WebSocket');
       if (callbacks.onConnected) callbacks.onConnected();
       return;
     }
 
     if (this.isConnecting) {
-      console.log('WebSocket connection in progress...');
       return;
     }
 
@@ -53,7 +64,7 @@ class WebSocketService {
       this.client = new Client({
         // Use SockJS with HTTP transport option for better cross-platform support
         webSocketFactory: () => {
-          console.log('Creating SockJS connection to:', SOCKJS_URL);
+          wsDebug('Creating SockJS connection to:', SOCKJS_URL);
           const socket = new SockJS(SOCKJS_URL, null, {
             transports: ['websocket', 'xhr-streaming', 'xhr-polling']
           });
@@ -64,16 +75,15 @@ class WebSocketService {
           passcode: 'guest',
         },
         debug: (msg: string) => {
-          // Only log important messages, not every heartbeat
-          if (!msg.includes('HEARTBEAT')) {
-            console.log('[WebSocket]', msg);
+          // Keep STOMP debug logs fully silent unless explicitly enabled.
+          if (WS_DEBUG_LOGS && !msg.includes('HEARTBEAT')) {
+            wsDebug('[WebSocket]', msg);
           }
         },
         reconnectDelay: 5000,
         heartbeatIncoming: 4000,
         heartbeatOutgoing: 4000,
         onConnect: (frame: any) => {
-          console.log('✅ WebSocket Connected Successfully');
           this.isConnecting = false;
           this.reconnectAttempts = 0;
 
@@ -85,21 +95,23 @@ class WebSocketService {
           }
         },
         onDisconnect: (frame: any) => {
-          console.log('❌ WebSocket Disconnected');
+          wsDebug('WebSocket disconnected');
           if (this.callbacks.onDisconnected) {
             this.callbacks.onDisconnected();
           }
           this.attemptReconnect(userId);
         },
         onStompError: (frame: any) => {
-          console.error('⚠️ WebSocket STOMP Error:', frame);
+          // This is an actionable error, keep it visible.
+          console.error('WebSocket STOMP error:', frame);
           this.isConnecting = false;
           if (this.callbacks.onError) {
             this.callbacks.onError(frame);
           }
         },
         onWebSocketError: (event: any) => {
-          console.error('⚠️ WebSocket Connection Error:', event);
+          // This is an actionable error, keep it visible.
+          console.error('WebSocket connection error:', event);
           this.isConnecting = false;
           if (this.callbacks.onError) {
             this.callbacks.onError(event);
@@ -107,10 +119,10 @@ class WebSocketService {
         },
       });
 
-      console.log('Attempting to activate WebSocket client...');
+      wsDebug('Attempting to activate WebSocket client via', WEBSOCKET_URL);
       this.client.activate();
     } catch (error) {
-      console.error('❌ Failed to create WebSocket client:', error);
+      console.error('Failed to create WebSocket client:', error);
       this.isConnecting = false;
       if (this.callbacks.onError) {
         this.callbacks.onError(error);
@@ -123,35 +135,31 @@ class WebSocketService {
    */
   private subscribeToPings(userId: string) {
     if (!this.client || !this.client.connected) {
-      console.error('❌ WebSocket not connected, cannot subscribe');
+      wsDebug('WebSocket not connected, cannot subscribe');
       return;
     }
 
     const topicPath = `/topic/ping/${userId}`;
-    console.log(`📩 Subscribing to: ${topicPath}`);
+    wsDebug(`Subscribing to: ${topicPath}`);
 
     try {
       this.client.subscribe(topicPath, (message: any) => {
-        console.log('📨 Raw message received:', message);
         try {
           // Parse the message body
           const notification = JSON.parse(message.body);
-          console.log('✅ Successfully parsed ping notification:', notification);
+          wsDebug('Parsed ping notification:', notification);
           
           // Call the callback
           if (this.callbacks.onPingReceived) {
-            console.log('🔔 Invoking onPingReceived callback');
             this.callbacks.onPingReceived(notification);
-          } else {
-            console.warn('⚠️ No onPingReceived callback set');
           }
         } catch (error) {
-          console.error('❌ Error parsing ping message:', error, 'Body:', message.body);
+          console.error('Error parsing ping message:', error);
         }
       });
-      console.log('✅ Successfully subscribed to ping topic');
+      wsDebug('Successfully subscribed to ping topic');
     } catch (error) {
-      console.error('❌ Error subscribing to pings:', error);
+      console.error('Error subscribing to ping topic:', error);
     }
   }
 
@@ -162,13 +170,13 @@ class WebSocketService {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
       const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 30000);
-      console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+      wsDebug(`Attempting reconnect in ${delay}ms (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 
       setTimeout(() => {
         this.connect(userId, this.callbacks);
       }, delay);
     } else {
-      console.error(`Max reconnection attempts (${this.maxReconnectAttempts}) reached`);
+      console.error(`WebSocket: max reconnection attempts (${this.maxReconnectAttempts}) reached`);
     }
   }
 
@@ -179,7 +187,7 @@ class WebSocketService {
     if (this.client && this.client.connected) {
       try {
         this.client.deactivate();
-        console.log('WebSocket disconnected');
+        wsDebug('WebSocket disconnected');
       } catch (error) {
         console.error('Error disconnecting WebSocket:', error);
       }

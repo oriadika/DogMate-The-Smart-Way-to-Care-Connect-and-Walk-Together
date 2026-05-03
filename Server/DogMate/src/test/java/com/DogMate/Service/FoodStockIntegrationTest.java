@@ -86,7 +86,7 @@ class FoodStockIntegrationTest {
         // Currently you don't validate bag size in domain/service,
         // so this might PASS. If you want it to FAIL, add validation and keep this test.
         RegularUser user = userService.registerUser("fs2@test.com", "password123", "G", "H");
-        Dog dog = dogService.addDogToUser(user.getId(), "Max", "Pug", LocalDate.now(), 'M', "img_url", RelationshipType.OWNERSHIP);
+        Dog dog = dogService.addDogToUser(user.getId(), "Max", "Pug", LocalDate.now(), 'M', "img_url", null, RelationshipType.OWNERSHIP);
 
         assertThrows(Exception.class, () -> dogService.addFoodStockToDog(
                 dog.getID(),
