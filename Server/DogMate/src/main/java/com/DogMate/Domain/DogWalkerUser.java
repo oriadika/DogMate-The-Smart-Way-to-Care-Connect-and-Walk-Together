@@ -36,13 +36,13 @@ public class DogWalkerUser extends UserAccount {
 
     public static void validateFirstName(String firstName) {
         if (firstName == null || firstName.trim().isEmpty()) {
-            throw new IllegalArgumentException("First name cannot be null or empty");
+            throw new IllegalArgumentException("חובה להזין שם פרטי");
         }
     }
 
     public static void validateLastName(String lastName) {
         if (lastName == null || lastName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Last name cannot be null or empty");
+            throw new IllegalArgumentException("חובה להזין שם משפחה");
         }
     }
 
@@ -60,6 +60,19 @@ public class DogWalkerUser extends UserAccount {
         UserAccount.validateEmailNotExists(emailExists, email);
 
         String passwordHash = passwordEncoder.apply(plainPassword);
+        UUID userId = UUID.randomUUID();
+        return new DogWalkerUser(userId, email, passwordHash, firstName, lastName);
+    }
+
+    /**
+     * Create a walker with an already-hashed password (e.g. after email OTP during pending registration).
+     */
+    public static DogWalkerUser createWithHashedPassword(
+        String email, String passwordHash, String firstName, String lastName
+    ) {
+        UserAccount.validateEmail(email);
+        validateFirstName(firstName);
+        validateLastName(lastName);
         UUID userId = UUID.randomUUID();
         return new DogWalkerUser(userId, email, passwordHash, firstName, lastName);
     }

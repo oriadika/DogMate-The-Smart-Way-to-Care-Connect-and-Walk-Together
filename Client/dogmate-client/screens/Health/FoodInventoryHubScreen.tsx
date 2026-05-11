@@ -14,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import FoodInventoryCard from '../../components/FoodInventoryCard';
 import { userAPI, foodStockAPI } from '../../services/api';
+import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
@@ -170,9 +171,11 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
           <TouchableOpacity
             style={styles.homeButton}
             onPress={() => {
-              // Navigate back to Home with userId to ensure data loads
               if (userId) {
-                navigation.navigate('Home', { userId });
+                navigation.navigate('Home', {
+                  screen: 'Dashboard',
+                  params: { userId },
+                });
               } else {
                 navigation.goBack();
               }
@@ -183,7 +186,7 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
           <Text style={styles.headerTitle}>ניהול מלאי מזון</Text>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.navigate('Health')}
+            onPress={() => navigation.navigate('Home', { screen: OWNER_MAIN_TAB.Health })}
           >
             <Ionicons name="arrow-forward" size={28} color={TEXT_DARK} />
           </TouchableOpacity>

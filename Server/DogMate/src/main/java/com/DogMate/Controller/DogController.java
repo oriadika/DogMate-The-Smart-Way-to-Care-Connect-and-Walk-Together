@@ -59,7 +59,7 @@ public class DogController {
             System.err.println("Failed to get dogs: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Failed to fetch dogs: " + e.getMessage()));
+                    .body(createErrorResponse("נכשלה טעינת הכלבים: " + e.getMessage()));
         }
     }
 
@@ -90,7 +90,7 @@ public class DogController {
             System.err.println("Failed to get dogs: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Failed to fetch dogs: " + e.getMessage()));
+                    .body(createErrorResponse("נכשלה טעינת הכלבים: " + e.getMessage()));
         }
     }
 
@@ -105,7 +105,7 @@ public class DogController {
             if (request == null || request.getUserId() == null || request.getName() == null || 
                 request.getBreed() == null || request.getBirthdate() == null) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Missing required fields: userId, name, breed, birthdate"));
+                    .body(createErrorResponse("חסרים שדות נדרשים: מזהה משתמש, שם, גזע, תאריך לידה"));
             }
 
             System.out.println("Received add dog request for user: " + request.getUserId());
@@ -116,7 +116,7 @@ public class DogController {
                 userId = UUID.fromString(request.getUserId());
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Invalid user ID format"));
+                    .body(createErrorResponse("מזהה משתמש בפורמט לא תקין"));
             }
 
             // Parse gender (default to 'M' if not provided)
@@ -129,7 +129,7 @@ public class DogController {
                     gender = 'F';
                 } else {
                     return ResponseEntity.badRequest()
-                        .body(createErrorResponse("Invalid gender. Use 'M' for male or 'F' for female"));
+                        .body(createErrorResponse("מין לא תקין. השתמש ב־M לזכר או ב־F לנקבה"));
                 }
             }
 
@@ -141,13 +141,14 @@ public class DogController {
                 request.getBirthdate(),
                 gender,
                 request.getProfileImageUrl() != null ? request.getProfileImageUrl() : "",
+                request.getWeightKg(),
                 RelationshipType.OWNERSHIP
             );
 
             // Create success response with dog data
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Dog added successfully");
+            response.put("message", "הכלב נוסף בהצלחה");
             response.put("dog", createDogResponse(newDog));
 
             System.out.println("Dog created successfully with ID: " + newDog.getID());
@@ -161,7 +162,74 @@ public class DogController {
             System.err.println("Failed to add dog: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to add dog: " + e.getMessage()));
+                .body(createErrorResponse("נכשלה הוספת הכלב: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Update an existing dog for a user
+     * PUT /api/dogs/{userId}/{dogId}
+     */
+    @PutMapping("/{userId}/{dogId}")
+    public ResponseEntity<?> updateDogForUser(
+            @PathVariable String userId,
+            @PathVariable String dogId,
+            @RequestBody UpdateDogRequest request) {
+        try {
+            if (userId == null || userId.isBlank() || dogId == null || dogId.isBlank()) {
+                return ResponseEntity.badRequest()
+                        .body(createErrorResponse("נדרשים מזהה משתמש ומזהה כלב"));
+            }
+            if (request == null || request.getName() == null || request.getBreed() == null
+                    || request.getBirthdate() == null) {
+                return ResponseEntity.badRequest()
+                        .body(createErrorResponse("חסרים שדות נדרשים: שם, גזע, תאריך לידה"));
+            }
+
+            UUID userUuid;
+            UUID dogUuid;
+            try {
+                userUuid = UUID.fromString(userId);
+                dogUuid = UUID.fromString(dogId);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest()
+                        .body(createErrorResponse("מזהה משתמש או כלב בפורמט לא תקין"));
+            }
+
+            char gender = 'M';
+            if (request.getGender() != null && !request.getGender().isEmpty()) {
+                String genderStr = request.getGender().toUpperCase();
+                if (genderStr.equals("M") || genderStr.equals("MALE")) {
+                    gender = 'M';
+                } else if (genderStr.equals("F") || genderStr.equals("FEMALE")) {
+                    gender = 'F';
+                } else {
+                    return ResponseEntity.badRequest()
+                            .body(createErrorResponse("מין לא תקין. השתמש ב־M לזכר או ב־F לנקבה"));
+                }
+            }
+
+            Dog updated = dogService.updateDogForUser(
+                    userUuid,
+                    dogUuid,
+                    request.getName().trim(),
+                    request.getBreed().trim(),
+                    request.getBirthdate(),
+                    gender,
+                    request.getProfileImageUrl(),
+                    request.getWeightKg()
+            );
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "פרטי הכלב עודכנו בהצלחה");
+            response.put("dog", createDogResponse(updated));
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("נכשלה עדכון הכלב: " + e.getMessage()));
         }
     }
 
@@ -174,7 +242,7 @@ public class DogController {
         try {
             if (userId == null || userId.trim().isEmpty()) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("User ID is required"));
+                    .body(createErrorResponse("נדרש מזהה משתמש"));
             }
 
             // Parse UUID
@@ -183,7 +251,7 @@ public class DogController {
                 userUuid = UUID.fromString(userId);
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Invalid user ID format"));
+                    .body(createErrorResponse("מזהה משתמש בפורמט לא תקין"));
             }
 
             System.out.println("Fetching dogs for user: " + userId);
@@ -208,7 +276,7 @@ public class DogController {
             System.err.println("Failed to get dogs: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to fetch dogs: " + e.getMessage()));
+                .body(createErrorResponse("נכשלה טעינת הכלבים: " + e.getMessage()));
         }
     }
 
@@ -217,7 +285,7 @@ public class DogController {
         try {
             if (dogId == null || dogId.trim().isEmpty()) {
                 return ResponseEntity.badRequest()
-                        .body(createErrorResponse("Dog ID are required"));
+                        .body(createErrorResponse("נדרש מזהה כלב"));
             }
 
             // Parse UUIDs
@@ -226,7 +294,7 @@ public class DogController {
                 dogUuid = UUID.fromString(dogId);
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest()
-                        .body(createErrorResponse("Invalid user ID or dog ID format"));
+                        .body(createErrorResponse("מזהה משתמש או כלב בפורמט לא תקין"));
             }
 
             System.out.println("Deleting dog: " + dogId);
@@ -236,7 +304,7 @@ public class DogController {
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Dog deleted successfully");
+            response.put("message", "הכלב נמחק בהצלחה");
             response.put("dogId", dogId);
 
             System.out.println("Dog deleted successfully");
@@ -250,7 +318,7 @@ public class DogController {
             System.err.println("Failed to delete dog: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Failed to delete dog: " + e.getMessage()));
+                    .body(createErrorResponse("נכשלה מחיקת הכלב: " + e.getMessage()));
         }
     }
 
@@ -263,7 +331,7 @@ public class DogController {
         try {
             if (userId == null || userId.trim().isEmpty() || dogId == null || dogId.trim().isEmpty()) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("User ID and Dog ID are required"));
+                    .body(createErrorResponse("נדרשים מזהה משתמש ומזהה כלב"));
             }
 
             // Parse UUIDs
@@ -274,7 +342,7 @@ public class DogController {
                 dogUuid = UUID.fromString(dogId);
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest()
-                    .body(createErrorResponse("Invalid user ID or dog ID format"));
+                        .body(createErrorResponse("מזהה משתמש או כלב בפורמט לא תקין"));
             }
 
             System.out.println("Deleting dog: " + dogId + " for user: " + userId);
@@ -284,7 +352,7 @@ public class DogController {
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Dog deleted successfully");
+            response.put("message", "הכלב נמחק בהצלחה");
             response.put("dogId", dogId);
 
             System.out.println("Dog deleted successfully");
@@ -298,7 +366,7 @@ public class DogController {
             System.err.println("Failed to delete dog: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(createErrorResponse("Failed to delete dog: " + e.getMessage()));
+                .body(createErrorResponse("נכשלה מחיקת הכלב: " + e.getMessage()));
         }
     }
 
@@ -324,7 +392,7 @@ public class DogController {
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Food stock created and linked to dog");
+            response.put("message", "מלאי המזון נוצר וקושר לכלב");
             response.put("foodStockId", newStock.getId().toString());
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -333,7 +401,7 @@ public class DogController {
             return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Failed to add food stock: " + e.getMessage()));
+                    .body(createErrorResponse("נכשלה הוספת מלאי מזון: " + e.getMessage()));
         }
     }
 
@@ -353,7 +421,7 @@ public class DogController {
 
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Dog successfully connected to existing food stock");
+            response.put("message", "הכלב קושר למלאי המזון הקיים");
 
             return ResponseEntity.ok(response);
 
@@ -361,7 +429,7 @@ public class DogController {
             return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Failed to connect dog to food stock: " + e.getMessage()));
+                    .body(createErrorResponse("נכשלה קישור הכלב למלאי המזון: " + e.getMessage()));
         }
     }
 
@@ -377,6 +445,7 @@ public class DogController {
         dogData.put("birthdate", dog.getBirthdate().toString());
         dogData.put("gender", dog.getGender());
         dogData.put("profileImageUrl", dog.getProfileImageURL());
+        dogData.put("weightKg", dog.getWeightKg());
         return dogData;
     }
 
@@ -401,6 +470,7 @@ public class DogController {
         private LocalDate birthdate;
         private String gender; // "M" or "F"
         private String profileImageUrl;
+        private Double weightKg;
 
         // Default constructor for Jackson
         public AddDogRequest() {
@@ -454,6 +524,75 @@ public class DogController {
         public void setProfileImageUrl(String profileImageUrl) {
             this.profileImageUrl = profileImageUrl;
         }
+
+        public Double getWeightKg() {
+            return weightKg;
+        }
+
+        public void setWeightKg(Double weightKg) {
+            this.weightKg = weightKg;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class UpdateDogRequest {
+        private String name;
+        private String breed;
+        private LocalDate birthdate;
+        private String gender;
+        private String profileImageUrl;
+        private Double weightKg;
+
+        public UpdateDogRequest() {
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getBreed() {
+            return breed;
+        }
+
+        public void setBreed(String breed) {
+            this.breed = breed;
+        }
+
+        public LocalDate getBirthdate() {
+            return birthdate;
+        }
+
+        public void setBirthdate(LocalDate birthdate) {
+            this.birthdate = birthdate;
+        }
+
+        public String getGender() {
+            return gender;
+        }
+
+        public void setGender(String gender) {
+            this.gender = gender;
+        }
+
+        public String getProfileImageUrl() {
+            return profileImageUrl;
+        }
+
+        public void setProfileImageUrl(String profileImageUrl) {
+            this.profileImageUrl = profileImageUrl;
+        }
+
+        public Double getWeightKg() {
+            return weightKg;
+        }
+
+        public void setWeightKg(Double weightKg) {
+            this.weightKg = weightKg;
+        }
     }
 
     @PostMapping("/{dogId}/mood")
@@ -471,7 +610,7 @@ public class DogController {
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Failed to add mood log: " + e.getMessage());
+                    .body(createErrorResponse("נכשלה הוספת רשומת מצב רוח: " + e.getMessage()));
         }
     }
 
@@ -487,7 +626,7 @@ public class DogController {
         
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
-        response.put("message", "Mood log deleted successfully");
+        response.put("message", "רשומת מצב הרוח נמחקה");
         
         return ResponseEntity.ok(response);
     }

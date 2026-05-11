@@ -44,6 +44,7 @@ import {
   normalizeIsraeliMobileToDigits,
   normalizeIsraeliMobileToWhatsAppPhoneParam,
 } from '../utils/phoneValidation';
+import { OWNER_MAIN_TAB } from '../navigation/ownerTabRoutes';
 
 const PRIMARY_COLOR = '#7FB069';
 const CALL_BUTTON_GREEN = '#34C759';
@@ -502,7 +503,16 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerRow}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity
+          onPress={() => {
+            const parent = navigation.getParent();
+            if (parent && (parent as any).getState?.()?.type === 'tab') {
+              navigation.navigate(OWNER_MAIN_TAB.Dashboard);
+              return;
+            }
+            navigation.goBack();
+          }}
+        >
           <Ionicons name="arrow-forward" size={28} color="#5C4033" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>דוגווקרים זמינים</Text>

@@ -29,8 +29,8 @@ const ForgotPasswordScreen = ({ navigation }: any) => {
         style={styles.backButton}
         onPress={() => navigation.navigate('Login')}
       >
-        <Text style={styles.backIcon}>←</Text>
-      </TouchableOpacity>
+        <Text style={styles.backIcon}>→</Text>
+        </TouchableOpacity>
 
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView

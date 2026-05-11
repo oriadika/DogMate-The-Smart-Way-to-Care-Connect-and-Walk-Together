@@ -53,7 +53,7 @@ public class FoodStockController {
         
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
-        response.put("message", "Food stock deleted and unlinked from all dogs");
+        response.put("message", "מלאי המזון נמחק והוסר מכל הכלבים");
         
         return ResponseEntity.ok(response);
     }

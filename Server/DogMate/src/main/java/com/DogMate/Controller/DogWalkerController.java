@@ -39,7 +39,7 @@ public class DogWalkerController {
             return ResponseEntity.ok(list);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Failed to load available dog walkers: " + e.getMessage()));
+                    .body(createErrorResponse("נכשלה טעינת הדוגווקרים: " + e.getMessage()));
         }
     }
 
@@ -49,7 +49,7 @@ public class DogWalkerController {
             @RequestBody CreateRatingRequest body) {
         try {
             if (body == null || body.getOwnerId() == null || body.getStars() == null) {
-                return ResponseEntity.badRequest().body(createErrorResponse("ownerId and stars are required"));
+                return ResponseEntity.badRequest().body(createErrorResponse("נדרשים מזהה בעלים וציון כוכבים"));
             }
             DogWalkerRating saved = dogWalkerService.createRating(
                     walkerId,
@@ -66,7 +66,7 @@ public class DogWalkerController {
             return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Failed to create rating: " + e.getMessage()));
+                    .body(createErrorResponse("נכשלה שמירת הדירוג: " + e.getMessage()));
         }
     }
 
@@ -88,7 +88,7 @@ public class DogWalkerController {
             return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Failed to delete rating: " + e.getMessage()));
+                    .body(createErrorResponse("נכשלה מחיקת הדירוג: " + e.getMessage()));
         }
     }
 
@@ -101,7 +101,7 @@ public class DogWalkerController {
             return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Failed to load professional profile: " + e.getMessage()));
+                    .body(createErrorResponse("נכשלה טעינת הפרופיל המקצועי: " + e.getMessage()));
         }
     }
 
@@ -112,7 +112,7 @@ public class DogWalkerController {
         try {
             if (body == null || body.getCityOfferings() == null) {
                 return ResponseEntity.badRequest()
-                        .body(createErrorResponse("cityOfferings is required (use empty array if none)"));
+                        .body(createErrorResponse("חובה לשלוח cityOfferings (מערך ריק אם אין הצעות)"));
             }
             List<WalkerCityOffering> domain = body.getCityOfferings().stream()
                     .map(DogWalkerController::toDomainOffering)
@@ -123,7 +123,7 @@ public class DogWalkerController {
             return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(createErrorResponse("Failed to update professional profile: " + e.getMessage()));
+                    .body(createErrorResponse("נכשל עדכון הפרופיל המקצועי: " + e.getMessage()));
         }
     }
 
