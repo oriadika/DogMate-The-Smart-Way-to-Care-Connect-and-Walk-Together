@@ -145,10 +145,10 @@ export default function App() {
       <main className="page">
         <section className="card auth-card">
           <h1>DogMate Admin</h1>
-          <p className="muted">Desktop admin access for existing mobile operations.</p>
+          <p className="muted">גישת מנהל שולחן עבודה עבור פעולות ניידות קיימות</p>
           <form onSubmit={onLogin} className="auth-form">
             <label>
-              Email
+              דואר אלקטרוני
               <input
                 type="email"
                 value={email}
@@ -157,7 +157,7 @@ export default function App() {
               />
             </label>
             <label>
-              Password
+              סיסמה
               <input
                 type="password"
                 value={password}
@@ -166,7 +166,7 @@ export default function App() {
               />
             </label>
             <button type="submit" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign in as admin'}
+              {loading ? '...נכנס' : 'התחבר למערכת כמנהל'}
             </button>
           </form>
           {error ? <p className="error">{error}</p> : null}
@@ -181,57 +181,76 @@ export default function App() {
         <header className="toolbar">
           <div>
             <h1>DogMate Admin</h1>
-            <p className="muted">Logged in as {activeEmail}</p>
+            <p className="muted admin-email">
+                :נכנסת למערכת מנהל עם דואר אלקטרוני
+                <div>
+                  <span className="email">{activeEmail}</span>
+                </div>
+            </p>          
           </div>
-          <button onClick={onLogout}>Logout</button>
+          <button onClick={onLogout}>יציאה</button>
         </header>
 
         <div className="tabs">
           <button className={tab === 'users' ? 'active' : ''} onClick={() => setTab('users')}>
-            Users
+            משתמשים
           </button>
           <button className={tab === 'dogs' ? 'active' : ''} onClick={() => setTab('dogs')}>
-            Dogs
+            כלבים
           </button>
-          <button onClick={() => (tab === 'users' ? void loadUsers() : void loadDogs())}>Refresh</button>
+          <button onClick={() => (tab === 'users' ? void loadUsers() : void loadDogs())}>רענון</button>
         </div>
 
         <input
           className="search"
-          placeholder={tab === 'users' ? 'Search user by name/email' : 'Search dog by name/breed'}
+          placeholder={tab === 'users' ? 'חפש משתמש לפי שם/דואר אלקטרוני' : 'חפש כלב לפי שם/גזע'}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
 
         {error ? <p className="error">{error}</p> : null}
-        {loading ? <p className="muted">Loading...</p> : null}
+        {loading ? <p className="muted">...טעינת נתונים</p> : null}
 
         {tab === 'users' ? (
           <table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Type</th>
-                <th>Status</th>
-                <th>Actions</th>
+                <th>שם</th>
+                <th>דואר אלקטרוני</th>
+                <th>סוג משתמש</th>
+                <th>סטטוס</th>
+                <th className="actions-header">פעולות</th>
               </tr>
             </thead>
             <tbody>
               {filteredUsers.map((u) => {
                 const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim() || '-';
+                let type = "-";
+                switch (u.type) {
+                  case 'AdminUser':
+                    type = 'אדמין';
+                    break;
+                  case 'RegularUser':
+                    type = 'משתמש רגיל';
+                    break;
+                  case 'DogWalkerUser':
+                    type = 'משתמש דוגווקר';
+                    break;
+                  default:
+                    break;
+                }
                 return (
                   <tr key={u.id}>
                     <td>{fullName}</td>
                     <td>{u.email}</td>
-                    <td>{u.type || '-'}</td>
-                    <td>{u.suspended ? 'Suspended' : 'Active'}</td>
+                    <td>{type}</td>
+                    <td>{u.suspended ? 'מושהה' : 'פעיל'}</td>
                     <td className="actions">
                       <button disabled={!!u.suspended} onClick={() => void onSuspend(u)}>
-                        Suspend
+                        חסום משתמש
                       </button>
                       <button className="danger" onClick={() => void onDeleteUser(u)}>
-                        Delete
+                        מחק משתמש
                       </button>
                     </td>
                   </tr>
@@ -243,12 +262,12 @@ export default function App() {
           <table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Breed</th>
-                <th>Gender</th>
-                <th>Birthdate</th>
-                <th>Users Related</th>
-                <th>Actions</th>
+                <th>שם</th>
+                <th>גזע</th>
+                <th>מגדר</th>
+                <th>תאריך לידה</th>
+                <th>משתמשים מקושרים</th>
+                <th style={{paddingLeft : '20px'}}>פעולות</th>
               </tr>
             </thead>
             <tbody>
@@ -256,12 +275,12 @@ export default function App() {
                 <tr key={d.id}>
                   <td>{d.name}</td>
                   <td>{d.breed}</td>
-                  <td>{d.gender === 'M' ? 'Male' : d.gender === 'F' ? 'Female' : '-'}</td>
+                  <td>{d.gender === 'M' ? 'זכר' : d.gender === 'F' ? 'נקבה' : '-'}</td>
                   <td>{d.birthdate || '-'}</td>
                   <td>{Array.isArray(d.users_related) ? d.users_related.join(', ') : '-'}</td>
                   <td className="actions">
                     <button className="danger" onClick={() => void onDeleteDog(d)}>
-                      Delete
+                      מחק כלב
                     </button>
                   </td>
                 </tr>

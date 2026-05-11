@@ -138,6 +138,10 @@ th {
   gap: 8px;
 }
 
+.actions-header {
+  padding-left: 100px;
+}
+
 .error {
   color: #b42318;
   margin-top: 10px;
