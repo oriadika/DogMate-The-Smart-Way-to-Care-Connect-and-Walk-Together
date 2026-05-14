@@ -36,6 +36,11 @@ public interface IUserRepository {
     Optional<UserAccount> findById(UUID id);
 
     /**
+     * Batch load by id (backed by {@link org.springframework.data.jpa.repository.JpaRepository#findAllById}).
+     */
+    List<UserAccount> findAllById(Iterable<UUID> ids);
+
+    /**
      * Check if a user with the given email exists
      * @param email The email to check
      * @return true if email exists, false otherwise

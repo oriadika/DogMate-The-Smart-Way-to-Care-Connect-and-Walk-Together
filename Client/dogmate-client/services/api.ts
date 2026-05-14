@@ -7,7 +7,7 @@ let authToken: string | null = null;
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -51,7 +51,7 @@ function getAuthFlowErrorMessage(error: any, fallbackHebrew: string): string {
   if (raw === 'Network Error' || raw === 'ERR_NETWORK') {
     return 'אין חיבור לרשת. בדוק את החיבור ונסה שוב.';
   }
-  if (/timeout/i.test(raw) || raw.includes('10000')) {
+  if (/timeout/i.test(raw)) {
     return 'השרת לא הגיב בזמן. נסה שוב.';
   }
   return fallbackHebrew;
@@ -923,6 +923,76 @@ export const reminderAPI = {
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'נכשלה מחיקת התזכורת';
       console.error("Failed to delete reminder:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+};
+
+export interface VaccinationRow {
+  id: string;
+  dogId: string;
+  dogName: string;
+  vaccineName: string;
+  administeredDate: string;
+  createdAt?: string | null;
+}
+
+export const vaccinationAPI = {
+  list: async (userId: string) => {
+    try {
+      const response = await apiClient.get(`/vaccinations/user/${userId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון את החיסונים';
+      console.error('Failed to list vaccinations:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  create: async (
+    userId: string,
+    payload: { dogId: string; vaccineName: string; administeredDate: string }
+  ) => {
+    try {
+      const response = await apiClient.post(`/vaccinations/user/${userId}`, {
+        dogId: payload.dogId,
+        vaccineName: payload.vaccineName,
+        administeredDate: payload.administeredDate,
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה שמירת החיסון';
+      console.error('Failed to create vaccination:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  update: async (
+    userId: string,
+    vaccinationId: string,
+    payload: { dogId: string; vaccineName: string; administeredDate: string }
+  ) => {
+    try {
+      const response = await apiClient.put(`/vaccinations/${vaccinationId}`, payload, {
+        params: { userId },
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל עדכון החיסון';
+      console.error('Failed to update vaccination:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  delete: async (userId: string, vaccinationId: string) => {
+    try {
+      const response = await apiClient.delete(`/vaccinations/${vaccinationId}`, {
+        params: { userId },
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה מחיקת החיסון';
+      console.error('Failed to delete vaccination:', errorMessage);
       throw new Error(errorMessage);
     }
   },

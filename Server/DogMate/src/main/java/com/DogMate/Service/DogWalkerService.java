@@ -14,8 +14,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.time.LocalDate;
 
 @Service
@@ -171,13 +175,21 @@ public class DogWalkerService {
         double average = count == 0 ? 0.0 : ratings.stream().mapToInt(DogWalkerRating::getStars).average().orElse(0.0);
         boolean alreadyRated = ownerId != null && ratings.stream().anyMatch(r -> r.getOwnerId().equals(ownerId));
 
+        Set<UUID> reviewerIds = ratings.stream().map(DogWalkerRating::getOwnerId).collect(Collectors.toSet());
+        Map<UUID, String> nameByOwnerId = new HashMap<>();
+        if (!reviewerIds.isEmpty()) {
+            for (UserAccount ua : userRepository.findAllById(reviewerIds)) {
+                if (ua instanceof RegularUser ru) {
+                    String name = (ru.getFirst_name() + " " + ru.getLast_name()).trim();
+                    nameByOwnerId.put(ua.getId(), name.isBlank() ? "בעל כלב" : name);
+                } else {
+                    nameByOwnerId.put(ua.getId(), "בעל כלב");
+                }
+            }
+        }
+
         List<WalkerReviewView> reviews = ratings.stream().map(r -> {
-            String reviewerName = userRepository.findById(r.getOwnerId())
-                    .filter(RegularUser.class::isInstance)
-                    .map(RegularUser.class::cast)
-                    .map(u -> (u.getFirst_name() + " " + u.getLast_name()).trim())
-                    .filter(name -> !name.isBlank())
-                    .orElse("בעל כלב");
+            String reviewerName = nameByOwnerId.getOrDefault(r.getOwnerId(), "בעל כלב");
             return new WalkerReviewView(
                     r.getId(),
                     r.getOwnerId(),
