@@ -35,14 +35,14 @@ function startExpo(publicApiUrl) {
   log(`\nUsing API tunnel: ${publicApiUrl}`);
   log('Starting Expo tunnel...\n');
 
-  const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  expo = spawn(npx, ['expo', 'start', '--tunnel', '--clear'], {
+  expo = spawn('npx expo start --tunnel --clear', {
     cwd: process.cwd(),
     env: {
       ...process.env,
       EXPO_PUBLIC_API_URL: publicApiUrl,
     },
     stdio: 'inherit',
+    shell: true,
   });
 
   expo.on('exit', (code, signal) => {
@@ -78,7 +78,10 @@ cloudflared.stderr.on('data', handleCloudflaredOutput);
 
 cloudflared.on('error', (err) => {
   if (err && err.code === 'ENOENT') {
-    console.error('cloudflared is not installed. Run: brew install cloudflared');
+    const installHint = process.platform === 'win32'
+      ? 'winget install Cloudflare.Cloudflared'
+      : 'brew install cloudflared';
+    console.error(`cloudflared is not installed. Run: ${installHint}`);
   } else {
     console.error('Failed to start cloudflared:', err?.message || err);
   }
