@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -8,6 +9,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { dogAPI, userAPI } from '../services/api';
 import { useUsers } from '../contexts/UsersContext';
@@ -20,6 +22,30 @@ const AdminScreen = ({ navigation, route }: any) => {
   const [dogs, setDogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loggedOut, setLoggedOut] = useState(false);
+  const [openSupportCount, setOpenSupportCount] = useState<number | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  const refreshOpenSupportCount = useCallback(async () => {
+    const adminId = route.params?.userId;
+    if (!adminId) {
+      setOpenSupportCount(0);
+      return;
+    }
+    try {
+      const res = await userAPI.getSupportRequests(String(adminId));
+      const list = Array.isArray(res.requests) ? res.requests : [];
+      const open = list.filter((r) => String(r.status || '').toUpperCase() === 'OPEN').length;
+      setOpenSupportCount(open);
+    } catch {
+      setOpenSupportCount(null);
+    }
+  }, [route.params?.userId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshOpenSupportCount();
+    }, [refreshOpenSupportCount])
+  );
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -71,34 +97,33 @@ const AdminScreen = ({ navigation, route }: any) => {
     alert('צפייה בדוחות עדיין לא זמינה');
   };
 
+  const handleSupportInbox = () => {
+    navigation.navigate('AdminSupportRequests', {
+      userId: route.params?.userId,
+      email: route.params?.email,
+    });
+  };
+
   const handleSystemSettings = () => {
     alert('הגדרות מערכת עדיין לא זמינות');
   };
 
   const handleLogout = () => {
-    Alert.alert('התנתקות', 'בטוח שברצונך להתנתק?', [
-      {
-        text: 'ביטול',
-        onPress: () => {},
-        style: 'cancel',
-      },
-      {
-        text: 'התנתקות',
-        onPress: async () => {
-          try {
-            await userAPI.logout(route?.params?.userId || '', route?.params?.email || '');
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Start' }],
-            });
-          } catch (error: any) {
-            Alert.alert('שגיאה', error.message || 'ההתנתקות נכשלה');
-            console.error('Sign out error:', error);
-          }
-        },
-        style: 'destructive',
-      },
-    ]);
+    setShowLogoutConfirm(true);
+  };
+
+  const performLogout = async () => {
+    setShowLogoutConfirm(false);
+    try {
+      await userAPI.logout(route?.params?.userId || '', route?.params?.email || '');
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Start' }],
+      });
+    } catch (error: any) {
+      Alert.alert('שגיאה', error.message || 'ההתנתקות נכשלה');
+      console.error('Sign out error:', error);
+    }
   };
 
   if (loading) {
@@ -114,6 +139,36 @@ const AdminScreen = ({ navigation, route }: any) => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <Modal
+        visible={showLogoutConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutConfirm(false)}
+      >
+        <View style={styles.logoutModalOverlay}>
+          <View style={styles.logoutModalCard}>
+            <Text style={styles.logoutModalTitle}>התנתקות</Text>
+            <Text style={styles.logoutModalMessage}>בטוח שברצונך להתנתק?</Text>
+            <View style={styles.logoutModalActions}>
+              <TouchableOpacity
+                style={styles.logoutModalCancelBtn}
+                onPress={() => setShowLogoutConfirm(false)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.logoutModalCancelText}>ביטול</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.logoutModalConfirmBtn}
+                onPress={performLogout}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.logoutModalConfirmText}>התנתקות</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>לוח בקרה למנהל</Text>
@@ -155,6 +210,22 @@ const AdminScreen = ({ navigation, route }: any) => {
 
           <TouchableOpacity style={styles.actionButton} onPress={handleManageDogs}>
             <Text style={styles.actionButtonText}>ניהול כלבים</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.actionButton} onPress={handleSupportInbox} activeOpacity={0.85}>
+            <View style={styles.supportBadgeWrap}>
+              <View
+                style={[
+                  styles.supportCountBadge,
+                  (openSupportCount ?? 0) > 0 ? styles.supportCountBadgeActive : styles.supportCountBadgeZero,
+                ]}
+              >
+                <Text style={styles.supportCountBadgeText}>
+                  {openSupportCount === null ? '…' : openSupportCount > 99 ? '99+' : String(openSupportCount)}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.actionButtonText}>פניות מלקוחות</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleViewReports}>
@@ -249,6 +320,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   actionButton: {
+    position: 'relative',
     backgroundColor: PRIMARY_COLOR,
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -259,6 +331,34 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
+  },
+  supportBadgeWrap: {
+    position: 'absolute',
+    left: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+  },
+  supportCountBadge: {
+    minWidth: 28,
+    height: 28,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  supportCountBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.45)',
+  },
+  supportCountBadgeZero: {
+    backgroundColor: 'rgba(0, 0, 0, 0.12)',
+  },
+  supportCountBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
   actionButtonText: {
     color: '#FFFFFF',
@@ -319,5 +419,75 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '700',
+  },
+  logoutModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    paddingHorizontal: 28,
+  },
+  logoutModalCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  logoutModalTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 10,
+    textAlign: 'center',
+    width: '100%',
+  },
+  logoutModalMessage: {
+    fontSize: 16,
+    color: '#475569',
+    lineHeight: 24,
+    marginBottom: 22,
+    textAlign: 'center',
+    width: '100%',
+  },
+  logoutModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+    width: '100%',
+  },
+  logoutModalCancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  logoutModalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#334155',
+    textAlign: 'center',
+  },
+  logoutModalConfirmBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    borderRadius: 12,
+    backgroundColor: DESTRUCTIVE_COLOR,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  logoutModalConfirmText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
 });

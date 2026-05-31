@@ -13,11 +13,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -56,35 +58,35 @@ public class DogService {
     @Transactional
     @CacheEvict(cacheNames = "dogsByUser", key = "#userId")
     public Dog addDogToUser(UUID userId, String name, String breed, LocalDate birthdate,
-                            char gender, String profileImageURL, RelationshipType relationshipType) {
+                            char gender, String profileImageURL, Double weightKg, RelationshipType relationshipType) {
         
         // Find the user (orchestration)
         Optional<UserAccount> userOptional = userRepository.findById(userId);
         if (userOptional.isEmpty()) {
-            throw new IllegalArgumentException("User with ID " + userId + " not found");
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
         }
         
         UserAccount userAccount = userOptional.get();
         if (!(userAccount instanceof RegularUser)) {
-            throw new IllegalArgumentException("User must be a RegularUser");
+            throw new IllegalArgumentException("רק משתמשים מסוג בעל כלב יכולים לבצע פעולה זו");
         }
         RegularUser user = (RegularUser) userAccount;
 
         if (!(gender == 'M' || gender == 'F')){
-            throw new IllegalArgumentException("gender is not valid");
+            throw new IllegalArgumentException("מין הכלב חייב להיות M או F");
         }
         if (birthdate.isAfter(LocalDate.now())){
-            throw new IllegalArgumentException("Date is not before current time");
+            throw new IllegalArgumentException("תאריך הלידה לא יכול להיות בעתיד");
         }
         // Create new dog (domain logic)
         UUID dogId = UUID.randomUUID();
-        Dog newDog = new Dog(dogId, name, breed, birthdate, gender, profileImageURL);
+        Dog newDog = new Dog(dogId, name, breed, birthdate, gender, profileImageURL, weightKg);
         
         // Save dog to repository (orchestration)
         Dog savedDog = dogRepository.save(newDog);
 
         if (relationshipType == null) {
-            throw new IllegalArgumentException("Relationship type is null");
+            throw new IllegalArgumentException("חסר סוג קשר");
         }
         // Create relationship between user and dog
         DogRelationship relationship = new DogRelationship(user, savedDog, relationshipType);
@@ -102,6 +104,62 @@ public class DogService {
     }
 
     /**
+     * Update dog fields for a user who has a relationship with the dog.
+     */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "dogsByUser", key = "#userId"),
+            @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    })
+    public Dog updateDogForUser(
+            UUID userId,
+            UUID dogId,
+            String name,
+            String breed,
+            LocalDate birthdate,
+            char gender,
+            String profileImageUrlOrNull,
+            Double weightKgOrNull
+    ) {
+        Optional<UserAccount> userOptional = userRepository.findById(userId);
+        if (userOptional.isEmpty()) {
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
+        }
+        UserAccount userAccount = userOptional.get();
+        if (!(userAccount instanceof RegularUser)) {
+            throw new IllegalArgumentException("רק משתמשים מסוג בעל כלב יכולים לבצע פעולה זו");
+        }
+        RegularUser user = (RegularUser) userAccount;
+
+        Dog dog = dogRepository.findById(dogId)
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא כלב עם המזהה: " + dogId));
+
+        boolean linked = dog.getDogRelationships().stream()
+                .anyMatch(rel -> rel.getRegularUser() != null && rel.getRegularUser().getId().equals(user.getId()));
+        if (!linked) {
+            throw new IllegalArgumentException("הכלב לא משויך למשתמש זה");
+        }
+
+        if (!(gender == 'M' || gender == 'F')) {
+            throw new IllegalArgumentException("מין הכלב חייב להיות M או F");
+        }
+        if (birthdate.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("תאריך הלידה לא יכול להיות בעתיד");
+        }
+
+        dog.setName(name.trim());
+        dog.setBreed(breed.trim());
+        dog.setBirthdate(birthdate);
+        dog.setGender(gender);
+        if (profileImageUrlOrNull != null && !profileImageUrlOrNull.isBlank()) {
+            dog.setProfileImageURL(profileImageUrlOrNull.trim());
+        }
+        dog.setWeightKg(weightKgOrNull);
+
+        return dogRepository.save(dog);
+    }
+
+    /**
      * Add an existing dog to a user through DogRelationship
      * Service layer - orchestration only
      * @param userId The ID of the user
@@ -115,19 +173,19 @@ public class DogService {
         // Find the user (orchestration)
         Optional<UserAccount> userOptional = userRepository.findById(userId);
         if (userOptional.isEmpty()) {
-            throw new IllegalArgumentException("User with ID " + userId + " not found");
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
         }
         
         UserAccount userAccount = userOptional.get();
         if (!(userAccount instanceof RegularUser)) {
-            throw new IllegalArgumentException("User must be a RegularUser");
+            throw new IllegalArgumentException("רק משתמשים מסוג בעל כלב יכולים לבצע פעולה זו");
         }
         RegularUser user = (RegularUser) userAccount;
         
         // Find the dog (orchestration)
         Optional<Dog> dogOptional = dogRepository.findById(dogId);
         if (dogOptional.isEmpty()) {
-            throw new IllegalArgumentException("Dog with ID " + dogId + " not found");
+            throw new IllegalArgumentException("לא נמצא כלב עם המזהה: " + dogId);
         }
         
         Dog dog = dogOptional.get();
@@ -159,12 +217,12 @@ public class DogService {
         // Find the user (orchestration)
         Optional<UserAccount> userOptional = userRepository.findById(userId);
         if (userOptional.isEmpty()) {
-            throw new IllegalArgumentException("User with ID " + userId + " not found");
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
         }
         
         UserAccount userAccount = userOptional.get();
         if (!(userAccount instanceof RegularUser)) {
-            throw new IllegalArgumentException("User must be a RegularUser");
+            throw new IllegalArgumentException("רק משתמשים מסוג בעל כלב יכולים לבצע פעולה זו");
         }
         RegularUser user = (RegularUser) userAccount;
         
@@ -205,7 +263,7 @@ public class DogService {
     })
     public void deleteDog(UUID dogId) {
         Dog dog = dogRepository.findById(dogId)
-                .orElseThrow(() -> new IllegalArgumentException("Dog with ID " + dogId + " not found"));
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא כלב עם המזהה: " + dogId));
 
          FoodStock foodStock = dog.getFoodStock();
         if (foodStock != null) {
@@ -237,7 +295,7 @@ public class DogService {
             double dailyConsumptionInGram
     ) {
         Dog dog = dogRepository.findById(dogId)
-                .orElseThrow(() -> new IllegalArgumentException("Dog with ID " + dogId + " not found"));
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא כלב עם המזהה: " + dogId));
 
         validateFoodStockInput(brandName, bagSizeInKg, currentLevelInKg, dailyConsumptionInGram);
         
@@ -273,10 +331,10 @@ public class DogService {
     @Transactional
     public boolean addDogToFoodStock(UUID dogId, UUID foodStockId) {
         Dog dog = dogRepository.findById(dogId)
-                .orElseThrow(() -> new IllegalArgumentException("Dog with ID " + dogId + " not found"));
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא כלב עם המזהה: " + dogId));
 
         FoodStock foodStock = foodStockRepository.findById(foodStockId)
-                .orElseThrow(() -> new IllegalArgumentException("Food stock with ID " + foodStockId + " not found"));
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא מלאי מזון עם המזהה: " + foodStockId));
 
         // disconnect (owning side)
         FoodStock oldFoodStock = dog.getFoodStock();
@@ -298,11 +356,11 @@ public class DogService {
     }
 
     private void validateFoodStockInput(String name, double size, double level, double consumption) {
-        if (name == null || name.isBlank()) {throw new IllegalArgumentException("Brand name cannot be empty");}
-        if (size <= 0) {throw new IllegalArgumentException("Bag size must be greater than 0 kg");}
-        if (level < 0) {throw new IllegalArgumentException("Current level cannot be negative");}
-        if (level > size) {throw new IllegalArgumentException("Current level cannot exceed the total bag size (" + size + " kg)");}
-        if (consumption <= 0) {throw new IllegalArgumentException("Daily consumption must be greater than 0 grams");}
+        if (name == null || name.isBlank()) {throw new IllegalArgumentException("חובה להזין שם מותג");}
+        if (size <= 0) {throw new IllegalArgumentException("גודל השק חייב להיות גדול מ־0 ק״ג");}
+        if (level < 0) {throw new IllegalArgumentException("הכמות הנוכחית לא יכולה להיות שלילית");}
+        if (level > size) {throw new IllegalArgumentException("הכמות הנוכחית לא יכולה לעלות על גודל השק (" + size + " ק״ג)");}
+        if (consumption <= 0) {throw new IllegalArgumentException("צריכה יומית חייבת להיות גדולה מ־0 גרם");}
     }
 
     /**
@@ -313,26 +371,60 @@ public class DogService {
      */
     @Cacheable(cacheNames = "dogsByUser", key = "#userId")
     public List<Dog> getDogsForUser(UUID userId) {
-        // Get all dogs from repository and filter by user relationships
-        List<Dog> allDogs = dogRepository.findAll();
-        List<Dog> userDogs = new java.util.ArrayList<>();
+        return dogRepository.findAllForRegularUser(userId);
+    }
 
-        for (Dog dog : allDogs) {
-            // Check if this dog has any relationships with the user
-            // Since we don't have a direct query method, we check through the dog's relationships
-            for (DogRelationship relationship : dog.getDogRelationships()) {
-                if (relationship.getRegularUser().getId().equals(userId)) {
-                    userDogs.add(dog);
-                    break; // No need to check other relationships for same dog
-                }
+    /**
+     * First non-blank dog profile image URL for map markers (e.g. logged-users API).
+     */
+    public Optional<String> getFirstMapDogProfileImageUrl(UUID userId) {
+        List<Dog> userDogs = getDogsForUser(userId);
+        for (Dog dog : userDogs) {
+            String url = dog.getProfileImageURL();
+            if (url != null && !url.isBlank()) {
+                return Optional.of(url.trim());
             }
         }
+        return Optional.empty();
+    }
 
-        return userDogs;
+    /**
+     * Same dog as map avatar when possible: first with profile image; otherwise first dog of the user.
+     */
+    public Optional<Dog> getPrimaryDogForMap(UUID userId) {
+        List<Dog> userDogs = getDogsForUser(userId);
+        if (userDogs.isEmpty()) {
+            return Optional.empty();
+        }
+        for (Dog dog : userDogs) {
+            String url = dog.getProfileImageURL();
+            if (url != null && !url.isBlank()) {
+                return Optional.of(dog);
+            }
+        }
+        return Optional.of(userDogs.get(0));
+    }
+
+    /**
+     * Adds mapDogName, mapDogBreed, mapDogBirthdate (ISO), mapDogAgeYears to userInfo when a dog exists.
+     */
+    public void putMapDogSummaryFields(UUID userId, Map<String, Object> userInfo) {
+        getPrimaryDogForMap(userId).ifPresent(dog -> {
+            if (dog.getName() != null && !dog.getName().isBlank()) {
+                userInfo.put("mapDogName", dog.getName().trim());
+            }
+            if (dog.getBreed() != null && !dog.getBreed().isBlank()) {
+                userInfo.put("mapDogBreed", dog.getBreed().trim());
+            }
+            if (dog.getBirthdate() != null) {
+                userInfo.put("mapDogBirthdate", dog.getBirthdate().toString());
+                userInfo.put("mapDogAgeYears", Period.between(dog.getBirthdate(), LocalDate.now()).getYears());
+            }
+        });
     }
 
     public List<Dog> getAllDogsforUser(UUID userId) {
-        return dogRepository.findAll().stream().filter(dog -> dog.getDogRelationships().stream().anyMatch(rel -> rel.getRegularUser().getId().equals(userId))).collect(Collectors.toList());
+        return dogRepository.findAllForRegularUser(userId);
     }
 
     /**
@@ -346,7 +438,7 @@ public class DogService {
         if (dogRepository instanceof com.DogMate.Infrastructure.DogRepository) {
             return ((com.DogMate.Infrastructure.DogRepository) dogRepository).findAll();
         }
-        throw new IllegalStateException("UserRepository is not properly configured");
+        throw new IllegalStateException("מאגר הכלבים לא מוגדר כראוי");
     }
 
     public List<FoodStockDTO> getUserFoodStocks(UUID userId) {
@@ -365,7 +457,7 @@ public class DogService {
 
     public FoodStockDTO renewFoodStock(UUID foodStockId) {
         FoodStock foodStock = foodStockRepository.findById(foodStockId)
-                .orElseThrow(() -> new IllegalArgumentException("Food stock with ID " + foodStockId + " not found"));
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא מלאי מזון עם המזהה: " + foodStockId));
         foodStock.renewStock();
         FoodStock updatedStock = foodStockRepository.save(foodStock);
         return new FoodStockDTO(updatedStock);
@@ -373,7 +465,7 @@ public class DogService {
 
     public void deleteFoodStock(UUID foodStockId) {
         FoodStock foodStock = foodStockRepository.findById(foodStockId)
-                .orElseThrow(() -> new IllegalArgumentException("Food stock with ID " + foodStockId + " not found"));
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא מלאי מזון עם המזהה: " + foodStockId));
         List<Dog> dogs = foodStock.getDogs();        
         for (Dog dog : new ArrayList<>(dogs)) {
             foodStock.removeDog(dog);
@@ -386,7 +478,7 @@ public class DogService {
     @Transactional
     public FoodStockDTO updateFoodStock(UUID foodStockId, FoodStockDTO foodStockDTO) {
         FoodStock foodStock = foodStockRepository.findById(foodStockId)
-                .orElseThrow(() -> new IllegalArgumentException("Food stock with ID " + foodStockId + " not found"));
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא מלאי מזון עם המזהה: " + foodStockId));
 
         validateFoodStockInput(
                 foodStockDTO.getBrandName(),

@@ -8,6 +8,10 @@ public class Ping {
     private String fromUserId;
     private String fromUserName;
     private String toUserId;
+    private String dogName;
+    private String dogBreed;
+    private String dogAgeLabel;
+    private String dogImageUrl;
     private LocalDateTime createdAt;
     private boolean read;
 
@@ -58,6 +62,38 @@ public class Ping {
 
     public void setToUserId(String toUserId) {
         this.toUserId = toUserId;
+    }
+
+    public String getDogName() {
+        return dogName;
+    }
+
+    public void setDogName(String dogName) {
+        this.dogName = dogName;
+    }
+
+    public String getDogBreed() {
+        return dogBreed;
+    }
+
+    public void setDogBreed(String dogBreed) {
+        this.dogBreed = dogBreed;
+    }
+
+    public String getDogAgeLabel() {
+        return dogAgeLabel;
+    }
+
+    public void setDogAgeLabel(String dogAgeLabel) {
+        this.dogAgeLabel = dogAgeLabel;
+    }
+
+    public String getDogImageUrl() {
+        return dogImageUrl;
+    }
+
+    public void setDogImageUrl(String dogImageUrl) {
+        this.dogImageUrl = dogImageUrl;
     }
 
     public LocalDateTime getCreatedAt() {

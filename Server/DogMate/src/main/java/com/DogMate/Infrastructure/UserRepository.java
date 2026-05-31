@@ -21,11 +21,15 @@ public interface UserRepository extends JpaRepository<UserAccount, UUID>, IUserR
      */
     Optional<UserAccount> findByEmail(String email);
 
+    Optional<UserAccount> findByEmailIgnoreCase(String email);
+
     /**
      * Spring Data JPA automatically implements this method
      * Checks if a user with the given email exists
      */
     boolean existsByEmail(String email);
+
+    boolean existsByEmailIgnoreCase(String email);
 
     /**
      * Return all users in the

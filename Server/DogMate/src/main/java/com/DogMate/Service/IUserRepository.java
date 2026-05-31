@@ -24,6 +24,11 @@ public interface IUserRepository {
     Optional<UserAccount> findByEmail(String email);
 
     /**
+     * Case-insensitive email lookup (for verification and login flows).
+     */
+    Optional<UserAccount> findByEmailIgnoreCase(String email);
+
+    /**
      * Find a user by ID
      * @param id The UUID of the user
      * @return Optional containing the user if found
@@ -31,11 +36,18 @@ public interface IUserRepository {
     Optional<UserAccount> findById(UUID id);
 
     /**
+     * Batch load by id (backed by {@link org.springframework.data.jpa.repository.JpaRepository#findAllById}).
+     */
+    List<UserAccount> findAllById(Iterable<UUID> ids);
+
+    /**
      * Check if a user with the given email exists
      * @param email The email to check
      * @return true if email exists, false otherwise
      */
     boolean existsByEmail(String email);
+
+    boolean existsByEmailIgnoreCase(String email);
 
     /**
      * Delete a user by ID

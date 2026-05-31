@@ -50,4 +50,15 @@ public interface IDogRepository {
     """)
     List<Dog> searchDogs(@Param("text") String text);
 
+    /**
+     * Dogs linked to this regular user via {@code dog_relationships} — one query instead of
+     * {@code findAll()} plus lazy N+1 loads (which timed out the mobile client on remote DB).
+     */
+    @Query("""
+        SELECT DISTINCT d FROM Dog d
+        INNER JOIN d.dogRelationships dr
+        WHERE dr.regularUser.id = :userId
+        """)
+    List<Dog> findAllForRegularUser(@Param("userId") UUID userId);
+
 }

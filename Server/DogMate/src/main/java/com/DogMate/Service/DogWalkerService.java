@@ -14,8 +14,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.time.LocalDate;
 
 @Service
 public class DogWalkerService {
@@ -59,11 +64,35 @@ public class DogWalkerService {
         return dogWalkerRepository.save(newUser);
     }
 
+    /**
+     * Creates a walker after email OTP; password is already bcrypt-hashed (from pending registration).
+     */
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    @Transactional
+    public DogWalkerUser registerDogWalkerFromPending(
+        String email,
+        String passwordHash,
+        String firstName,
+        String lastName,
+        String phoneNumber,
+        LocalDate birthDate
+    ) {
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new IllegalArgumentException("כתובת המייל כבר קיימת במערכת: " + email);
+        }
+        DogWalkerUser newUser = DogWalkerUser.createWithHashedPassword(email, passwordHash, firstName, lastName);
+        if (phoneNumber != null && !phoneNumber.isBlank()) {
+            newUser.setPhoneNumber(phoneNumber);
+        }
+        newUser.setBirthDate(birthDate);
+        return dogWalkerRepository.save(newUser);
+    }
+
     private DogWalkerUser loadDogWalkerOrThrow(UUID userId) {
         UserAccount user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId));
         if (!(user instanceof DogWalkerUser walker)) {
-            throw new IllegalArgumentException("User is not a dog walker: " + userId);
+            throw new IllegalArgumentException("המשתמש אינו דוגווקר: " + userId);
         }
         return walker;
     }
@@ -94,20 +123,20 @@ public class DogWalkerService {
         UserAccount.validateUserId(walkerId);
         UserAccount.validateUserId(ownerId);
         if (stars == null || stars < 1 || stars > 5) {
-            throw new IllegalArgumentException("stars must be between 1 and 5");
+            throw new IllegalArgumentException("הדירוג חייב להיות בין 1 ל־5");
         }
 
         // Validate user roles.
         loadDogWalkerOrThrow(walkerId);
         UserAccount owner = userRepository.findById(ownerId)
-                .orElseThrow(() -> new IllegalArgumentException("Owner not found with ID: " + ownerId));
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא בעל כלב עם המזהה: " + ownerId));
         if (!(owner instanceof RegularUser)) {
-            throw new IllegalArgumentException("Only dog owners can rate dog walkers");
+            throw new IllegalArgumentException("רק בעלי כלבים יכולים לדרג דוגווקרים");
         }
 
         boolean alreadyRated = dogWalkerRatingRepository.existsByWalkerIdAndOwnerId(walkerId, ownerId);
         if (alreadyRated) {
-            throw new IllegalArgumentException("You already rated this dog walker");
+            throw new IllegalArgumentException("כבר דירגת את הדוגווקר הזה");
         }
 
         DogWalkerRating rating = new DogWalkerRating(
@@ -127,13 +156,13 @@ public class DogWalkerService {
         UserAccount.validateUserId(ownerId);
 
         DogWalkerRating rating = dogWalkerRatingRepository.findById(ratingId)
-                .orElseThrow(() -> new IllegalArgumentException("Rating not found with ID: " + ratingId));
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא דירוג עם המזהה: " + ratingId));
 
         if (!rating.getWalkerId().equals(walkerId)) {
-            throw new IllegalArgumentException("Rating does not belong to the selected dog walker");
+            throw new IllegalArgumentException("הדירוג אינו שייך לדוגווקר שנבחר");
         }
         if (!rating.getOwnerId().equals(ownerId)) {
-            throw new AccessDeniedException("You can delete only your own review");
+            throw new AccessDeniedException("ניתן למחוק רק ביקורות ששלחת");
         }
 
         dogWalkerRatingRepository.delete(rating);
@@ -146,13 +175,21 @@ public class DogWalkerService {
         double average = count == 0 ? 0.0 : ratings.stream().mapToInt(DogWalkerRating::getStars).average().orElse(0.0);
         boolean alreadyRated = ownerId != null && ratings.stream().anyMatch(r -> r.getOwnerId().equals(ownerId));
 
+        Set<UUID> reviewerIds = ratings.stream().map(DogWalkerRating::getOwnerId).collect(Collectors.toSet());
+        Map<UUID, String> nameByOwnerId = new HashMap<>();
+        if (!reviewerIds.isEmpty()) {
+            for (UserAccount ua : userRepository.findAllById(reviewerIds)) {
+                if (ua instanceof RegularUser ru) {
+                    String name = (ru.getFirst_name() + " " + ru.getLast_name()).trim();
+                    nameByOwnerId.put(ua.getId(), name.isBlank() ? "בעל כלב" : name);
+                } else {
+                    nameByOwnerId.put(ua.getId(), "בעל כלב");
+                }
+            }
+        }
+
         List<WalkerReviewView> reviews = ratings.stream().map(r -> {
-            String reviewerName = userRepository.findById(r.getOwnerId())
-                    .filter(RegularUser.class::isInstance)
-                    .map(RegularUser.class::cast)
-                    .map(u -> (u.getFirst_name() + " " + u.getLast_name()).trim())
-                    .filter(name -> !name.isBlank())
-                    .orElse("בעל כלב");
+            String reviewerName = nameByOwnerId.getOrDefault(r.getOwnerId(), "בעל כלב");
             return new WalkerReviewView(
                     r.getId(),
                     r.getOwnerId(),

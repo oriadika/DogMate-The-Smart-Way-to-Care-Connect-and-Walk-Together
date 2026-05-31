@@ -7,14 +7,26 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  Pressable,
   KeyboardAvoidingView,
   Platform,
   Alert,
   ActivityIndicator,
   ScrollView,
+  Modal,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
 import { isValidIsraeliMobileInput } from '../utils/phoneValidation';
+
+/** Basic format check before sending verification email (no spaces in local/domain parts). */
+const EMAIL_FORMAT_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidEmailFormat(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return EMAIL_FORMAT_REGEX.test(normalized);
+}
 
 const SignUpScreen: React.FC = ({ navigation }: any) => {
   const [firstName, setFirstName] = useState('');
@@ -24,11 +36,43 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [birthDate, setBirthDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  const formatDate = (date: Date): string => {
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+      if (event.type !== 'dismissed' && selectedDate) {
+        setBirthDate(selectedDate);
+      }
+    } else if (selectedDate) {
+      setBirthDate(selectedDate);
+    }
+  };
 
   const handleSignUp = async () => {
     if (!firstName.trim() || !lastName.trim() || !email.trim() || !password || !confirmPassword) {
       Alert.alert('שדות חסרים', 'אנא מלא את כל השדות.');
+      return;
+    }
+
+    const emailTrimmed = email.trim().toLowerCase();
+    if (!isValidEmailFormat(emailTrimmed)) {
+      Alert.alert(
+        'הרשמה נכשלה',
+        'ההרשמה לא הושלמה כי כתובת האימייל לא תקינה. נא להזין כתובת בפורמט תקין (למשל user@example.com).'
+      );
       return;
     }
 
@@ -42,10 +86,27 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
       return;
     }
 
-    if (!isValidIsraeliMobileInput(phoneNumber.trim())) {
+    const phoneTrimmed = phoneNumber.trim();
+    if (role === 'walker') {
+      if (!isValidIsraeliMobileInput(phoneTrimmed)) {
+        Alert.alert(
+          'מספר טלפון לא תקין',
+          'לדוגווקר נדרש מספר פלאפון ישראלי תקין (למשל 05XXXXXXXX).'
+        );
+        return;
+      }
+    } else if (phoneTrimmed && !isValidIsraeliMobileInput(phoneTrimmed)) {
       Alert.alert(
         'מספר טלפון לא תקין',
-        'נדרש מספר פלאפון ישראלי תקין (למשל 05XXXXXXXX).'
+        'אם ממלאים מספר פלאפון, יש להזין מספר ישראלי תקין (למשל 05XXXXXXXX).'
+      );
+      return;
+    }
+
+    if (!acceptedTerms) {
+      Alert.alert(
+        'אישור תנאי שימוש נדרש',
+        'יש לסמן את תיבת האישור כדי לאשר שקראת את תנאי השימוש ומדיניות הפרטיות.'
       );
       return;
     }
@@ -54,56 +115,49 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
     try {
       // Call the API to register the user
       const response = await userAPI.register({
-        email,
+        email: emailTrimmed,
         password,
         firstName,
         lastName,
-        phoneNumber,
+        birthDate: `${birthDate.getFullYear()}-${(birthDate.getMonth() + 1).toString().padStart(2, '0')}-${birthDate.getDate().toString().padStart(2, '0')}`,
+        phoneNumber: phoneTrimmed || undefined,
         userRole: role,
       });
-
-      let registeredUserId = response?.userId;
-
-      // Fallback: if register response misses userId, login immediately to retrieve it.
-      if (!registeredUserId) {
-        const loginResponse = await userAPI.login({ email, password });
-        registeredUserId = loginResponse?.userId;
-      }
-
-      if (!registeredUserId) {
-        throw new Error('Registration succeeded, but failed to obtain user ID');
-      }
 
     const registeredRole =
       response?.userRole === 'walker' || response?.userRole === 'owner'
         ? response.userRole
         : role;
 
+    const mailOk = response?.verificationEmailSent !== false;
     Alert.alert(
-      'החשבון נוצר בהצלחה',
-      `ברוך הבא ל-DogMate, ${firstName} ${lastName}! (${registeredRole === 'owner' ? 'בעל כלב' : 'דוגווקר'})`
+      mailOk ? 'קוד אימות נשלח' : 'שימו לב',
+      mailOk
+        ? 'החשבון ייווצר רק אחרי שתזין את הקוד שנשלח למייל שלך.'
+        : 'השרת לא הצליח לשלוח מייל (חסרה הגדרת SMTP). הקוד מופיע בלוג השרת. אחרי הגדרת סיסמת אפליקציה ב-Gmail יופעל שליחה אוטומטית.'
     );
 
-    const homeParams = {
-      userId: registeredUserId,
-      userFirstName: firstName,
-      userLastName: lastName,
-      email,
+    const verifyParams = {
+      firstName,
+      lastName,
+      email: (response?.email as string | undefined)?.trim() || emailTrimmed,
       userRole: registeredRole,
-      phoneNumber,
+      phoneNumber: phoneTrimmed,
+      password,
+      fromSignUp: true,
     };
 
-    navigation.reset({
-      index: 0,
-      routes: [
-        {
-          name: registeredRole === 'walker' ? 'WalkerHome' : 'Home',
-          params: homeParams,
-        },
-      ],
-    });
+    navigation.navigate('VerifyEmail', verifyParams);
     } catch (error: any) {
-      Alert.alert('הרשמה נכשלה', error.message || 'אירעה שגיאה בעת ההרשמה');
+      const msg = error?.message || 'אירעה שגיאה בעת ההרשמה';
+      const disposableEmail =
+        typeof msg === 'string' && msg.includes('מייל זמני');
+      Alert.alert(
+        'הרשמה נכשלה',
+        disposableEmail
+          ? `ההרשמה לא הושלמה בגלל האימייל: ${msg}`
+          : msg
+      );
       console.error('Sign up error:', error);
     } finally {
       setIsLoading(false);
@@ -117,8 +171,8 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
         style={styles.backButton}
         onPress={() => navigation.navigate('Start')}
       >
-        <Text style={styles.backIcon}>←</Text>
-      </TouchableOpacity>
+        <Text style={styles.backIcon}>→</Text>
+        </TouchableOpacity>
 
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAvoidingView
@@ -139,27 +193,35 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
                 </View>
 
                 {/* First Name */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="שם פרטי"
-                  placeholderTextColor="#A9B5C7"
-                  value={firstName}
-                  onChangeText={setFirstName}
-                  textAlign="right"
-                />
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    שם פרטי <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[styles.input, styles.inputInField]}
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    textAlign="right"
+                  />
+                </View>
 
                 {/* Last Name */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="שם משפחה"
-                  placeholderTextColor="#A9B5C7"
-                  value={lastName}
-                  onChangeText={setLastName}
-                  textAlign="right"
-                />
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    שם משפחה <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[styles.input, styles.inputInField]}
+                    value={lastName}
+                    onChangeText={setLastName}
+                    textAlign="right"
+                  />
+                </View>
 
                 {/* Role selector */}
-                <Text style={styles.roleLabel}>אני נרשם בתור:</Text>
+                <Text style={styles.roleLabel}>
+                  אני נרשם בתור: <Text style={styles.requiredStar}>*</Text>
+                </Text>
                 <View style={styles.roleRow}>
                   <TouchableOpacity
                     style={[
@@ -194,50 +256,185 @@ const SignUpScreen: React.FC = ({ navigation }: any) => {
                   </TouchableOpacity>
                 </View>
 
+                {/* Birth Date */}
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    תאריך לידה <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.input, styles.inputInField]}
+                    onPress={() => setShowDatePicker(true)}
+                    activeOpacity={0.7}
+                    disabled={isLoading}
+                  >
+                    <View style={styles.datePickerContent}>
+                      <Text style={styles.dateText}>{formatDate(birthDate)}</Text>
+                      <Ionicons name="calendar-outline" size={20} color="#8B7355" />
+                    </View>
+                  </TouchableOpacity>
+
+                  {Platform.OS === 'ios' && (
+                    <Modal
+                      visible={showDatePicker}
+                      transparent
+                      animationType="slide"
+                      onRequestClose={() => setShowDatePicker(false)}
+                    >
+                      <View style={styles.modalContainer}>
+                        <View style={styles.modalContent}>
+                          <View style={styles.modalHeader}>
+                            <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                              <Text style={styles.modalDoneText}>סיום</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <DateTimePicker
+                            value={birthDate}
+                            mode="date"
+                            display="spinner"
+                            onChange={onDateChange}
+                            maximumDate={new Date()}
+                            textColor="#5C4033"
+                            style={styles.datePicker}
+                          />
+                        </View>
+                      </View>
+                    </Modal>
+                  )}
+
+                  {Platform.OS === 'android' && showDatePicker && (
+                    <DateTimePicker
+                      value={birthDate}
+                      mode="date"
+                      display="default"
+                      onChange={onDateChange}
+                      maximumDate={new Date()}
+                    />
+                  )}
+                </View>
+
                 {/* Phone Number */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="מספר פלאפון (חובה, 05…)"
-                  placeholderTextColor="#A9B5C7"
-                  keyboardType="phone-pad"
-                  value={phoneNumber}
-                  onChangeText={setPhoneNumber}
-                  textAlign="right"
-                />
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    מספר פלאפון{' '}
+                    {role === 'walker' ? (
+                      <Text style={styles.requiredStar}>*</Text>
+                    ) : (
+                      <Text style={styles.optionalHint}>(אופציונלי)</Text>
+                    )}
+                  </Text>
+                  <TextInput
+                    style={[styles.input, styles.inputInField]}
+                    keyboardType="phone-pad"
+                    value={phoneNumber}
+                    onChangeText={setPhoneNumber}
+                    textAlign="right"
+                  />
+                </View>
 
                 {/* Email */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="אימייל"
-                  placeholderTextColor="#A9B5C7"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={setEmail}
-                  textAlign="right"
-                />
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    אימייל <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[styles.input, styles.inputInField]}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={email}
+                    onChangeText={setEmail}
+                    textAlign="right"
+                  />
+                </View>
 
                 {/* Password */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="סיסמה"
-                  placeholderTextColor="#A9B5C7"
-                  secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
-                  textAlign="right"
-                />
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    סיסמה <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <View style={styles.passwordInputRow}>
+                    <TouchableOpacity
+                      style={styles.eyeButton}
+                      onPress={() => setShowPassword((prev) => !prev)}
+                      activeOpacity={0.8}
+                      accessibilityLabel={showPassword ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                    >
+                      <Ionicons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#8B7355"
+                      />
+                    </TouchableOpacity>
+                    <TextInput
+                      style={styles.passwordInputInner}
+                      secureTextEntry={!showPassword}
+                      value={password}
+                      onChangeText={setPassword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      textAlign="right"
+                    />
+                  </View>
+                </View>
 
                 {/* Confirm Password */}
-                <TextInput
-                  style={styles.input}
-                  placeholder="אימות סיסמה"
-                  placeholderTextColor="#A9B5C7"
-                  secureTextEntry
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  textAlign="right"
-                />
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>
+                    אימות סיסמה <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <View style={styles.passwordInputRow}>
+                    <TouchableOpacity
+                      style={styles.eyeButton}
+                      onPress={() => setShowConfirmPassword((prev) => !prev)}
+                      activeOpacity={0.8}
+                      accessibilityLabel={showConfirmPassword ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                    >
+                      <Ionicons
+                        name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#8B7355"
+                      />
+                    </TouchableOpacity>
+                    <TextInput
+                      style={styles.passwordInputInner}
+                      secureTextEntry={!showConfirmPassword}
+                      value={confirmPassword}
+                      onChangeText={setConfirmPassword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      textAlign="right"
+                    />
+                  </View>
+                </View>
+
+                <Text style={[styles.fieldLabel, styles.termsFieldLabel]}>
+                  אישור תנאי שימוש ומדיניות פרטיות{' '}
+                  <Text style={styles.requiredStar}>*</Text>
+                </Text>
+                <View style={styles.termsRow}>
+                  <Pressable
+                    style={styles.termsCheckboxButton}
+                    onPress={() => setAcceptedTerms((prev) => !prev)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: acceptedTerms }}
+                    accessibilityLabel="אישור קריאת תנאי שימוש ומדיניות פרטיות"
+                  >
+                    <Ionicons
+                      name={acceptedTerms ? 'checkbox' : 'square-outline'}
+                      size={24}
+                      color={acceptedTerms ? PRIMARY_COLOR : '#8B7355'}
+                    />
+                  </Pressable>
+                  <Text style={styles.termsText}>
+                    אני מאשר/ת שקראתי את{' '}
+                    <Text style={styles.termsLink} onPress={() => navigation.navigate('TermsPrivacy')}>
+                      תנאי השימוש ומדיניות הפרטיות
+                    </Text>
+                  </Text>
+                </View>
+
+                <Text style={styles.requiredFieldLegend}>
+                  <Text style={styles.requiredStar}>*</Text> שדה חובה
+                </Text>
 
                 {/* Sign Up button */}
                 <TouchableOpacity
@@ -307,6 +504,29 @@ const styles = StyleSheet.create({
     color: '#5C4033', // Dark brown
     textAlign: 'center',
   },
+  fieldBlock: {
+    marginBottom: 14,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5C4033',
+    textAlign: 'right',
+    marginBottom: 6,
+  },
+  requiredStar: {
+    color: '#D32F2F',
+    fontWeight: '700',
+  },
+  optionalHint: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#8B7355',
+  },
+  termsFieldLabel: {
+    marginTop: 2,
+    marginBottom: 8,
+  },
   input: {
     backgroundColor: '#faf0e6', // Light beige
     borderRadius: 12,
@@ -318,6 +538,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0d5c7', // Subtle border
     minHeight: 50,
+  },
+  inputInField: {
+    marginBottom: 0,
+  },
+  passwordInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0d5c7',
+    borderRadius: 12,
+    backgroundColor: '#faf0e6',
+    paddingHorizontal: 10,
+    minHeight: 50,
+  },
+  eyeButton: {
+    padding: 6,
+  },
+  passwordInputInner: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    fontSize: 16,
+    color: '#000000',
   },
   roleLabel: {
     fontSize: 16,
@@ -366,6 +609,29 @@ const styles = StyleSheet.create({
   roleTextInactive: {
     color: '#5C4033',
   },
+  termsRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 8,
+    gap: 8,
+  },
+  termsCheckboxButton: {
+    padding: 2,
+  },
+  termsText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#5C4033',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+    lineHeight: 18,
+  },
+  termsLink: {
+    color: '#1E6BB8',
+    textDecorationLine: 'underline',
+    fontWeight: '700',
+  },
   primaryButton: {
     marginTop: 10,
     backgroundColor: PRIMARY_COLOR,
@@ -413,5 +679,55 @@ const styles = StyleSheet.create({
   footerLinkTextBold: {
     fontWeight: '700',
     color: '#5C4033',
+  },
+  requiredFieldLegend: {
+    marginTop: 10,
+    marginBottom: 10,
+    fontSize: 12,
+    color: '#8B7355',
+    textAlign: 'right',
+    alignSelf: 'stretch',
+  },
+  datePickerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  dateText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'right',
+    flex: 1,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    backgroundColor: '#faf0e6',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    alignItems: 'center',
+  },
+  modalHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0D5C7',
+  },
+  modalDoneText: {
+    color: PRIMARY_COLOR,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  datePicker: {
+    width: '100%',
+    height: 200,
   },
 });

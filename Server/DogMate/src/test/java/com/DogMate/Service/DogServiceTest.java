@@ -47,6 +47,7 @@ class DogServiceTest {
                 LocalDate.now(),
                 'M',
                 "img_url",
+                null,
                 RelationshipType.OWNERSHIP
         );
 
@@ -80,6 +81,7 @@ class DogServiceTest {
                         LocalDate.now(),
                         'M',
                         "img_url",
+                        null,
                         RelationshipType.OWNERSHIP
                 )
         );
@@ -104,6 +106,7 @@ class DogServiceTest {
                         LocalDate.now(),
                         'M',
                         "img_url",
+                        null,
                         null
                 )
         );
@@ -124,6 +127,7 @@ class DogServiceTest {
                         LocalDate.now(),
                         'X',
                         "img_url",
+                        null,
                         RelationshipType.OWNERSHIP
                 )
         );
