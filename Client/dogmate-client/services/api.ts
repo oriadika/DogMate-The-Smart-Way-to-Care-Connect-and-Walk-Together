@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { getApiBaseUrlWithPath } from './config';
 
+
 const API_BASE_URL = getApiBaseUrlWithPath('api');
 
 let authToken: string | null = null;
