@@ -100,6 +100,12 @@ const HealthScreen = ({ navigation }: any) => {
             title="החיסונים שלי"
             description="רישום חיסונים לפי כלב ותאריך"
           />
+          <HealthMenuRow
+            onPress={() => openHealthStackScreen(navigation, 'MedicationsHub')}
+            icon={<MaterialCommunityIcons name="pill" size={40} color={PRIMARY_COLOR} />}
+            title="התרופות שלי"
+            description="רישום תרופות וטיפולים"
+          />
         </ScrollView>
       </View>
     </SafeAreaView>
