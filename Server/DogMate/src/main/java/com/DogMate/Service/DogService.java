@@ -371,22 +371,7 @@ public class DogService {
      */
     @Cacheable(cacheNames = "dogsByUser", key = "#userId")
     public List<Dog> getDogsForUser(UUID userId) {
-        // Get all dogs from repository and filter by user relationships
-        List<Dog> allDogs = dogRepository.findAll();
-        List<Dog> userDogs = new java.util.ArrayList<>();
-
-        for (Dog dog : allDogs) {
-            // Check if this dog has any relationships with the user
-            // Since we don't have a direct query method, we check through the dog's relationships
-            for (DogRelationship relationship : dog.getDogRelationships()) {
-                if (relationship.getRegularUser().getId().equals(userId)) {
-                    userDogs.add(dog);
-                    break; // No need to check other relationships for same dog
-                }
-            }
-        }
-
-        return userDogs;
+        return dogRepository.findAllForRegularUser(userId);
     }
 
     /**
@@ -439,7 +424,7 @@ public class DogService {
     }
 
     public List<Dog> getAllDogsforUser(UUID userId) {
-        return dogRepository.findAll().stream().filter(dog -> dog.getDogRelationships().stream().anyMatch(rel -> rel.getRegularUser().getId().equals(userId))).collect(Collectors.toList());
+        return dogRepository.findAllForRegularUser(userId);
     }
 
     /**

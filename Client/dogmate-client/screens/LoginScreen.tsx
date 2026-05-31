@@ -49,8 +49,8 @@ const LoginScreen = ({ navigation }: any) => {
                   name: role === 'walker' ? 'WalkerHome' : 'Home',
                   params: {
                       userId: response.userId,
-                      email: response.email,
-                      userFirstName: response.firstName || response.email,
+                      email: response.email || email.trim(),
+                      userFirstName: response.firstName || response.email || email.trim(),
                       userLastName: response.lastName || '',
                       userRole: role,
                       phoneNumber: response.phoneNumber || '',

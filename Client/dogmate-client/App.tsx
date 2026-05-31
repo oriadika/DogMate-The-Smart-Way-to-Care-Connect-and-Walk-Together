@@ -26,6 +26,10 @@ import SupportScreen from './screens/SupportScreen';
 import FoodIntakeScreen from './screens/Health/FoodIntakeScreen';
 import AddReminderScreen from './screens/AddReminderScreen';
 import FoodInventoryHubScreen from './screens/Health/FoodInventoryHubScreen';
+import VaccinationsHubScreen from './screens/Health/VaccinationsHubScreen';
+import VaccinationFormScreen from './screens/Health/VaccinationFormScreen';
+import MedicationsHubScreen from './screens/Health/MedicationsHubScreen';
+import MedicationFormScreen from './screens/Health/MedicationFormScreen';
 import { setupNotificationListeners, requestNotificationPermissions } from './services/notifications';
 import SOSScreen from './screens/SOSScreen';
 import AdminScreen from './screens/AdminScreen';
@@ -34,6 +38,7 @@ import ManageUsersScreen from './screens/ManageScreens/Users/ManageUsersScreen';
 import UserDetailsScreen from './screens/ManageScreens/Users/UserDetailsScreen';
 import ManageDogScreens from './screens/ManageScreens/Dogs/ManageDogScreens';
 import DogDetailScreen from './screens/ManageScreens/Dogs/DogDetailScreen';
+import { rootNavigationRef } from './navigation/rootNavigationRef';
 
 const Stack = createNativeStackNavigator();
 
@@ -52,7 +57,7 @@ export default function App() {
     <SafeAreaProvider>
       <UsersProvider>
         <MessageDialogHost />
-        <NavigationContainer>
+        <NavigationContainer ref={rootNavigationRef}>
           <Stack.Navigator initialRouteName="Start" screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Start" component={StartScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
@@ -73,6 +78,10 @@ export default function App() {
           <Stack.Screen name="TermsPrivacy" component={TermsPrivacyScreen} />
           <Stack.Screen name="Support" component={SupportScreen} />
           <Stack.Screen name="FoodInventoryHub" component={FoodInventoryHubScreen} />
+          <Stack.Screen name="VaccinationsHub" component={VaccinationsHubScreen} />
+          <Stack.Screen name="VaccinationForm" component={VaccinationFormScreen} />
+          <Stack.Screen name="MedicationsHub" component={MedicationsHubScreen} />
+          <Stack.Screen name="MedicationForm" component={MedicationFormScreen} />
           <Stack.Screen name="FoodIntake" component={FoodIntakeScreen} />
           <Stack.Screen name="AddReminder" component={AddReminderScreen} />
           <Stack.Screen name="Emergency" component={SOSScreen} />

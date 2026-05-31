@@ -1,48 +1,74 @@
 // screens/Health/HealthScreen.tsx
-import React, { useState, useCallback } from 'react';
-import {
-  SafeAreaView,
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-} from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import React from 'react';
+import { SafeAreaView, View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { userAPI } from '../../services/api';
 import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
+import { navigateRoot, rootNavigationRef } from '../../navigation/rootNavigationRef';
 
-const PRIMARY_COLOR = '#7FB069'; // Sage green
-const BG_COLOR = '#FAEFDD'; // Main background
-const TEXT_DARK = '#5C4033'; // Dark brown for text
-const CARD_BG = '#faf0e6'; // Lighter beige for inputs/cards
-const BORDER_COLOR = '#E0D5C7'; // Border color
+const PRIMARY_COLOR = '#7FB069';
+const BG_COLOR = '#FAEFDD';
+const TEXT_DARK = '#5C4033';
+const BORDER_COLOR = '#E0D5C7';
+
+/** Fallback when ref not ready yet: walk parents until a navigator lists the target route. */
+function navigateToRootStackScreen(navigation: any, screenName: string) {
+  let nav: any = navigation;
+  for (let depth = 0; depth < 10 && nav; depth++) {
+    try {
+      const state = nav.getState?.();
+      const names: string[] | undefined = state?.routeNames;
+      if (Array.isArray(names) && names.includes(screenName)) {
+        nav.navigate(screenName);
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    nav = nav.getParent?.();
+  }
+  navigation.navigate(screenName);
+}
+
+function openHealthStackScreen(navigation: any, screenName: string) {
+  if (rootNavigationRef.isReady()) {
+    navigateRoot(screenName);
+    return;
+  }
+  navigateToRootStackScreen(navigation, screenName);
+}
+
+type HealthMenuRowProps = {
+  onPress: () => void;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+};
+
+function HealthMenuRow({ onPress, icon, title, description }: HealthMenuRowProps) {
+  return (
+    <TouchableOpacity
+      style={styles.featureButton}
+      onPress={onPress}
+      activeOpacity={0.8}
+    >
+      <View style={styles.featureIconContainer}>{icon}</View>
+      <View style={styles.featureContent}>
+        <Text style={styles.featureTitle}>{title}</Text>
+        <Text style={styles.featureDescription}>{description}</Text>
+      </View>
+      <Ionicons name="chevron-back" size={24} color={TEXT_DARK} />
+    </TouchableOpacity>
+  );
+}
 
 const HealthScreen = ({ navigation }: any) => {
-  const [userId, setUserId] = useState<string | null>(null);
-
-  // Load user ID on focus
-  useFocusEffect(
-    useCallback(() => {
-      const loadUserId = async () => {
-        try {
-          const userResponse = await userAPI.getLoggedUsers();
-          if (userResponse.success && userResponse.users && userResponse.users.length > 0) {
-            setUserId(userResponse.users[0].id);
-          }
-        } catch (error) {
-          console.error('Error loading user:', error);
-        }
-      };
-      loadUserId();
-    }, [])
-  );
+  const insets = useSafeAreaInsets();
+  const bottomPad = Math.max(insets.bottom, 12) + 100;
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <View style={{ width: 40 }} />
           <Text style={styles.headerTitle}>בריאות</Text>
@@ -57,25 +83,29 @@ const HealthScreen = ({ navigation }: any) => {
         </View>
 
         <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
+          style={styles.scroll}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
+          showsVerticalScrollIndicator
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Food Intake Button */}
-          <TouchableOpacity
-            style={styles.featureButton}
-            onPress={() => navigation.navigate('FoodInventoryHub')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.featureIconContainer}>
-              <MaterialCommunityIcons name="bone" size={40} color={PRIMARY_COLOR} />
-            </View>
-            <View style={styles.featureContent}>
-              <Text style={styles.featureTitle}>ניהול מלאי מזון</Text>
-              <Text style={styles.featureDescription}>ניהול מלאי מזון וצריכה יומית</Text>
-            </View>
-            <Ionicons name="chevron-back" size={24} color={TEXT_DARK} />
-          </TouchableOpacity>
+          <HealthMenuRow
+            onPress={() => openHealthStackScreen(navigation, 'FoodInventoryHub')}
+            icon={<MaterialCommunityIcons name="bone" size={40} color={PRIMARY_COLOR} />}
+            title="ניהול מלאי מזון"
+            description="ניהול מלאי מזון וצריכה יומית"
+          />
+          <HealthMenuRow
+            onPress={() => openHealthStackScreen(navigation, 'VaccinationsHub')}
+            icon={<MaterialCommunityIcons name="needle" size={40} color={PRIMARY_COLOR} />}
+            title="החיסונים שלי"
+            description="רישום חיסונים לפי כלב ותאריך"
+          />
+          <HealthMenuRow
+            onPress={() => openHealthStackScreen(navigation, 'MedicationsHub')}
+            icon={<MaterialCommunityIcons name="pill" size={40} color={PRIMARY_COLOR} />}
+            title="התרופות שלי"
+            description="רישום תרופות וטיפולים"
+          />
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -112,7 +142,7 @@ const styles = StyleSheet.create({
     width: 40,
     alignItems: 'flex-end',
   },
-  scrollView: {
+  scroll: {
     flex: 1,
   },
   scrollContent: {
@@ -125,6 +155,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
+    minHeight: 88,
     borderLeftWidth: 4,
     borderLeftColor: PRIMARY_COLOR,
     shadowColor: '#000',
