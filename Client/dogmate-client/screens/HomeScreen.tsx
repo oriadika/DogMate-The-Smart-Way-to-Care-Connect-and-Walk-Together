@@ -165,18 +165,39 @@ const HomeScreen = ({ navigation, route }: any) => {
         }
       }
 
-      const [dogsResponse, remindersResponse] = await Promise.all([
+      const priorCache = homeDataCache.get(userIdToLoad);
+
+      const [dogsSettled, remindersSettled] = await Promise.allSettled([
         dogAPI.getDogsForUser(userIdToLoad),
         reminderAPI.getRemindersForUser(userIdToLoad),
       ]);
 
-      const nextDogs = dogsResponse.success && dogsResponse.dogs ? dogsResponse.dogs : [];
-      const nextReminders = remindersResponse.success && remindersResponse.reminders
-        ? remindersResponse.reminders
-        : [];
+      let nextDogs: any[] = [];
+      if (dogsSettled.status === 'fulfilled') {
+        const dogsResponse = dogsSettled.value;
+        nextDogs = dogsResponse.success && dogsResponse.dogs ? dogsResponse.dogs : [];
+      } else {
+        console.error('Error loading dogs:', dogsSettled.reason);
+        nextDogs = priorCache?.dogs ?? [];
+        if (shouldShowLoader) {
+          Alert.alert('שגיאה', 'שגיאה בטעינת רשימת הכלבים');
+        }
+      }
+
+      let nextReminders: any[] = [];
+      if (remindersSettled.status === 'fulfilled') {
+        const remindersResponse = remindersSettled.value;
+        nextReminders =
+          remindersResponse.success && remindersResponse.reminders
+            ? remindersResponse.reminders
+            : [];
+      } else {
+        console.warn('Error loading reminders:', remindersSettled.reason);
+        nextReminders = priorCache?.reminders ?? [];
+      }
 
       const nextSignature = buildDataSignature(nextDogs, nextReminders);
-      const cached = homeDataCache.get(userIdToLoad);
+      const cached = priorCache;
       const hasChanged = !cached || cached.signature !== nextSignature || cached.userName !== nextUserName || cached.userLastName !== nextUserLastName;
 
       if (hasChanged) {

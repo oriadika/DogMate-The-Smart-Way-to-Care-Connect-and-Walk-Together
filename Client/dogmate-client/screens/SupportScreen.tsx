@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -42,8 +42,28 @@ const DESCRIPTION_MAX_CHARS = 1000;
 
 export default function SupportScreen({ navigation, route }: any) {
   const userId = String(route?.params?.userId || '').trim();
-  /** אימייל מהחשבון המחובר — לא ניתן לעריכה */
-  const contactEmail = String(route?.params?.email || '').trim();
+  /** אימייל מהניווט; אם חסר (למשל אחרי `navigate('Home', { params: { userId } })` בלי email) — נטען מהפרופיל */
+  const paramEmail = String(route?.params?.email || '').trim();
+  const [profileEmail, setProfileEmail] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (paramEmail || !userId) return;
+      try {
+        const profile = await userAPI.getProfile(userId);
+        const e = String(profile?.email || '').trim();
+        if (!cancelled && e) setProfileEmail(e);
+      } catch {
+        /* השאר ריק — validation יציג הודעה */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [paramEmail, userId]);
+
+  const contactEmail = paramEmail || profileEmail;
 
   const [category, setCategory] = useState<SupportRequestPayload['category']>('bug');
   const [subject, setSubject] = useState('');

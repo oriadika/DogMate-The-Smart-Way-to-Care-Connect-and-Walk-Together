@@ -10,8 +10,8 @@ import java.util.UUID;
 public interface IDogWalkerRepository extends JpaRepository<DogWalkerUser, UUID> {
 
     /**
-     * Dog walkers who saved at least one professional offering (city / availability / pricing row).
+     * Dog walkers with at least one city offering; JOIN FETCH avoids N+1 when building API rows.
      */
-    @Query("SELECT DISTINCT w FROM DogWalkerUser w WHERE SIZE(w.cityOfferings) > 0")
+    @Query("SELECT DISTINCT w FROM DogWalkerUser w JOIN FETCH w.cityOfferings")
     List<DogWalkerUser> findAllWithNonEmptyCityOfferings();
 }
