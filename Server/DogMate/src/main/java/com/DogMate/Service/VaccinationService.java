@@ -45,7 +45,8 @@ public class VaccinationService {
     }
 
     @Transactional
-    public VaccinationDTO create(UUID userId, UUID dogId, String vaccineName, LocalDate administeredDate) {
+    public VaccinationDTO create(UUID userId, UUID dogId, String vaccineName, LocalDate administeredDate,
+                                 LocalDate nextDueDate, String vetClinicName) {
         if (vaccineName == null || vaccineName.isBlank()) {
             throw new IllegalArgumentException("חובה להזין שם חיסון");
         }
@@ -58,11 +59,14 @@ public class VaccinationService {
         Dog dog = dogRepository.findById(dogId)
                 .orElseThrow(() -> new IllegalArgumentException("לא נמצא כלב עם המזהה: " + dogId));
         DogVaccination entity = new DogVaccination(null, dog, vaccineName, administeredDate);
+        entity.setNextDueDate(nextDueDate);
+        entity.setVetClinicName(vetClinicName);
         return VaccinationDTO.fromEntity(vaccinationRepository.save(entity));
     }
 
     @Transactional
-    public VaccinationDTO update(UUID userId, UUID vaccinationId, UUID dogId, String vaccineName, LocalDate administeredDate) {
+    public VaccinationDTO update(UUID userId, UUID vaccinationId, UUID dogId, String vaccineName,
+                                 LocalDate administeredDate, LocalDate nextDueDate, String vetClinicName) {
         DogVaccination v = loadOwnedOrThrow(userId, vaccinationId);
         if (vaccineName == null || vaccineName.isBlank()) {
             throw new IllegalArgumentException("חובה להזין שם חיסון");
@@ -80,6 +84,8 @@ public class VaccinationService {
         }
         v.setVaccineName(vaccineName);
         v.setAdministeredDate(administeredDate);
+        v.setNextDueDate(nextDueDate);
+        v.setVetClinicName(vetClinicName);
         return VaccinationDTO.fromEntity(vaccinationRepository.save(v));
     }
 

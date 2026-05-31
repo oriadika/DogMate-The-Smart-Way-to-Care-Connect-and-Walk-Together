@@ -17,8 +17,8 @@ const CARD = '#faf0e6';
 export type VaccinationSortOption = 'date_desc' | 'date_asc';
 
 const OPTIONS: { key: VaccinationSortOption; label: string }[] = [
-  { key: 'date_desc', label: 'תאריך החיסון: מהעדכני למוקדם' },
-  { key: 'date_asc', label: 'תאריך החיסון: מהמוקדם לעדכני' },
+  { key: 'date_desc', label: 'חיסון אחרון: מהעדכני למוקדם' },
+  { key: 'date_asc', label: 'חיסון אחרון: מהמוקדם לעדכני' },
 ];
 
 type Props = {

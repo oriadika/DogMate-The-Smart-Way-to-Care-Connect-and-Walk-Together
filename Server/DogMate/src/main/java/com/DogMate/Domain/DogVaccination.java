@@ -38,6 +38,12 @@ public class DogVaccination {
     @Column(name = "administered_date", nullable = false)
     private LocalDate administeredDate;
 
+    @Column(name = "next_due_date")
+    private LocalDate nextDueDate;
+
+    @Column(name = "vet_clinic_name", columnDefinition = "TEXT")
+    private String vetClinicName;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -91,6 +97,22 @@ public class DogVaccination {
 
     public void setAdministeredDate(LocalDate administeredDate) {
         this.administeredDate = administeredDate;
+    }
+
+    public LocalDate getNextDueDate() {
+        return nextDueDate;
+    }
+
+    public void setNextDueDate(LocalDate nextDueDate) {
+        this.nextDueDate = nextDueDate;
+    }
+
+    public String getVetClinicName() {
+        return vetClinicName;
+    }
+
+    public void setVetClinicName(String vetClinicName) {
+        this.vetClinicName = vetClinicName != null ? vetClinicName.trim() : null;
     }
 
     public LocalDateTime getCreatedAt() {

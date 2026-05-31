@@ -56,7 +56,9 @@ public class VaccinationController {
             }
             UUID uid = UUID.fromString(userId);
             LocalDate date = parseDate(body.getAdministeredDate());
-            VaccinationDTO saved = vaccinationService.create(uid, body.getDogId(), body.getVaccineName(), date);
+            LocalDate nextDue = parseOptionalDate(body.getNextDueDate());
+            VaccinationDTO saved = vaccinationService.create(uid, body.getDogId(), body.getVaccineName(), date,
+                    nextDue, body.getVetClinicName());
             Map<String, Object> ok = new HashMap<>();
             ok.put("success", true);
             ok.put("vaccination", saved);
@@ -81,7 +83,9 @@ public class VaccinationController {
             UUID uid = UUID.fromString(userId);
             UUID vid = UUID.fromString(vaccinationId);
             LocalDate date = parseDate(body.getAdministeredDate());
-            VaccinationDTO saved = vaccinationService.update(uid, vid, body.getDogId(), body.getVaccineName(), date);
+            LocalDate nextDue = parseOptionalDate(body.getNextDueDate());
+            VaccinationDTO saved = vaccinationService.update(uid, vid, body.getDogId(), body.getVaccineName(), date,
+                    nextDue, body.getVetClinicName());
             Map<String, Object> ok = new HashMap<>();
             ok.put("success", true);
             ok.put("vaccination", saved);
@@ -119,6 +123,13 @@ public class VaccinationController {
         return LocalDate.parse(raw.trim());
     }
 
+    private static LocalDate parseOptionalDate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        return LocalDate.parse(raw.trim());
+    }
+
     private static Map<String, Object> error(String message) {
         Map<String, Object> m = new HashMap<>();
         m.put("success", false);
@@ -131,6 +142,8 @@ public class VaccinationController {
         private UUID dogId;
         private String vaccineName;
         private String administeredDate;
+        private String nextDueDate;
+        private String vetClinicName;
 
         public UUID getDogId() {
             return dogId;
@@ -154,6 +167,22 @@ public class VaccinationController {
 
         public void setAdministeredDate(String administeredDate) {
             this.administeredDate = administeredDate;
+        }
+
+        public String getNextDueDate() {
+            return nextDueDate;
+        }
+
+        public void setNextDueDate(String nextDueDate) {
+            this.nextDueDate = nextDueDate;
+        }
+
+        public String getVetClinicName() {
+            return vetClinicName;
+        }
+
+        public void setVetClinicName(String vetClinicName) {
+            this.vetClinicName = vetClinicName;
         }
     }
 
@@ -162,6 +191,8 @@ public class VaccinationController {
         private UUID dogId;
         private String vaccineName;
         private String administeredDate;
+        private String nextDueDate;
+        private String vetClinicName;
 
         public UUID getDogId() {
             return dogId;
@@ -185,6 +216,22 @@ public class VaccinationController {
 
         public void setAdministeredDate(String administeredDate) {
             this.administeredDate = administeredDate;
+        }
+
+        public String getNextDueDate() {
+            return nextDueDate;
+        }
+
+        public void setNextDueDate(String nextDueDate) {
+            this.nextDueDate = nextDueDate;
+        }
+
+        public String getVetClinicName() {
+            return vetClinicName;
+        }
+
+        public void setVetClinicName(String vetClinicName) {
+            this.vetClinicName = vetClinicName;
         }
     }
 }

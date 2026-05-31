@@ -934,8 +934,18 @@ export interface VaccinationRow {
   dogName: string;
   vaccineName: string;
   administeredDate: string;
+  nextDueDate?: string | null;
+  vetClinicName?: string | null;
   createdAt?: string | null;
 }
+
+export type VaccinationPayload = {
+  dogId: string;
+  vaccineName: string;
+  administeredDate: string;
+  nextDueDate?: string | null;
+  vetClinicName?: string | null;
+};
 
 export const vaccinationAPI = {
   list: async (userId: string) => {
@@ -949,15 +959,14 @@ export const vaccinationAPI = {
     }
   },
 
-  create: async (
-    userId: string,
-    payload: { dogId: string; vaccineName: string; administeredDate: string }
-  ) => {
+  create: async (userId: string, payload: VaccinationPayload) => {
     try {
       const response = await apiClient.post(`/vaccinations/user/${userId}`, {
         dogId: payload.dogId,
         vaccineName: payload.vaccineName,
         administeredDate: payload.administeredDate,
+        nextDueDate: payload.nextDueDate ?? null,
+        vetClinicName: payload.vetClinicName?.trim() || null,
       });
       return response.data;
     } catch (error: any) {
@@ -967,11 +976,7 @@ export const vaccinationAPI = {
     }
   },
 
-  update: async (
-    userId: string,
-    vaccinationId: string,
-    payload: { dogId: string; vaccineName: string; administeredDate: string }
-  ) => {
+  update: async (userId: string, vaccinationId: string, payload: VaccinationPayload) => {
     try {
       const response = await apiClient.put(`/vaccinations/${vaccinationId}`, payload, {
         params: { userId },

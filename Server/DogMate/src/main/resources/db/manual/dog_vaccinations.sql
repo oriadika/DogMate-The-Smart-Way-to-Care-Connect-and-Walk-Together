@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS dog_vaccinations (
     dog_id UUID NOT NULL REFERENCES dogs (id) ON DELETE CASCADE,
     vaccine_name TEXT NOT NULL,
     administered_date DATE NOT NULL,
+    next_due_date DATE,
+    vet_clinic_name TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

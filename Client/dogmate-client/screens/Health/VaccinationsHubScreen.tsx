@@ -19,12 +19,17 @@ import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
 import VaccinationSortModal, {
   type VaccinationSortOption,
 } from '../../components/health/VaccinationSortModal';
+import VaccinationGroupCard from '../../components/health/VaccinationGroupCard';
+import {
+  groupVaccinations,
+  sortVaccinationGroups,
+  type VaccinationGroup,
+} from '../../utils/vaccinationGroups';
 
 const PRIMARY_COLOR = '#7FB069';
 const BG_COLOR = '#FAEFDD';
 const TEXT_DARK = '#5C4033';
 const BORDER_COLOR = '#E0D5C7';
-const CARD_BG = '#faf0e6';
 const BG_CARD = '#fff';
 const MUTED = '#8B7355';
 
@@ -40,16 +45,6 @@ const ALL_DOGS_FILTER = '__all_dogs__';
 
 const DEFAULT_VACCINATION_SORT: VaccinationSortOption = 'date_desc';
 
-function vaccinationAdministeredTime(iso: string): number {
-  try {
-    const d = new Date(iso + (iso.includes('T') ? '' : 'T12:00:00'));
-    const t = d.getTime();
-    return Number.isNaN(t) ? 0 : t;
-  } catch {
-    return 0;
-  }
-}
-
 type DogOption = { id: string; name: string };
 
 const VaccinationsHubScreen = ({ navigation }: any) => {
@@ -61,6 +56,7 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
   const [dogFilterModalVisible, setDogFilterModalVisible] = useState(false);
   const [vaccinationSort, setVaccinationSort] = useState<VaccinationSortOption>(DEFAULT_VACCINATION_SORT);
   const [sortModalVisible, setSortModalVisible] = useState(false);
+  const [expandedHistoryByKey, setExpandedHistoryByKey] = useState<Record<string, boolean>>({});
 
   const closeDogFilterModal = useCallback(() => setDogFilterModalVisible(false), []);
 
@@ -143,14 +139,9 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
     return rows.filter((r) => String(r.dogId) === selectedDogId);
   }, [rows, selectedDogId]);
 
-  const sortedFilteredRows = useMemo(() => {
-    const arr = [...filteredRows];
-    arr.sort((a, b) => {
-      const ta = vaccinationAdministeredTime(a.administeredDate);
-      const tb = vaccinationAdministeredTime(b.administeredDate);
-      return vaccinationSort === 'date_desc' ? tb - ta : ta - tb;
-    });
-    return arr;
+  const sortedGroupedRows = useMemo(() => {
+    const groups = groupVaccinations(filteredRows);
+    return sortVaccinationGroups(groups, vaccinationSort);
   }, [filteredRows, vaccinationSort]);
 
   const dogModalOptions = useMemo(
@@ -194,12 +185,17 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
       dogId: item.dogId,
       vaccineName: item.vaccineName,
       administeredDate: item.administeredDate,
+      nextDueDate: item.nextDueDate ?? undefined,
+      vetClinicName: item.vetClinicName ?? undefined,
     });
   };
 
   const handleDelete = (item: VaccinationRow) => {
     if (!userId) return;
-    Alert.alert('מחיקת חיסון', `למחוק את "${item.vaccineName}" של ${item.dogName}?`, [
+    Alert.alert(
+      'מחיקת רישום',
+      `למחוק את רישום "${item.vaccineName}" של ${item.dogName} מתאריך ${formatDateDisplay(item.administeredDate)}?`,
+      [
       { text: 'ביטול', style: 'cancel' },
       {
         text: 'מחק',
@@ -208,14 +204,52 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
           try {
             await vaccinationAPI.delete(userId, item.id);
             await loadVaccinations();
-            Alert.alert('הצלחה', 'החיסון נמחק');
+            Alert.alert('הצלחה', 'הרישום נמחק');
           } catch (e: any) {
             Alert.alert('שגיאה', e?.message || 'מחיקה נכשלה');
           }
         },
       },
-    ]);
+    ]
+    );
   };
+
+  const handleDeleteGroup = (group: VaccinationGroup) => {
+    if (!userId) return;
+    const count = group.history.length;
+    Alert.alert(
+      'מחיקת חיסון',
+      `למחוק את "${group.vaccineName}" של ${group.dogName} כולו${count > 1 ? ` (${count} רישומים)` : ''}?`,
+      [
+        { text: 'ביטול', style: 'cancel' },
+        {
+          text: 'מחק',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await Promise.all(
+                group.history.map((entry) => vaccinationAPI.delete(userId, entry.id))
+              );
+              setExpandedHistoryByKey((prev) => {
+                const next = { ...prev };
+                delete next[group.key];
+                return next;
+              });
+              await loadVaccinations();
+              Alert.alert('הצלחה', 'החיסון נמחק');
+            } catch (e: any) {
+              Alert.alert('שגיאה', e?.message || 'מחיקה נכשלה');
+              await loadVaccinations();
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const toggleHistory = useCallback((key: string) => {
+    setExpandedHistoryByKey((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
   if (loading) {
     return (
@@ -324,25 +358,19 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
         </View>
 
         <FlatList
-          data={sortedFilteredRows}
-          keyExtractor={(item) => item.id}
+          data={sortedGroupedRows}
+          keyExtractor={(item) => item.key}
           contentContainerStyle={styles.listPad}
           renderItem={({ item }) => (
-            <View style={styles.card}>
-              <View style={styles.cardText}>
-                <Text style={styles.dogName}>{item.dogName}</Text>
-                <Text style={styles.vaccine}>{item.vaccineName}</Text>
-                <Text style={styles.date}>{formatDateDisplay(item.administeredDate)}</Text>
-              </View>
-              <View style={styles.cardActions}>
-                <TouchableOpacity onPress={() => handleEdit(item)} style={styles.iconBtn}>
-                  <Ionicons name="create-outline" size={22} color={PRIMARY_COLOR} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDelete(item)} style={styles.iconBtn}>
-                  <Ionicons name="trash-outline" size={22} color="#C45C5C" />
-                </TouchableOpacity>
-              </View>
-            </View>
+            <VaccinationGroupCard
+              group={item}
+              expanded={Boolean(expandedHistoryByKey[item.key])}
+              onToggleHistory={() => toggleHistory(item.key)}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onDeleteGroup={handleDeleteGroup}
+              formatDate={formatDateDisplay}
+            />
           )}
           ListEmptyComponent={
             <View style={styles.empty}>
@@ -511,22 +539,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   listPad: { padding: 20, paddingBottom: 40 },
-  card: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    backgroundColor: CARD_BG,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: BORDER_COLOR,
-  },
-  cardText: { flex: 1, alignItems: 'flex-end' },
-  dogName: { fontSize: 17, fontWeight: '700', color: TEXT_DARK },
-  vaccine: { fontSize: 15, color: TEXT_DARK, marginTop: 4 },
-  date: { fontSize: 14, color: '#8B7355', marginTop: 4 },
-  cardActions: { flexDirection: 'row', alignItems: 'center' },
-  iconBtn: { padding: 8, marginHorizontal: 2 },
   empty: { alignItems: 'center', marginTop: 48 },
   emptyText: { textAlign: 'center', color: '#8B7355', fontSize: 16 },
 });
