@@ -13,7 +13,8 @@
 
 import * as Linking from 'expo-linking';
 
-export const BASE_URL = 'http://172.20.10.4:8080';
+export const BASE_URL = 'http://16.171.68.255:8080';
+export const ALWAYS_USE_BASE_URL = true;
 
 const DEFAULT_BACKEND_PORT = '8080';
 
@@ -46,6 +47,9 @@ function deriveRuntimeApiBaseUrl(): string | null {
 export function getApiBaseUrl(): string {
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL.replace(/\/+$/, '');
+  }
+  if (ALWAYS_USE_BASE_URL) {
+    return BASE_URL.replace(/\/+$/, '');
   }
   return deriveRuntimeApiBaseUrl() || BASE_URL.replace(/\/+$/, '');
 }

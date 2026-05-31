@@ -1,5 +1,8 @@
 package com.DogMate.Controller;
 
+import com.DogMate.Domain.AdminUser;
+import com.DogMate.Domain.DogWalkerUser;
+import com.DogMate.Domain.RegularUser;
 import com.DogMate.Domain.UserAccount;
 import com.DogMate.Service.PendingRegistrationService;
 import com.DogMate.Service.UserService;
@@ -142,12 +145,12 @@ public class AuthController {
             response.put("message", "החשבון נוצר בהצלחה");
             response.put("userId", user.getId().toString());
             response.put("email", user.getEmail());
-            if (user instanceof com.DogMate.Domain.RegularUser ru) {
+            if (user instanceof RegularUser ru) {
                 response.put("userRole", "owner");
                 response.put("firstName", ru.getFirst_name());
                 response.put("lastName", ru.getLast_name());
                 response.put("phoneNumber", ru.getPhoneNumber() != null ? ru.getPhoneNumber() : "");
-            } else if (user instanceof com.DogMate.Domain.DogWalkerUser w) {
+            } else if (user instanceof DogWalkerUser w) {
                 response.put("userRole", "walker");
                 response.put("firstName", w.getFirst_name());
                 response.put("lastName", w.getLast_name());
