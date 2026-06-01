@@ -1,13 +1,25 @@
 #!/usr/bin/env node
 
+/**
+ * External dev access over cellular data (no same Wi‑Fi required):
+ * - Cloudflare quick tunnel → Spring Boot API (localhost:8080)
+ * - Cloudflare quick tunnel → Metro bundler (localhost:8081)
+ * - Expo starts in LAN mode with EXPO_PACKAGER_PROXY_URL (avoids Expo/ngrok --tunnel)
+ */
+
 const { spawn } = require('child_process');
 
-const BACKEND_URL = 'http://localhost:8080';
+const API_LOCAL = 'http://localhost:8080';
+const METRO_LOCAL = 'http://localhost:8081';
 const TUNNEL_URL_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/i;
 
-let cloudflared;
+let cloudflaredApi;
+let cloudflaredMetro;
 let expo;
 let shuttingDown = false;
+
+let apiTunnelUrl = null;
+let metroTunnelUrl = null;
 
 function log(message) {
   process.stdout.write(`${message}\n`);
@@ -22,76 +34,101 @@ function kill(child) {
 function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
-  log('\nStopping Expo and Cloudflare tunnel...');
+  log('\nStopping Expo and Cloudflare tunnels...');
   kill(expo);
-  kill(cloudflared);
+  kill(cloudflaredApi);
+  kill(cloudflaredMetro);
   setTimeout(() => process.exit(0), 500);
 }
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-function startExpo(publicApiUrl) {
-  log(`\nUsing API tunnel: ${publicApiUrl}`);
-  log('Starting Expo tunnel...\n');
+function startExpo() {
+  log('\n--- Ready ---');
+  log(`API:   ${apiTunnelUrl}`);
+  log(`Metro: ${metroTunnelUrl}`);
+  log('Starting Expo (LAN + Cloudflare proxy, no ngrok)...\n');
 
-  expo = spawn('npx expo start --tunnel --clear', {
+  const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  expo = spawn(npx, ['expo', 'start', '--lan', '--clear'], {
     cwd: process.cwd(),
     env: {
       ...process.env,
-      EXPO_PUBLIC_API_URL: publicApiUrl,
+      EXPO_PUBLIC_API_URL: apiTunnelUrl,
+      EXPO_PACKAGER_PROXY_URL: metroTunnelUrl,
     },
     stdio: 'inherit',
-    shell: true,
   });
 
   expo.on('exit', (code, signal) => {
     if (!shuttingDown) {
-      log(`Expo exited (${signal || code}). Stopping Cloudflare tunnel...`);
-      kill(cloudflared);
+      log(`Expo exited (${signal || code}). Stopping tunnels...`);
+      kill(cloudflaredApi);
+      kill(cloudflaredMetro);
       process.exit(code ?? 0);
     }
   });
 }
 
-function handleCloudflaredOutput(chunk) {
+function maybeStartExpo() {
+  if (expo || !apiTunnelUrl || !metroTunnelUrl) return;
+  startExpo();
+}
+
+function watchTunnelOutput(label, chunk, assignUrl) {
   const text = chunk.toString();
   process.stdout.write(text);
-
-  if (expo) return;
+  if (assignUrl) return;
   const match = text.match(TUNNEL_URL_RE);
   if (match) {
-    startExpo(match[0]);
+    if (label === 'api') {
+      apiTunnelUrl = match[0];
+      log(`\n[API tunnel] ${apiTunnelUrl}`);
+    } else {
+      metroTunnelUrl = match[0];
+      log(`\n[Metro tunnel] ${metroTunnelUrl}`);
+    }
+    maybeStartExpo();
   }
 }
 
-log(`Starting Cloudflare tunnel for ${BACKEND_URL}...`);
+function spawnCloudflared(label, localUrl) {
+  const child = spawn('cloudflared', ['tunnel', '--url', localUrl], {
+    cwd: process.cwd(),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  child.stdout.on('data', (chunk) => watchTunnelOutput(label, chunk, false));
+  child.stderr.on('data', (chunk) => watchTunnelOutput(label, chunk, false));
+
+  child.on('error', (err) => {
+    if (err && err.code === 'ENOENT') {
+      console.error('cloudflared is not installed. Run: brew install cloudflared');
+    } else {
+      console.error(`Failed to start cloudflared (${label}):`, err?.message || err);
+    }
+    shutdown();
+    process.exit(1);
+  });
+
+  child.on('exit', (code, signal) => {
+    if (!shuttingDown) {
+      log(`Cloudflare tunnel (${label}) exited (${signal || code}).`);
+      kill(expo);
+      kill(cloudflaredApi);
+      kill(cloudflaredMetro);
+      process.exit(code ?? 0);
+    }
+  });
+
+  return child;
+}
+
+log('Starting external dev mode (Cloudflare only — no Expo/ngrok tunnel)...');
+log(`  API tunnel  → ${API_LOCAL}`);
+log(`  Metro tunnel → ${METRO_LOCAL}`);
 log('Keep this terminal open. Press Ctrl+C to stop everything.\n');
 
-cloudflared = spawn('cloudflared', ['tunnel', '--url', BACKEND_URL], {
-  cwd: process.cwd(),
-  stdio: ['ignore', 'pipe', 'pipe'],
-});
-
-cloudflared.stdout.on('data', handleCloudflaredOutput);
-cloudflared.stderr.on('data', handleCloudflaredOutput);
-
-cloudflared.on('error', (err) => {
-  if (err && err.code === 'ENOENT') {
-    const installHint = process.platform === 'win32'
-      ? 'winget install Cloudflare.Cloudflared'
-      : 'brew install cloudflared';
-    console.error(`cloudflared is not installed. Run: ${installHint}`);
-  } else {
-    console.error('Failed to start cloudflared:', err?.message || err);
-  }
-  process.exit(1);
-});
-
-cloudflared.on('exit', (code, signal) => {
-  if (!shuttingDown) {
-    log(`Cloudflare tunnel exited (${signal || code}).`);
-    kill(expo);
-    process.exit(code ?? 0);
-  }
-});
+cloudflaredApi = spawnCloudflared('api', API_LOCAL);
+cloudflaredMetro = spawnCloudflared('metro', METRO_LOCAL);

@@ -2,7 +2,6 @@ import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { getWebSocketBaseUrl } from './config';
 
-
 const { websocketUrl: WEBSOCKET_URL, sockJsUrl: SOCKJS_URL } = getWebSocketBaseUrl('ws-ping');
 const WS_DEBUG_LOGS = false;
 const wsDebug = (...args: any[]) => {

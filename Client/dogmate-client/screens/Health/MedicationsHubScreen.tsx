@@ -14,17 +14,17 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { userAPI, vaccinationAPI, dogAPI, type VaccinationRow } from '../../services/api';
+import { userAPI, medicationAPI, dogAPI, type MedicationRow } from '../../services/api';
 import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
-import VaccinationSortModal, {
-  type VaccinationSortOption,
-} from '../../components/health/VaccinationSortModal';
-import VaccinationGroupCard from '../../components/health/VaccinationGroupCard';
+import MedicationSortModal, {
+  type MedicationSortOption,
+} from '../../components/health/MedicationSortModal';
+import MedicationGroupCard from '../../components/health/MedicationGroupCard';
 import {
-  groupVaccinations,
-  sortVaccinationGroups,
-  type VaccinationGroup,
-} from '../../utils/vaccinationGroups';
+  groupMedications,
+  sortMedicationGroups,
+  type MedicationGroup,
+} from '../../utils/medicationGroups';
 
 const PRIMARY_COLOR = '#7FB069';
 const BG_COLOR = '#FAEFDD';
@@ -43,24 +43,24 @@ const DOG_MODAL_LIST_MAX_HEIGHT = Math.min(Dimensions.get('window').height * 0.5
 /** מסנן "כל הכלבים" — לא dogId אמיתי */
 const ALL_DOGS_FILTER = '__all_dogs__';
 
-const DEFAULT_VACCINATION_SORT: VaccinationSortOption = 'date_desc';
+const DEFAULT_MEDICATION_SORT: MedicationSortOption = 'date_desc';
 
 type DogOption = { id: string; name: string };
 
-const VaccinationsHubScreen = ({ navigation }: any) => {
-  const [rows, setRows] = useState<VaccinationRow[]>([]);
+const MedicationsHubScreen = ({ navigation }: any) => {
+  const [rows, setRows] = useState<MedicationRow[]>([]);
   const [userDogs, setUserDogs] = useState<DogOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [selectedDogId, setSelectedDogId] = useState<string>(ALL_DOGS_FILTER);
   const [dogFilterModalVisible, setDogFilterModalVisible] = useState(false);
-  const [vaccinationSort, setVaccinationSort] = useState<VaccinationSortOption>(DEFAULT_VACCINATION_SORT);
+  const [medicationSort, setMedicationSort] = useState<MedicationSortOption>(DEFAULT_MEDICATION_SORT);
   const [sortModalVisible, setSortModalVisible] = useState(false);
   const [expandedHistoryByKey, setExpandedHistoryByKey] = useState<Record<string, boolean>>({});
 
   const closeDogFilterModal = useCallback(() => setDogFilterModalVisible(false), []);
 
-  const loadVaccinations = useCallback(async () => {
+  const loadMedications = useCallback(async () => {
     try {
       setLoading(true);
       const userResponse = await userAPI.getLoggedUsers();
@@ -74,12 +74,12 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
       setUserId(uid);
 
       try {
-        const res = await vaccinationAPI.list(uid);
-        const list = Array.isArray(res.vaccinations) ? res.vaccinations : [];
-        setRows(list as VaccinationRow[]);
+        const res = await medicationAPI.list(uid);
+        const list = Array.isArray(res.medications) ? res.medications : [];
+        setRows(list as MedicationRow[]);
       } catch (ve: any) {
-        console.error('Vaccinations load error:', ve);
-        Alert.alert('שגיאה', ve?.message || 'שגיאה בטעינת החיסונים');
+        console.error('Medications load error:', ve);
+        Alert.alert('שגיאה', ve?.message || 'שגיאה בטעינת התרופות');
         setRows([]);
       }
 
@@ -97,7 +97,7 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
         setUserDogs([]);
       }
     } catch (e: any) {
-      console.error('Vaccinations hub load error:', e);
+      console.error('Medications hub load error:', e);
       Alert.alert('שגיאה', e?.message || 'שגיאה בטעינת הנתונים');
       setRows([]);
       setUserDogs([]);
@@ -108,8 +108,8 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
 
   useFocusEffect(
     useCallback(() => {
-      loadVaccinations();
-    }, [loadVaccinations])
+      loadMedications();
+    }, [loadMedications])
   );
 
   const dogsInData = useMemo(() => {
@@ -140,9 +140,9 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
   }, [rows, selectedDogId]);
 
   const sortedGroupedRows = useMemo(() => {
-    const groups = groupVaccinations(filteredRows);
-    return sortVaccinationGroups(groups, vaccinationSort);
-  }, [filteredRows, vaccinationSort]);
+    const groups = groupMedications(filteredRows);
+    return sortMedicationGroups(groups, medicationSort);
+  }, [filteredRows, medicationSort]);
 
   const dogModalOptions = useMemo(
     () => [{ id: ALL_DOGS_FILTER, name: 'כל הכלבים' }, ...dogsInData],
@@ -174,27 +174,27 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
 
   const handleAdd = () => {
     if (!userId) return;
-    navigation.navigate('VaccinationForm', { userId });
+    navigation.navigate('MedicationForm', { userId });
   };
 
-  const handleEdit = (item: VaccinationRow) => {
+  const handleEdit = (item: MedicationRow) => {
     if (!userId) return;
-    navigation.navigate('VaccinationForm', {
+    navigation.navigate('MedicationForm', {
       userId,
-      vaccinationId: item.id,
+      medicationId: item.id,
       dogId: item.dogId,
-      vaccineName: item.vaccineName,
+      medicationName: item.medicationName,
       administeredDate: item.administeredDate,
       nextDueDate: item.nextDueDate ?? undefined,
       vetClinicName: item.vetClinicName ?? undefined,
     });
   };
 
-  const handleDelete = (item: VaccinationRow) => {
+  const handleDelete = (item: MedicationRow) => {
     if (!userId) return;
     Alert.alert(
       'מחיקת רישום',
-      `למחוק את רישום "${item.vaccineName}" של ${item.dogName} מתאריך ${formatDateDisplay(item.administeredDate)}?`,
+      `למחוק את רישום "${item.medicationName}" של ${item.dogName} מתאריך ${formatDateDisplay(item.administeredDate)}?`,
       [
       { text: 'ביטול', style: 'cancel' },
       {
@@ -202,8 +202,8 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
         style: 'destructive',
         onPress: async () => {
           try {
-            await vaccinationAPI.delete(userId, item.id);
-            await loadVaccinations();
+            await medicationAPI.delete(userId, item.id);
+            await loadMedications();
             Alert.alert('הצלחה', 'הרישום נמחק');
           } catch (e: any) {
             Alert.alert('שגיאה', e?.message || 'מחיקה נכשלה');
@@ -214,12 +214,12 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
     );
   };
 
-  const handleDeleteGroup = (group: VaccinationGroup) => {
+  const handleDeleteGroup = (group: MedicationGroup) => {
     if (!userId) return;
     const count = group.history.length;
     Alert.alert(
-      'מחיקת חיסון',
-      `למחוק את "${group.vaccineName}" של ${group.dogName} כולו${count > 1 ? ` (${count} רישומים)` : ''}?`,
+      'מחיקת תרופה',
+      `למחוק את "${group.medicationName}" של ${group.dogName} כולו${count > 1 ? ` (${count} רישומים)` : ''}?`,
       [
         { text: 'ביטול', style: 'cancel' },
         {
@@ -228,18 +228,18 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
           onPress: async () => {
             try {
               await Promise.all(
-                group.history.map((entry) => vaccinationAPI.delete(userId, entry.id))
+                group.history.map((entry) => medicationAPI.delete(userId, entry.id))
               );
               setExpandedHistoryByKey((prev) => {
                 const next = { ...prev };
                 delete next[group.key];
                 return next;
               });
-              await loadVaccinations();
-              Alert.alert('הצלחה', 'החיסון נמחק');
+              await loadMedications();
+              Alert.alert('הצלחה', 'התרופה נמחק');
             } catch (e: any) {
               Alert.alert('שגיאה', e?.message || 'מחיקה נכשלה');
-              await loadVaccinations();
+              await loadMedications();
             }
           },
         },
@@ -256,7 +256,7 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={PRIMARY_COLOR} />
-          <Text style={styles.loadingText}>טוען חיסונים...</Text>
+          <Text style={styles.loadingText}>טוען תרופות...</Text>
         </View>
       </SafeAreaView>
     );
@@ -278,7 +278,7 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
           >
             <Ionicons name="home-outline" size={24} color={TEXT_DARK} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>החיסונים שלי</Text>
+          <Text style={styles.headerTitle}>התרופות שלי</Text>
           <TouchableOpacity
             style={styles.backBtn}
             onPress={() => navigation.navigate('Home', { screen: OWNER_MAIN_TAB.Health })}
@@ -288,7 +288,7 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
         </View>
 
         <View style={styles.hubSection}>
-          <Text style={styles.subtitle}>רשימת החיסונים לפי כלב</Text>
+          <Text style={styles.subtitle}>רשימת התרופות לפי כלב</Text>
           <View style={styles.titleRow}>
             <View style={styles.hubControlCell}>
               <TouchableOpacity
@@ -362,7 +362,7 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
           keyExtractor={(item) => item.key}
           contentContainerStyle={styles.listPad}
           renderItem={({ item }) => (
-            <VaccinationGroupCard
+            <MedicationGroupCard
               group={item}
               expanded={Boolean(expandedHistoryByKey[item.key])}
               onToggleHistory={() => toggleHistory(item.key)}
@@ -376,27 +376,27 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
             <View style={styles.empty}>
               <Text style={styles.emptyText}>
                 {rows.length === 0
-                  ? 'אין חיסונים רשומים. לחץ על + להוספה.'
+                  ? 'אין תרופות רשומות. לחץ על + להוספה.'
                   : selectedDogId === ALL_DOGS_FILTER
-                    ? 'אין חיסונים להצגה.'
-                    : 'אין חיסונים לכלב זה. בחר כלב אחר או "כל הכלבים".'}
+                    ? 'אין תרופות להצגה.'
+                    : 'אין תרופות לכלב זה. בחר כלב אחר או "כל הכלבים".'}
               </Text>
             </View>
           }
         />
 
-        <VaccinationSortModal
+        <MedicationSortModal
           visible={sortModalVisible}
           onClose={() => setSortModalVisible(false)}
-          value={vaccinationSort}
-          onChange={setVaccinationSort}
+          value={medicationSort}
+          onChange={setMedicationSort}
         />
       </View>
     </SafeAreaView>
   );
 };
 
-export default VaccinationsHubScreen;
+export default MedicationsHubScreen;
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: BG_COLOR },

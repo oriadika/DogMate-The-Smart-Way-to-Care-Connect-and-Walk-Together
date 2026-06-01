@@ -16,13 +16,13 @@ import java.util.UUID;
 
 @Entity
 @Table(
-    name = "dog_vaccinations",
+    name = "dog_medications",
     indexes = {
-        @Index(name = "idx_dog_vaccinations_dog_id", columnList = "dog_id"),
-        @Index(name = "idx_dog_vaccinations_administered_date", columnList = "administered_date")
+        @Index(name = "idx_dog_medications_dog_id", columnList = "dog_id"),
+        @Index(name = "idx_dog_medications_administered_date", columnList = "administered_date")
     }
 )
-public class DogVaccination {
+public class DogMedication {
 
     @Id
     @Column(name = "id", nullable = false, updatable = false)
@@ -32,8 +32,8 @@ public class DogVaccination {
     @JoinColumn(name = "dog_id", nullable = false)
     private Dog dog;
 
-    @Column(name = "vaccine_name", nullable = false, columnDefinition = "TEXT")
-    private String vaccineName;
+    @Column(name = "medication_name", nullable = false, columnDefinition = "TEXT")
+    private String medicationName;
 
     @Column(name = "administered_date", nullable = false)
     private LocalDate administeredDate;
@@ -47,13 +47,13 @@ public class DogVaccination {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    protected DogVaccination() {
+    protected DogMedication() {
     }
 
-    public DogVaccination(UUID id, Dog dog, String vaccineName, LocalDate administeredDate) {
+    public DogMedication(UUID id, Dog dog, String medicationName, LocalDate administeredDate) {
         this.id = id;
         this.dog = dog;
-        this.vaccineName = vaccineName != null ? vaccineName.trim() : "";
+        this.medicationName = medicationName != null ? medicationName.trim() : "";
         this.administeredDate = administeredDate;
         this.createdAt = LocalDateTime.now();
     }
@@ -66,8 +66,8 @@ public class DogVaccination {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }
-        if (vaccineName == null) {
-            vaccineName = "";
+        if (medicationName == null) {
+            medicationName = "";
         }
     }
 
@@ -83,12 +83,12 @@ public class DogVaccination {
         this.dog = dog;
     }
 
-    public String getVaccineName() {
-        return vaccineName;
+    public String getMedicationName() {
+        return medicationName;
     }
 
-    public void setVaccineName(String vaccineName) {
-        this.vaccineName = vaccineName != null ? vaccineName.trim() : "";
+    public void setMedicationName(String medicationName) {
+        this.medicationName = medicationName != null ? medicationName.trim() : "";
     }
 
     public LocalDate getAdministeredDate() {

@@ -13,6 +13,8 @@ public record VaccinationDTO(
         String dogName,
         String vaccineName,
         String administeredDate,
+        String nextDueDate,
+        String vetClinicName,
         String createdAt
 ) {
     public static VaccinationDTO fromEntity(DogVaccination v) {
@@ -22,6 +24,8 @@ public record VaccinationDTO(
                 v.getDog().getName(),
                 v.getVaccineName(),
                 v.getAdministeredDate().toString(),
+                v.getNextDueDate() != null ? v.getNextDueDate().toString() : null,
+                v.getVetClinicName(),
                 v.getCreatedAt() != null ? v.getCreatedAt().toString() : null
         );
     }

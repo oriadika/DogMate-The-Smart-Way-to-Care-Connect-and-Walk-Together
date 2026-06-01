@@ -14,21 +14,21 @@ const PRIMARY = '#7FB069';
 const TEXT_DARK = '#5C4033';
 const CARD = '#faf0e6';
 
-export type VaccinationSortOption = 'date_desc' | 'date_asc';
+export type MedicationSortOption = 'date_desc' | 'date_asc';
 
-const OPTIONS: { key: VaccinationSortOption; label: string }[] = [
-  { key: 'date_desc', label: 'חיסון אחרון: מהעדכני למוקדם' },
-  { key: 'date_asc', label: 'חיסון אחרון: מהמוקדם לעדכני' },
+const OPTIONS: { key: MedicationSortOption; label: string }[] = [
+  { key: 'date_desc', label: 'מתן אחרון: מהעדכני למוקדם' },
+  { key: 'date_asc', label: 'מתן אחרון: מהמוקדם לעדכני' },
 ];
 
 type Props = {
   visible: boolean;
   onClose: () => void;
-  value: VaccinationSortOption;
-  onChange: (v: VaccinationSortOption) => void;
+  value: MedicationSortOption;
+  onChange: (v: MedicationSortOption) => void;
 };
 
-export default function VaccinationSortModal({ visible, onClose, value, onChange }: Props) {
+export default function MedicationSortModal({ visible, onClose, value, onChange }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>

@@ -1,7 +1,7 @@
 package com.DogMate.Controller;
 
-import com.DogMate.DTO.VaccinationDTO;
-import com.DogMate.Service.VaccinationService;
+import com.DogMate.DTO.MedicationDTO;
+import com.DogMate.Service.MedicationService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,34 +22,34 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/vaccinations")
-public class VaccinationController {
+@RequestMapping("/api/medications")
+public class MedicationController {
 
-    private final VaccinationService vaccinationService;
+    private final MedicationService medicationService;
 
-    public VaccinationController(VaccinationService vaccinationService) {
-        this.vaccinationService = vaccinationService;
+    public MedicationController(MedicationService medicationService) {
+        this.medicationService = medicationService;
     }
 
     @GetMapping("/user/{userId}")
     public ResponseEntity<?> listForUser(@PathVariable String userId) {
         try {
             UUID uid = UUID.fromString(userId);
-            List<VaccinationDTO> list = vaccinationService.listForUser(uid);
+            List<MedicationDTO> list = medicationService.listForUser(uid);
             Map<String, Object> body = new HashMap<>();
             body.put("success", true);
-            body.put("vaccinations", list);
+            body.put("medications", list);
             return ResponseEntity.ok(body);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(error("נכשלה טעינת החיסונים: " + e.getMessage()));
+                    .body(error("נכשלה טעינת התרופות: " + e.getMessage()));
         }
     }
 
     @PostMapping("/user/{userId}")
-    public ResponseEntity<?> create(@PathVariable String userId, @RequestBody CreateVaccinationRequest body) {
+    public ResponseEntity<?> create(@PathVariable String userId, @RequestBody CreateMedicationRequest body) {
         try {
             if (body == null || body.getDogId() == null) {
                 return ResponseEntity.badRequest().body(error("חסרים שדות נדרשים"));
@@ -57,68 +57,68 @@ public class VaccinationController {
             UUID uid = UUID.fromString(userId);
             LocalDate date = parseDate(body.getAdministeredDate());
             LocalDate nextDue = parseOptionalDate(body.getNextDueDate());
-            VaccinationDTO saved = vaccinationService.create(uid, body.getDogId(), body.getVaccineName(), date,
+            MedicationDTO saved = medicationService.create(uid, body.getDogId(), body.getMedicationName(), date,
                     nextDue, body.getVetClinicName());
             Map<String, Object> ok = new HashMap<>();
             ok.put("success", true);
-            ok.put("vaccination", saved);
+            ok.put("medication", saved);
             return ResponseEntity.status(HttpStatus.CREATED).body(ok);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(error("נכשלה שמירת החיסון: " + e.getMessage()));
+                    .body(error("נכשלה שמירת התרופה: " + e.getMessage()));
         }
     }
 
-    @PutMapping("/{vaccinationId}")
+    @PutMapping("/{medicationId}")
     public ResponseEntity<?> update(
-            @PathVariable String vaccinationId,
+            @PathVariable String medicationId,
             @RequestParam String userId,
-            @RequestBody UpdateVaccinationRequest body) {
+            @RequestBody UpdateMedicationRequest body) {
         try {
             if (body == null || body.getDogId() == null) {
                 return ResponseEntity.badRequest().body(error("חסרים שדות נדרשים"));
             }
             UUID uid = UUID.fromString(userId);
-            UUID vid = UUID.fromString(vaccinationId);
+            UUID mid = UUID.fromString(medicationId);
             LocalDate date = parseDate(body.getAdministeredDate());
             LocalDate nextDue = parseOptionalDate(body.getNextDueDate());
-            VaccinationDTO saved = vaccinationService.update(uid, vid, body.getDogId(), body.getVaccineName(), date,
+            MedicationDTO saved = medicationService.update(uid, mid, body.getDogId(), body.getMedicationName(), date,
                     nextDue, body.getVetClinicName());
             Map<String, Object> ok = new HashMap<>();
             ok.put("success", true);
-            ok.put("vaccination", saved);
+            ok.put("medication", saved);
             return ResponseEntity.ok(ok);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(error("נכשל עדכון החיסון: " + e.getMessage()));
+                    .body(error("נכשל עדכון התרופה: " + e.getMessage()));
         }
     }
 
-    @DeleteMapping("/{vaccinationId}")
-    public ResponseEntity<?> delete(@PathVariable String vaccinationId, @RequestParam String userId) {
+    @DeleteMapping("/{medicationId}")
+    public ResponseEntity<?> delete(@PathVariable String medicationId, @RequestParam String userId) {
         try {
             UUID uid = UUID.fromString(userId);
-            UUID vid = UUID.fromString(vaccinationId);
-            vaccinationService.delete(uid, vid);
+            UUID mid = UUID.fromString(medicationId);
+            medicationService.delete(uid, mid);
             Map<String, Object> ok = new HashMap<>();
             ok.put("success", true);
-            ok.put("message", "החיסון נמחק בהצלחה");
+            ok.put("message", "התרופה נמחקה בהצלחה");
             return ResponseEntity.ok(ok);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(error(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(error("נכשלה מחיקת החיסון: " + e.getMessage()));
+                    .body(error("נכשלה מחיקת התרופה: " + e.getMessage()));
         }
     }
 
     private static LocalDate parseDate(String raw) {
         if (raw == null || raw.isBlank()) {
-            throw new IllegalArgumentException("חובה להזין תאריך חיסון");
+            throw new IllegalArgumentException("חובה להזין תאריך מתן תרופה");
         }
         return LocalDate.parse(raw.trim());
     }
@@ -138,9 +138,9 @@ public class VaccinationController {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class CreateVaccinationRequest {
+    public static class CreateMedicationRequest {
         private UUID dogId;
-        private String vaccineName;
+        private String medicationName;
         private String administeredDate;
         private String nextDueDate;
         private String vetClinicName;
@@ -153,12 +153,12 @@ public class VaccinationController {
             this.dogId = dogId;
         }
 
-        public String getVaccineName() {
-            return vaccineName;
+        public String getMedicationName() {
+            return medicationName;
         }
 
-        public void setVaccineName(String vaccineName) {
-            this.vaccineName = vaccineName;
+        public void setMedicationName(String medicationName) {
+            this.medicationName = medicationName;
         }
 
         public String getAdministeredDate() {
@@ -187,9 +187,9 @@ public class VaccinationController {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class UpdateVaccinationRequest {
+    public static class UpdateMedicationRequest {
         private UUID dogId;
-        private String vaccineName;
+        private String medicationName;
         private String administeredDate;
         private String nextDueDate;
         private String vetClinicName;
@@ -202,12 +202,12 @@ public class VaccinationController {
             this.dogId = dogId;
         }
 
-        public String getVaccineName() {
-            return vaccineName;
+        public String getMedicationName() {
+            return medicationName;
         }
 
-        public void setVaccineName(String vaccineName) {
-            this.vaccineName = vaccineName;
+        public void setMedicationName(String medicationName) {
+            this.medicationName = medicationName;
         }
 
         public String getAdministeredDate() {

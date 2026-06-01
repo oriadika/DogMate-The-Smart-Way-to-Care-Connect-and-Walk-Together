@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   SafeAreaView,
   View,
@@ -15,15 +15,18 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { dogAPI, vaccinationAPI } from '../../services/api';
-import VaccineNamePicker from '../../components/health/VaccineNamePicker';
+import { dogAPI, medicationAPI, type MedicationRow } from '../../services/api';
+import MedicationNamePicker from '../../components/health/MedicationNamePicker';
+import MedicationNameAutocompleteInput from '../../components/health/MedicationNameAutocompleteInput';
+import { getUniqueMedicationNamesForDog } from '../../utils/medicationHistory';
 import {
-  ISRAEL_VACCINE_CUSTOM,
-  ISRAEL_VACCINE_OPTIONS,
+  ISRAEL_MEDICATION_CUSTOM,
+  ISRAEL_MEDICATION_OPTIONS,
   computeNextDueDate,
-  resolveVaccineKeyFromName,
-  type IsraelVaccineKey,
-} from '../../constants/israelVaccines';
+  findMedicationOptionByLabel,
+  resolveMedicationKeyFromName,
+  type IsraelMedicationKey,
+} from '../../constants/israelMedications';
 
 const PRIMARY_COLOR = '#7FB069';
 const BG_COLOR = '#FAEFDD';
@@ -59,38 +62,55 @@ function startOfDay(d: Date): Date {
 
 type DogOption = { id: string; name: string };
 
-type VaccinationFormState = {
+type MedicationFormState = {
   selectedDogId: string | null;
-  vaccineKey: IsraelVaccineKey | null;
-  customVaccineName: string;
+  medicationKey: IsraelMedicationKey | null;
+  medicationDetailName: string;
   administeredDate: Date;
   nextDueDate: Date | null;
   nextDueManuallyEdited: boolean;
   vetClinicName: string;
 };
 
+function initialMedicationFields(storedName: string): Pick<MedicationFormState, 'medicationKey' | 'medicationDetailName'> {
+  const trimmed = storedName.trim();
+  if (!trimmed) {
+    return { medicationKey: null, medicationDetailName: '' };
+  }
+  const key = resolveMedicationKeyFromName(trimmed);
+  if (key === ISRAEL_MEDICATION_CUSTOM) {
+    return { medicationKey: key, medicationDetailName: trimmed };
+  }
+  if (findMedicationOptionByLabel(trimmed)) {
+    return { medicationKey: key, medicationDetailName: '' };
+  }
+  return { medicationKey: key, medicationDetailName: trimmed };
+}
+
+function buildStoredMedicationName(_key: IsraelMedicationKey | null, detailName: string): string {
+  return detailName.trim();
+}
+
 type DatePickerTarget = 'administered' | 'nextDue';
 
-const VaccinationFormScreen = ({ navigation, route }: any) => {
+const MedicationFormScreen = ({ navigation, route }: any) => {
   const paramUserId = route?.params?.userId as string | undefined;
-  const paramVaccinationId = route?.params?.vaccinationId as string | undefined;
+  const paramMedicationId = route?.params?.medicationId as string | undefined;
   const paramDogId = route?.params?.dogId as string | undefined;
-  const paramVaccineName = route?.params?.vaccineName as string | undefined;
+  const paramMedicationName = route?.params?.medicationName as string | undefined;
   const paramAdministeredDate = route?.params?.administeredDate as string | undefined;
   const paramNextDueDate = route?.params?.nextDueDate as string | undefined;
   const paramVetClinicName = route?.params?.vetClinicName as string | undefined;
 
   const [userId, setUserId] = useState<string | null>(paramUserId ?? null);
-  const [vaccinationId, setVaccinationId] = useState<string | null>(paramVaccinationId ?? null);
+  const [medicationId, setMedicationId] = useState<string | null>(paramMedicationId ?? null);
   const [dogs, setDogs] = useState<DogOption[]>([]);
-  const [form, setForm] = useState<VaccinationFormState>(() => {
-    const vaccineName = paramVaccineName ?? '';
-    const key = resolveVaccineKeyFromName(vaccineName);
-    const isCustom = key === ISRAEL_VACCINE_CUSTOM;
+  const [medicationRows, setMedicationRows] = useState<MedicationRow[]>([]);
+  const [form, setForm] = useState<MedicationFormState>(() => {
+    const medFields = initialMedicationFields(paramMedicationName ?? '');
     return {
       selectedDogId: paramDogId ?? null,
-      vaccineKey: vaccineName ? key : null,
-      customVaccineName: isCustom ? vaccineName : '',
+      ...medFields,
       administeredDate: parseIsoToLocalDate(paramAdministeredDate ?? ''),
       nextDueDate: paramNextDueDate ? parseIsoToLocalDate(paramNextDueDate) : null,
       nextDueManuallyEdited: Boolean(paramNextDueDate),
@@ -101,35 +121,37 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const isEdit = Boolean(vaccinationId);
-  const isCustomVaccine = form.vaccineKey === ISRAEL_VACCINE_CUSTOM;
+  const isEdit = Boolean(medicationId);
 
-  const resolvedVaccineName = isCustomVaccine
-    ? form.customVaccineName.trim()
-    : ISRAEL_VACCINE_OPTIONS.find((o) => o.key === form.vaccineKey)?.label ?? '';
+  const resolvedMedicationName = buildStoredMedicationName(
+    form.medicationKey,
+    form.medicationDetailName
+  );
+
+  const dogMedicationHistory = useMemo(
+    () => getUniqueMedicationNamesForDog(medicationRows, form.selectedDogId),
+    [medicationRows, form.selectedDogId]
+  );
 
   useEffect(() => {
     setUserId(paramUserId ?? null);
-    if (paramVaccinationId) {
-      const vaccineName = paramVaccineName ?? '';
-      const key = resolveVaccineKeyFromName(vaccineName);
-      const isCustom = key === ISRAEL_VACCINE_CUSTOM;
-      setVaccinationId(paramVaccinationId);
+    if (paramMedicationId) {
+      const medFields = initialMedicationFields(paramMedicationName ?? '');
+      setMedicationId(paramMedicationId);
       setForm({
         selectedDogId: paramDogId ?? null,
-        vaccineKey: vaccineName ? key : null,
-        customVaccineName: isCustom ? vaccineName : '',
+        ...medFields,
         administeredDate: parseIsoToLocalDate(paramAdministeredDate ?? ''),
         nextDueDate: paramNextDueDate ? parseIsoToLocalDate(paramNextDueDate) : null,
         nextDueManuallyEdited: Boolean(paramNextDueDate),
         vetClinicName: paramVetClinicName ?? '',
       });
     } else {
-      setVaccinationId(null);
+      setMedicationId(null);
       setForm({
         selectedDogId: paramDogId ?? null,
-        vaccineKey: null,
-        customVaccineName: '',
+        medicationKey: null,
+        medicationDetailName: '',
         administeredDate: new Date(),
         nextDueDate: null,
         nextDueManuallyEdited: false,
@@ -138,62 +160,67 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
     }
   }, [
     paramUserId,
-    paramVaccinationId,
+    paramMedicationId,
     paramDogId,
-    paramVaccineName,
+    paramMedicationName,
     paramAdministeredDate,
     paramNextDueDate,
     paramVetClinicName,
   ]);
 
   const applyAutoNextDue = useCallback(
-    (vaccineKey: IsraelVaccineKey | null, administeredDate: Date, force = false) => {
-      if (!vaccineKey) return;
+    (medicationKey: IsraelMedicationKey | null, administeredDate: Date, force = false) => {
+      if (!medicationKey) return;
       setForm((prev) => {
         if (!force && prev.nextDueManuallyEdited) return prev;
-        const computed = computeNextDueDate(vaccineKey, administeredDate);
+        const computed = computeNextDueDate(medicationKey, administeredDate);
         return { ...prev, nextDueDate: computed };
       });
     },
     []
   );
 
-  const loadDogs = useCallback(async () => {
+  const loadFormData = useCallback(async () => {
     if (!paramUserId) {
       setLoading(false);
       return;
     }
     try {
       setLoading(true);
-      const res = await dogAPI.getDogsForUser(paramUserId);
-      const list = res.success && Array.isArray(res.dogs) ? res.dogs : [];
+      const [dogsRes, medsRes] = await Promise.all([
+        dogAPI.getDogsForUser(paramUserId),
+        medicationAPI.list(paramUserId).catch(() => ({ medications: [] })),
+      ]);
+      const list = dogsRes.success && Array.isArray(dogsRes.dogs) ? dogsRes.dogs : [];
       setDogs(
         list.map((d: any) => ({
           id: String(d.id),
           name: d.name || 'כלב',
         }))
       );
-      if (!paramVaccinationId && list.length === 1) {
+      const meds = Array.isArray(medsRes.medications) ? medsRes.medications : [];
+      setMedicationRows(meds as MedicationRow[]);
+      if (!paramMedicationId && list.length === 1) {
         setForm((prev) => ({ ...prev, selectedDogId: String(list[0].id) }));
       }
     } catch (e: any) {
       console.error(e);
       Alert.alert('שגיאה', e?.message || 'לא ניתן לטעון את רשימת הכלבים');
       setDogs([]);
+      setMedicationRows([]);
     } finally {
       setLoading(false);
     }
-  }, [paramUserId, paramVaccinationId]);
+  }, [paramUserId, paramMedicationId]);
 
   useEffect(() => {
-    loadDogs();
-  }, [loadDogs]);
+    loadFormData();
+  }, [loadFormData]);
 
-  const onVaccineKeyChange = (key: IsraelVaccineKey) => {
+  const onMedicationKeyChange = (key: IsraelMedicationKey) => {
     setForm((prev) => ({
       ...prev,
-      vaccineKey: key,
-      customVaccineName: key === ISRAEL_VACCINE_CUSTOM ? prev.customVaccineName : '',
+      medicationKey: key,
       nextDueManuallyEdited: false,
     }));
     applyAutoNextDue(key, form.administeredDate, true);
@@ -201,8 +228,8 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
 
   const onAdministeredDateChange = (selectedDate: Date) => {
     setForm((prev) => ({ ...prev, administeredDate: selectedDate }));
-    if (!form.nextDueManuallyEdited && form.vaccineKey) {
-      applyAutoNextDue(form.vaccineKey, selectedDate, true);
+    if (!form.nextDueManuallyEdited && form.medicationKey) {
+      applyAutoNextDue(form.medicationKey, selectedDate, true);
     }
   };
 
@@ -232,15 +259,15 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
 
   const validateForm = (): string | null => {
     if (!form.selectedDogId) return 'נא לבחור כלב';
-    if (!form.vaccineKey) return 'נא לבחור שם חיסון / טיפול';
-    if (isCustomVaccine && !form.customVaccineName.trim()) return 'נא להזין שם חיסון / טיפול';
-    if (!resolvedVaccineName) return 'נא להזין שם חיסון';
-    if (Number.isNaN(form.administeredDate.getTime())) return 'תאריך החיסון אינו תקין';
+    if (!form.medicationKey) return 'נא לבחור סוג תרופה / טיפול';
+    if (!form.medicationDetailName.trim()) return 'נא להזין שם תרופה';
+    if (!resolvedMedicationName) return 'נא להזין שם תרופה';
+    if (Number.isNaN(form.administeredDate.getTime())) return 'תאריך התרופה אינו תקין';
     if (startOfDay(form.administeredDate) > startOfDay(new Date())) {
-      return 'תאריך החיסון לא יכול להיות בעתיד';
+      return 'תאריך התרופה לא יכול להיות בעתיד';
     }
     if (form.nextDueDate && startOfDay(form.nextDueDate) < startOfDay(form.administeredDate)) {
-      return 'תאריך החיסון הבא חייב להיות ביום החיסון או אחריו';
+      return 'תאריך המנה הבאה חייב להיות ביום מתן התרופה או אחריו';
     }
     return null;
   };
@@ -257,19 +284,19 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
     }
     const payload = {
       dogId: form.selectedDogId!,
-      vaccineName: resolvedVaccineName,
+      medicationName: resolvedMedicationName,
       administeredDate: toIsoLocal(form.administeredDate),
       nextDueDate: form.nextDueDate ? toIsoLocal(form.nextDueDate) : null,
       vetClinicName: form.vetClinicName.trim() || null,
     };
     try {
       setSaving(true);
-      if (isEdit && vaccinationId) {
-        await vaccinationAPI.update(userId, vaccinationId, payload);
-        Alert.alert('הצלחה', 'החיסון עודכן', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
+      if (isEdit && medicationId) {
+        await medicationAPI.update(userId, medicationId, payload);
+        Alert.alert('הצלחה', 'התרופה עודכנה', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
       } else {
-        await vaccinationAPI.create(userId, payload);
-        Alert.alert('הצלחה', 'החיסון נשמר', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
+        await medicationAPI.create(userId, payload);
+        Alert.alert('הצלחה', 'התרופה נשמר', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
       }
     } catch (e: any) {
       Alert.alert('שגיאה', e?.message || 'שמירה נכשלה');
@@ -297,7 +324,7 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
       >
         <View style={styles.header}>
           <View style={{ width: 40 }} />
-          <Text style={styles.headerTitle}>{isEdit ? 'עריכת חיסון' : 'הוספת חיסון'}</Text>
+          <Text style={styles.headerTitle}>{isEdit ? 'עריכת תרופה' : 'הוספת תרופה'}</Text>
           <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-forward" size={28} color={TEXT_DARK} />
           </TouchableOpacity>
@@ -333,29 +360,27 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
             <Text style={styles.hint}>אין כלבים רשומים. הוסף כלב במסך הבית.</Text>
           ) : null}
 
-          <Text style={styles.label}>שם החיסון / טיפול</Text>
-          <VaccineNamePicker
-            value={form.vaccineKey}
-            onChange={onVaccineKeyChange}
+          <Text style={styles.label}>סוג תרופה / טיפול</Text>
+          <MedicationNamePicker
+            value={form.medicationKey}
+            onChange={onMedicationKeyChange}
             disabled={saving}
           />
 
-          {isCustomVaccine ? (
-            <>
-              <Text style={styles.label}>שם מותאם אישית</Text>
-              <TextInput
-                style={styles.input}
-                value={form.customVaccineName}
-                onChangeText={(text) => setForm((prev) => ({ ...prev, customVaccineName: text }))}
-                placeholder="הקלד שם חיסון / טיפול"
-                placeholderTextColor="#A9B5C7"
-                textAlign="right"
-                editable={!saving}
-              />
-            </>
-          ) : null}
+          <Text style={styles.label}>שם התרופה</Text>
+          <MedicationNameAutocompleteInput
+            value={form.medicationDetailName}
+            onChangeText={(text) => setForm((prev) => ({ ...prev, medicationDetailName: text }))}
+            suggestions={dogMedicationHistory}
+            disabled={saving || !form.selectedDogId}
+            placeholder={
+              form.selectedDogId
+                ? 'הקלד את שם התרופה (חובה)'
+                : 'בחר כלב תחילה'
+            }
+          />
 
-          <Text style={styles.label}>תאריך מתן החיסון / הטיפול</Text>
+          <Text style={styles.label}>תאריך מתן התרופה / הטיפול</Text>
           <TouchableOpacity
             style={styles.input}
             onPress={() => setDatePickerTarget('administered')}
@@ -368,7 +393,7 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
             </View>
           </TouchableOpacity>
 
-          <Text style={styles.label}>תאריך החיסון / הטיפול הבא</Text>
+          <Text style={styles.label}>תאריך המנה הבאה / חידוש</Text>
           <TouchableOpacity
             style={styles.input}
             onPress={() => setDatePickerTarget('nextDue')}
@@ -382,8 +407,8 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
               <Ionicons name="calendar-outline" size={22} color="#8B7355" />
             </View>
           </TouchableOpacity>
-          {form.vaccineKey && !form.nextDueManuallyEdited ? (
-            <Text style={styles.autoHint}>חושב אוטומטית לפי פרוטוקול ישראלי — ניתן לעריכה</Text>
+          {form.medicationKey && !form.nextDueManuallyEdited ? (
+            <Text style={styles.autoHint}>חושב אוטומטית לפי מינון ותדירות — ניתן לעריכה</Text>
           ) : null}
 
           <Text style={styles.label}>שם הוטרינר / המרפאה</Text>
@@ -442,7 +467,7 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
   );
 };
 
-export default VaccinationFormScreen;
+export default MedicationFormScreen;
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: BG_COLOR },

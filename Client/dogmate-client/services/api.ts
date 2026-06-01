@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { getApiBaseUrlWithPath } from './config';
 
+
 const API_BASE_URL = getApiBaseUrlWithPath('api');
 
 let authToken: string | null = null;
@@ -934,8 +935,18 @@ export interface VaccinationRow {
   dogName: string;
   vaccineName: string;
   administeredDate: string;
+  nextDueDate?: string | null;
+  vetClinicName?: string | null;
   createdAt?: string | null;
 }
+
+export type VaccinationPayload = {
+  dogId: string;
+  vaccineName: string;
+  administeredDate: string;
+  nextDueDate?: string | null;
+  vetClinicName?: string | null;
+};
 
 export const vaccinationAPI = {
   list: async (userId: string) => {
@@ -949,15 +960,14 @@ export const vaccinationAPI = {
     }
   },
 
-  create: async (
-    userId: string,
-    payload: { dogId: string; vaccineName: string; administeredDate: string }
-  ) => {
+  create: async (userId: string, payload: VaccinationPayload) => {
     try {
       const response = await apiClient.post(`/vaccinations/user/${userId}`, {
         dogId: payload.dogId,
         vaccineName: payload.vaccineName,
         administeredDate: payload.administeredDate,
+        nextDueDate: payload.nextDueDate ?? null,
+        vetClinicName: payload.vetClinicName?.trim() || null,
       });
       return response.data;
     } catch (error: any) {
@@ -967,11 +977,7 @@ export const vaccinationAPI = {
     }
   },
 
-  update: async (
-    userId: string,
-    vaccinationId: string,
-    payload: { dogId: string; vaccineName: string; administeredDate: string }
-  ) => {
+  update: async (userId: string, vaccinationId: string, payload: VaccinationPayload) => {
     try {
       const response = await apiClient.put(`/vaccinations/${vaccinationId}`, payload, {
         params: { userId },
@@ -993,6 +999,81 @@ export const vaccinationAPI = {
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'נכשלה מחיקת החיסון';
       console.error('Failed to delete vaccination:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+};
+
+export interface MedicationRow {
+  id: string;
+  dogId: string;
+  dogName: string;
+  medicationName: string;
+  administeredDate: string;
+  nextDueDate?: string | null;
+  vetClinicName?: string | null;
+  createdAt?: string | null;
+}
+
+export type MedicationPayload = {
+  dogId: string;
+  medicationName: string;
+  administeredDate: string;
+  nextDueDate?: string | null;
+  vetClinicName?: string | null;
+};
+
+export const medicationAPI = {
+  list: async (userId: string) => {
+    try {
+      const response = await apiClient.get(`/medications/user/${userId}`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון את התרופות';
+      console.error('Failed to list medications:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  create: async (userId: string, payload: MedicationPayload) => {
+    try {
+      const response = await apiClient.post(`/medications/user/${userId}`, {
+        dogId: payload.dogId,
+        medicationName: payload.medicationName,
+        administeredDate: payload.administeredDate,
+        nextDueDate: payload.nextDueDate ?? null,
+        vetClinicName: payload.vetClinicName?.trim() || null,
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה שמירת התרופה';
+      console.error('Failed to create medication:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  update: async (userId: string, medicationId: string, payload: MedicationPayload) => {
+    try {
+      const response = await apiClient.put(`/medications/${medicationId}`, payload, {
+        params: { userId },
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל עדכון התרופה';
+      console.error('Failed to update medication:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  delete: async (userId: string, medicationId: string) => {
+    try {
+      const response = await apiClient.delete(`/medications/${medicationId}`, {
+        params: { userId },
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשלה מחיקת התרופה';
+      console.error('Failed to delete medication:', errorMessage);
       throw new Error(errorMessage);
     }
   },
