@@ -59,13 +59,14 @@ class WebSocketService {
     this.reconnectAttempts = 0;
 
     try {
-      // Create STOMP client with SockJS fallback for better compatibility
+      // Create STOMP client with direct WebSocket if available, otherwise SockJS.
       this.client = new Client({
-        // Use SockJS with HTTP transport option for better cross-platform support
+        brokerURL: WEBSOCKET_URL,
+        // Use SockJS fallback only when native WebSocket is unavailable.
         webSocketFactory: () => {
           wsDebug('Creating SockJS connection to:', SOCKJS_URL);
           const socket = new SockJS(SOCKJS_URL, null, {
-            transports: ['websocket', 'xhr-streaming', 'xhr-polling']
+            transports: ['websocket'] // Prefer native WebSocket transport to avoid slower polling fallbacks.
           });
           return socket;
         },
@@ -98,7 +99,7 @@ class WebSocketService {
           if (this.callbacks.onDisconnected) {
             this.callbacks.onDisconnected();
           }
-          this.attemptReconnect(userId);
+          // The built-in STOMP reconnectDelay will re-open the connection.
         },
         onStompError: (frame: any) => {
           // This is an actionable error, keep it visible.
