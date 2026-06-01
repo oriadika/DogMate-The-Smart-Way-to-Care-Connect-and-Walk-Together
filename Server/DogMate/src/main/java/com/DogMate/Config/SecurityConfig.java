@@ -23,9 +23,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable()) // Disable CSRF for API
             .authorizeHttpRequests(auth -> auth
                 // Allow public access to the public API root and all API endpoints
-                .requestMatchers("/", "/api", "/api/**", "/h2-console/**", "/ws-ping", "/ws-ping/**").permitAll()
-                // Allow public access to all API endpoints (no authentication required)
-                .requestMatchers("/", "/api/**", "/h2-console/**", "/ws-ping", "/ws-ping/**", "/selenium-test/**").permitAll()
+                .requestMatchers("/", "/api", "/api/**", "/h2-console/**", "/ws-ping", "/ws-ping/**", "/selenium-test/**").permitAll()
                 // Require authentication for all other endpoints
                 .anyRequest().authenticated()
             )
