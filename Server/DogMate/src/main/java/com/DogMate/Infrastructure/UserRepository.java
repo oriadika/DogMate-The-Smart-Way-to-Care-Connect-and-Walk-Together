@@ -46,6 +46,12 @@ public interface UserRepository extends JpaRepository<UserAccount, UUID>, IUserR
     @Query("UPDATE UserAccount u SET u.loggedIn = false, u.latitude = null, u.longitude = null")
     int resetAllUsersOnStartup();
 
+    /**
+     * Find all users who are currently logged in.
+     * Used by SessionCleanupService for timeout cleanup.
+     */
+    List<UserAccount> findByLoggedInTrue();
+
     // IUserRepository interface methods are automatically implemented by JpaRepository:
     // - save() -> JpaRepository.save()
     // - findById() -> JpaRepository.findById()

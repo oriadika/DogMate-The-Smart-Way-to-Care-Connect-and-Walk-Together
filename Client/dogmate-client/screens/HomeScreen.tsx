@@ -143,7 +143,7 @@ const HomeScreen = ({ navigation, route }: any) => {
       setUserId(userIdToLoad);
       let nextUserName = userNameToLoad || userName || 'חברים';
       let nextUserLastName = userLastName || '';
-      
+
       // If userName is missing, try to fetch it from logged users
       if (!userNameToLoad) {
         try {
@@ -257,7 +257,7 @@ const HomeScreen = ({ navigation, route }: any) => {
 
       // Backend now sends ISO 8601 string: "2026-01-06T14:30:00"
       const date = new Date(dateValue);
-      
+
       if (isNaN(date.getTime())) {
         console.warn('Invalid date received:', dateValue);
         return 'תאריך לא תקין';
@@ -351,12 +351,12 @@ const HomeScreen = ({ navigation, route }: any) => {
   // Get dog names from dog IDs
   const getDogNames = (dogIds: string[]): string => {
     if (!dogIds || dogIds.length === 0) return 'כל הכלבים';
-    
+
     const names = dogIds.map(id => {
       const dog = dogs.find(d => d.id === id);
       return dog ? dog.name : 'כלב לא ידוע';
     });
-    
+
     return names.join(', ');
   };
 
@@ -367,17 +367,17 @@ const HomeScreen = ({ navigation, route }: any) => {
     if (dogIds.length === dogs.length) {
       return 'כל הכלבים';
     }
-    
+
     if (dogIds.length === 1) {
       const dog = dogs.find(d => d.id === dogIds[0]);
       return `כלב: ${dog ? dog.name : 'כלב לא ידוע'}`;
     }
-    
+
     const names = dogIds.map(id => {
       const dog = dogs.find(d => d.id === id);
       return dog ? dog.name : 'כלב לא ידוע';
     });
-    
+
     return `כלבים: ${names.join(', ')}`;
   };
 
@@ -396,7 +396,7 @@ const HomeScreen = ({ navigation, route }: any) => {
       [
         {
           text: 'ביטול',
-          onPress: () => {},
+          onPress: () => { },
           style: 'cancel',
         },
         {
@@ -411,7 +411,7 @@ const HomeScreen = ({ navigation, route }: any) => {
               await dogAPI.deleteDog(userId, dogId);
               Alert.alert('הצלחה', `${dogName} נמחק בהצלחה`);
               dirtyHomeDataUsers.add(userId);
-              
+
               // Refresh dogs list
               if (currentUserId) {
                 loadUserAndDogs(currentUserId, currentUserName);
@@ -434,7 +434,7 @@ const HomeScreen = ({ navigation, route }: any) => {
       [
         {
           text: 'ביטול',
-          onPress: () => {},
+          onPress: () => { },
           style: 'cancel',
         },
         {
@@ -453,7 +453,7 @@ const HomeScreen = ({ navigation, route }: any) => {
               Alert.alert('הצלחה', `התזכורת נמחקה בהצלחה`);
               setShowReminderDetails(false);
               dirtyHomeDataUsers.add(userId);
-              
+
               // Refresh reminders list
               if (currentUserId) {
                 loadUserAndDogs(currentUserId, currentUserName);
@@ -476,7 +476,7 @@ const HomeScreen = ({ navigation, route }: any) => {
         <View style={styles.dogCardHeader}>
           <View style={styles.dogImageContainer}>
             {dog.profileImageUrl ? (
-              <Image 
+              <Image
                 source={{ uri: dog.profileImageUrl }}
                 style={styles.dogImage}
               />
@@ -489,7 +489,7 @@ const HomeScreen = ({ navigation, route }: any) => {
               styles.genderBadge,
               { backgroundColor: dog.gender === 'M' ? '#4A90E2' : '#FF69B4' }
             ]}>
-              <MaterialCommunityIcons 
+              <MaterialCommunityIcons
                 name={dog.gender === 'M' ? 'gender-male' : 'gender-female'}
                 size={16}
                 color="#fff"
@@ -516,7 +516,7 @@ const HomeScreen = ({ navigation, route }: any) => {
         </View>
 
         <View style={styles.dogActions}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.actionButton}
             onPress={() => handleDeleteDog(dog.id, dog.name)}
           >
@@ -551,7 +551,7 @@ const HomeScreen = ({ navigation, route }: any) => {
               style={styles.logoImage}
               resizeMode="contain"
             />
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.settingsButton}
               onPress={() => navigation.navigate('Settings', {
                 userId: currentUserId,
@@ -648,7 +648,7 @@ const HomeScreen = ({ navigation, route }: any) => {
                   <FlatList
                     data={reminders}
                     renderItem={({ item: reminder }) => (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.reminderCard}
                         onPress={() => {
                           setSelectedReminder(reminder);
@@ -812,7 +812,7 @@ const styles = StyleSheet.create({
     marginTop: -10,
   },
   mainCard: {
-    backgroundColor: '#F6D9B7', 
+    backgroundColor: '#F6D9B7',
     borderRadius: 24,
     padding: 24,
     marginBottom: 30,

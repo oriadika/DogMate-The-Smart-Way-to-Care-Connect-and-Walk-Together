@@ -47,11 +47,11 @@ const DEFAULT_VACCINATION_SORT: VaccinationSortOption = 'date_desc';
 
 type DogOption = { id: string; name: string };
 
-const VaccinationsHubScreen = ({ navigation }: any) => {
+const VaccinationsHubScreen = ({ navigation, route }: any) => {
   const [rows, setRows] = useState<VaccinationRow[]>([]);
   const [userDogs, setUserDogs] = useState<DogOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(route?.params?.userId || null);
   const [selectedDogId, setSelectedDogId] = useState<string>(ALL_DOGS_FILTER);
   const [dogFilterModalVisible, setDogFilterModalVisible] = useState(false);
   const [vaccinationSort, setVaccinationSort] = useState<VaccinationSortOption>(DEFAULT_VACCINATION_SORT);
@@ -63,14 +63,14 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
   const loadVaccinations = useCallback(async () => {
     try {
       setLoading(true);
-      const userResponse = await userAPI.getLoggedUsers();
-      if (!userResponse.success || !userResponse.users?.length) {
+      // Get userId from route params (passed from navigation) instead of calling getLoggedUsers()
+      const uid = route?.params?.userId || userId;
+      if (!uid) {
         Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
         setRows([]);
         setUserDogs([]);
         return;
       }
-      const uid = userResponse.users[0].id as string;
       setUserId(uid);
 
       try {

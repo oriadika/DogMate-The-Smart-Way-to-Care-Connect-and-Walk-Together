@@ -27,7 +27,7 @@ interface Dog {
 }
 
 const FoodIntakeScreen = ({ navigation, route }: any) => {
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(route?.params?.userId || null);
   const [dogs, setDogs] = useState<Dog[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDogModal, setShowDogModal] = useState(false);
@@ -46,17 +46,20 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
   const loadUserAndDogs = async () => {
     try {
       setLoading(true);
-      // Fetch current logged-in user - same as HomeScreen
-      const userResponse = await userAPI.getLoggedUsers();
-      if (userResponse.success && userResponse.users && userResponse.users.length > 0) {
-        const currentUser = userResponse.users[0];
-        setUserId(currentUser.id);
+      // Get userId from route params instead of calling getLoggedUsers()
+      const uid = route?.params?.userId || userId;
+      if (!uid) {
+        Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
+        setLoading(false);
+        return;
+      }
+      
+      setUserId(uid);
 
-        // Fetch dogs for this user - same as HomeScreen
-        const dogsResponse = await dogAPI.getDogsForUser(currentUser.id);
-        if (dogsResponse.success && dogsResponse.dogs) {
-          setDogs(dogsResponse.dogs);
-        }
+      // Fetch dogs for this user
+      const dogsResponse = await dogAPI.getDogsForUser(uid);
+      if (dogsResponse.success && dogsResponse.dogs) {
+        setDogs(dogsResponse.dogs);
       }
     } catch (error: any) {
       console.error('Error loading user/dogs:', error);

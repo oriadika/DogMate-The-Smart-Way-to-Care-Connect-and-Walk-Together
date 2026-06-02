@@ -40,26 +40,25 @@ type InventoryItem = {
 const FoodInventoryHubScreen = ({ navigation, route }: any) => {
   const [inventoryList, setInventoryList] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(route?.params?.userId || null);
 
   // Load food stocks from database
   const loadFoodStocks = useCallback(async () => {
     try {
       setLoading(true);
       
-      // Get current user
-      const userResponse = await userAPI.getLoggedUsers();
-      if (!userResponse.success || !userResponse.users || userResponse.users.length === 0) {
+      // Get userId from route params (passed from navigation) instead of calling getLoggedUsers()
+      const uid = route?.params?.userId || userId;
+      if (!uid) {
         Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
         setLoading(false);
         return;
       }
       
-      const currentUser = userResponse.users[0];
-      setUserId(currentUser.id);
+      setUserId(uid);
 
       // Fetch food stocks for this user
-      const response = await foodStockAPI.getFoodStocksForUser(currentUser.id);
+      const response = await foodStockAPI.getFoodStocksForUser(uid);
       
       if (response.success && response.foodStocks) {
         // Transform API response to our format

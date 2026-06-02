@@ -28,7 +28,7 @@ interface Dog {
 }
 
 const FoodIntakeScreen = ({ navigation, route }: any) => {
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(route?.params?.userId || null);
   const [dogs, setDogs] = useState<Dog[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDogModal, setShowDogModal] = useState(false);
@@ -54,30 +54,34 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
   const loadUserAndDogs = async () => {
     try {
       setLoading(true);
-      // Fetch current logged-in user - same as HomeScreen
-      const userResponse = await userAPI.getLoggedUsers();
-      if (userResponse.success && userResponse.users && userResponse.users.length > 0) {
-        const currentUser = userResponse.users[0];
-        setUserId(currentUser.id);
+      // Get userId from route params instead of calling getLoggedUsers()
+      const uid = route?.params?.userId || userId;
+      if (!uid) {
+        Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
+        setLoading(false);
+        return;
+      }
+      
+      setUserId(uid);
 
-        // Fetch dogs for this user - same as HomeScreen
-        const dogsResponse = await dogAPI.getDogsForUser(currentUser.id);
-        if (dogsResponse.success && dogsResponse.dogs) {
-          // If not in edit mode, filter out dogs that already have food stock
-          if (!isEditMode) {
-            const foodStocks = await foodStockAPI.getUserFoodStocks(currentUser.id);
-            // Get IDs of all dogs that already have food stock
-            const dogsWithFoodStock: string[] = [];
-            foodStocks.forEach((stock: FoodStockData) => {
-              stock.dogs.forEach((dog: any) => {
-                if (!dogsWithFoodStock.includes(dog.id)) {
-                  dogsWithFoodStock.push(dog.id);
-                }
-              });
+      // Fetch dogs for this user
+      const dogsResponse = await dogAPI.getDogsForUser(uid);
+      if (dogsResponse.success && dogsResponse.dogs) {
+        // If not in edit mode, filter out dogs that already have food stock
+        if (!isEditMode) {
+          const foodStocks = await foodStockAPI.getUserFoodStocks(uid);
+          // Get IDs of all dogs that already have food stock
+          const dogsWithFoodStock: string[] = [];
+          foodStocks.forEach((stock: FoodStockData) => {
+            stock.dogs.forEach((dog: any) => {
+              if (!dogsWithFoodStock.includes(dog.id)) {
+                dogsWithFoodStock.push(dog.id);
+              }
             });
-            
-            // Filter out dogs that already have food stock
-            const availableDogs = dogsResponse.dogs.filter((dog: Dog) => !dogsWithFoodStock.includes(dog.id));
+          });
+          
+          // Filter out dogs that already have food stock
+          const availableDogs = dogsResponse.dogs.filter((dog: Dog) => !dogsWithFoodStock.includes(dog.id));
             
             // If no dogs available, show alert and go back
             if (availableDogs.length === 0) {
@@ -116,14 +120,13 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
       setFoodStockId(inventoryId);
       setIsEditMode(true);
 
-      // Get user to fetch food stocks
-      const userResponse = await userAPI.getLoggedUsers();
-      if (!userResponse.success || !userResponse.users || userResponse.users.length === 0) {
+      // Get userId from state (already set from route params)
+      const uid = userId || route?.params?.userId;
+      if (!uid) {
         throw new Error('User not found');
       }
 
-      const currentUser = userResponse.users[0];
-      const foodStocks = await foodStockAPI.getUserFoodStocks(currentUser.id);
+      const foodStocks = await foodStockAPI.getUserFoodStocks(uid);
       
       // Find the food stock with matching ID
       const foodStock = foodStocks.find((stock: FoodStockData) => stock.id === inventoryId);

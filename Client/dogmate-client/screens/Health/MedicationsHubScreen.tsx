@@ -47,11 +47,11 @@ const DEFAULT_MEDICATION_SORT: MedicationSortOption = 'date_desc';
 
 type DogOption = { id: string; name: string };
 
-const MedicationsHubScreen = ({ navigation }: any) => {
+const MedicationsHubScreen = ({ navigation, route }: any) => {
   const [rows, setRows] = useState<MedicationRow[]>([]);
   const [userDogs, setUserDogs] = useState<DogOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(route?.params?.userId || null);
   const [selectedDogId, setSelectedDogId] = useState<string>(ALL_DOGS_FILTER);
   const [dogFilterModalVisible, setDogFilterModalVisible] = useState(false);
   const [medicationSort, setMedicationSort] = useState<MedicationSortOption>(DEFAULT_MEDICATION_SORT);
@@ -63,14 +63,14 @@ const MedicationsHubScreen = ({ navigation }: any) => {
   const loadMedications = useCallback(async () => {
     try {
       setLoading(true);
-      const userResponse = await userAPI.getLoggedUsers();
-      if (!userResponse.success || !userResponse.users?.length) {
+      // Get userId from route params (passed from navigation) instead of calling getLoggedUsers()
+      const uid = route?.params?.userId || userId;
+      if (!uid) {
         Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
         setRows([]);
         setUserDogs([]);
         return;
       }
-      const uid = userResponse.users[0].id as string;
       setUserId(uid);
 
       try {

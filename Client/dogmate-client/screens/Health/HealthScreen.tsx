@@ -12,14 +12,14 @@ const TEXT_DARK = '#5C4033';
 const BORDER_COLOR = '#E0D5C7';
 
 /** Fallback when ref not ready yet: walk parents until a navigator lists the target route. */
-function navigateToRootStackScreen(navigation: any, screenName: string) {
+function navigateToRootStackScreen(navigation: any, screenName: string, params?: Record<string, any>) {
   let nav: any = navigation;
   for (let depth = 0; depth < 10 && nav; depth++) {
     try {
       const state = nav.getState?.();
       const names: string[] | undefined = state?.routeNames;
       if (Array.isArray(names) && names.includes(screenName)) {
-        nav.navigate(screenName);
+        nav.navigate(screenName, params);
         return;
       }
     } catch {
@@ -27,15 +27,15 @@ function navigateToRootStackScreen(navigation: any, screenName: string) {
     }
     nav = nav.getParent?.();
   }
-  navigation.navigate(screenName);
+  navigation.navigate(screenName, params);
 }
 
-function openHealthStackScreen(navigation: any, screenName: string) {
+function openHealthStackScreen(navigation: any, screenName: string, params?: Record<string, any>) {
   if (rootNavigationRef.isReady()) {
-    navigateRoot(screenName);
+    navigateRoot(screenName, params);
     return;
   }
-  navigateToRootStackScreen(navigation, screenName);
+  navigateToRootStackScreen(navigation, screenName, params);
 }
 
 type HealthMenuRowProps = {
@@ -62,9 +62,10 @@ function HealthMenuRow({ onPress, icon, title, description }: HealthMenuRowProps
   );
 }
 
-const HealthScreen = ({ navigation }: any) => {
+const HealthScreen = ({ navigation, route }: any) => {
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, 12) + 100;
+  const userId = route?.params?.userId;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -89,19 +90,19 @@ const HealthScreen = ({ navigation }: any) => {
           keyboardShouldPersistTaps="handled"
         >
           <HealthMenuRow
-            onPress={() => openHealthStackScreen(navigation, 'FoodInventoryHub')}
+            onPress={() => openHealthStackScreen(navigation, 'FoodInventoryHub', { userId })}
             icon={<MaterialCommunityIcons name="bone" size={40} color={PRIMARY_COLOR} />}
             title="ניהול מלאי מזון"
             description="ניהול מלאי מזון וצריכה יומית"
           />
           <HealthMenuRow
-            onPress={() => openHealthStackScreen(navigation, 'VaccinationsHub')}
+            onPress={() => openHealthStackScreen(navigation, 'VaccinationsHub', { userId })}
             icon={<MaterialCommunityIcons name="needle" size={40} color={PRIMARY_COLOR} />}
             title="החיסונים שלי"
             description="רישום חיסונים לפי כלב ותאריך"
           />
           <HealthMenuRow
-            onPress={() => openHealthStackScreen(navigation, 'MedicationsHub')}
+            onPress={() => openHealthStackScreen(navigation, 'MedicationsHub', { userId })}
             icon={<MaterialCommunityIcons name="pill" size={40} color={PRIMARY_COLOR} />}
             title="התרופות שלי"
             description="רישום תרופות וטיפולים"

@@ -25,6 +25,9 @@ public class UserAccount {
     @Column(name = "logged_in", nullable = false, updatable = true, columnDefinition = "BOOLEAN DEFAULT false")
     private boolean loggedIn = false;
 
+    @Column(name = "last_activity_time")
+    private LocalDateTime lastActivityTime;
+
     @Column(name = "suspended", nullable = false, updatable = true, columnDefinition = "BOOLEAN DEFAULT false")
     private boolean suspended = false;
 
@@ -159,6 +162,14 @@ public class UserAccount {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public LocalDateTime getLastActivityTime() {
+        return lastActivityTime;
+    }
+
+    public void setLastActivityTime(LocalDateTime lastActivityTime) {
+        this.lastActivityTime = lastActivityTime;
     }
 
     public boolean isLoggedIn() {

@@ -318,6 +318,8 @@ public class UserService {
         }
         // Set logged in status to true
         user.setLoggedIn(true);
+        // Update last activity time for session timeout tracking
+        user.setLastActivityTime(LocalDateTime.now());
         System.out.println("Setting user " + email + " loggedIn to true");
         
         // Save the updated user

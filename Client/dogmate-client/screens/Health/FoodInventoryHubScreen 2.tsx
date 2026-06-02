@@ -43,7 +43,7 @@ let idCounter = 1; // Counter for generating unique IDs
 const FoodInventoryHubScreen = ({ navigation, route }: any) => {
   const [inventoryList, setInventoryList] = useState<InventoryItem[]>(INITIAL_INVENTORY_DATA);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(route?.params?.userId || null);
 
   // Convert FoodStockData to InventoryItem
   const convertFoodStockToInventoryItem = (foodStock: FoodStockData): InventoryItem => {
@@ -73,22 +73,23 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
     try {
       setLoading(true);
       console.log('Loading food stocks...');
-      const userResponse = await userAPI.getLoggedUsers();
-      console.log('User response:', userResponse);
-      if (userResponse.success && userResponse.users && userResponse.users.length > 0) {
-        const currentUser = userResponse.users[0];
-        setUserId(currentUser.id);
-        console.log('Loading food stocks for user:', currentUser.id);
-        
-        const foodStocks = await foodStockAPI.getUserFoodStocks(currentUser.id);
-        console.log('Food stocks loaded:', foodStocks);
-        const inventoryItems = foodStocks.map(convertFoodStockToInventoryItem);
-        console.log('Inventory items:', inventoryItems);
-        setInventoryList(inventoryItems);
-      } else {
-        console.log('No logged users found');
+      // Get userId from route params instead of calling getLoggedUsers()
+      const uid = route?.params?.userId || userId;
+      if (!uid) {
+        console.log('No user ID provided');
         setInventoryList([]);
+        setLoading(false);
+        return;
       }
+      
+      setUserId(uid);
+      console.log('Loading food stocks for user:', uid);
+      
+      const foodStocks = await foodStockAPI.getUserFoodStocks(uid);
+      console.log('Food stocks loaded:', foodStocks);
+      const inventoryItems = foodStocks.map(convertFoodStockToInventoryItem);
+      console.log('Inventory items:', inventoryItems);
+      setInventoryList(inventoryItems);
     } catch (error: any) {
       console.error('Error loading food stocks:', error);
       console.error('Error details:', error.response?.data || error.message);

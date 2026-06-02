@@ -2,20 +2,14 @@ package com.DogMate.Service;
 
 import com.DogMate.Domain.UserAccount;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface IUserRepository {
-    /**
-     * Save a new user account to the database
-     * @param userAccount The user account to save
-     * @return The saved user account with generated ID
-     */
-    UserAccount save(UserAccount userAccount);
-
+public interface IUserRepository extends CrudRepository<UserAccount, UUID> {
     /**
      * Find a user by email
      * @param email The email to search for
