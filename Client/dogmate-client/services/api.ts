@@ -111,6 +111,28 @@ export interface ResendVerificationPayload {
   email: string;
 }
 
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  success: boolean;
+  message: string;
+  /** False if SMTP is not configured or send failed — check server logs for OTP. */
+  resetEmailSent?: boolean;
+}
+
+export interface ResetPasswordPayload {
+  email: string;
+  code: string;
+  newPassword: string;
+}
+
+export interface ResetPasswordResponse {
+  success: boolean;
+  message: string;
+}
+
 export interface VerifyEmailResponse {
   success: boolean;
   message: string;
@@ -353,6 +375,32 @@ export const userAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage = getAuthFlowErrorMessage(error, 'שליחת קוד האימות מחדש נכשלה');
+      throw new Error(errorMessage);
+    }
+  },
+
+  forgotPassword: async (payload: ForgotPasswordPayload): Promise<ForgotPasswordResponse> => {
+    try {
+      const response = await apiClient.post('/auth/forgot-password', {
+        email: payload.email.trim(),
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = getAuthFlowErrorMessage(error, 'שליחת קוד איפוס הסיסמה נכשלה');
+      throw new Error(errorMessage);
+    }
+  },
+
+  resetPassword: async (payload: ResetPasswordPayload): Promise<ResetPasswordResponse> => {
+    try {
+      const response = await apiClient.post('/auth/reset-password', {
+        email: payload.email.trim(),
+        code: payload.code.trim(),
+        newPassword: payload.newPassword,
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = getAuthFlowErrorMessage(error, 'איפוס הסיסמה נכשל');
       throw new Error(errorMessage);
     }
   },

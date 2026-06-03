@@ -1,6 +1,7 @@
 package com.DogMate.Controller;
 
 import com.DogMate.Domain.UserAccount;
+import com.DogMate.Service.PasswordResetService;
 import com.DogMate.Service.PendingRegistrationService;
 import com.DogMate.Service.UserService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -18,11 +19,17 @@ public class AuthController {
     
     private final UserService userService;
     private final PendingRegistrationService pendingRegistrationService;
+    private final PasswordResetService passwordResetService;
 
     @Autowired
-    public AuthController(UserService userService, PendingRegistrationService pendingRegistrationService) {
+    public AuthController(
+        UserService userService,
+        PendingRegistrationService pendingRegistrationService,
+        PasswordResetService passwordResetService
+    ) {
         this.userService = userService;
         this.pendingRegistrationService = pendingRegistrationService;
+        this.passwordResetService = passwordResetService;
     }
 
     /**
@@ -170,6 +177,66 @@ public class AuthController {
      * Resend OTP only for an in-progress signup ({@link PendingRegistrationService}).
      * Already-registered users do not receive verification codes here — they sign in instead.
      */
+    /**
+     * Request a password-reset code sent to the user's email.
+     * POST /api/auth/forgot-password
+     */
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+        try {
+            if (request == null || request.getEmail() == null || request.getEmail().trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(createErrorResponse("נדרש מייל"));
+            }
+            boolean emailSent = passwordResetService.requestPasswordReset(request.getEmail());
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "קוד לאיפוס סיסמה נשלח למייל");
+            response.put("resetEmailSent", emailSent);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("אירעה שגיאה בבקשת איפוס הסיסמה. נסה שוב מאוחר יותר."));
+        }
+    }
+
+    /**
+     * Reset password using the emailed 6-digit code.
+     * POST /api/auth/reset-password
+     */
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordRequest request) {
+        try {
+            if (request == null
+                || request.getEmail() == null
+                || request.getEmail().trim().isEmpty()
+                || request.getCode() == null
+                || request.getCode().trim().isEmpty()
+                || request.getNewPassword() == null
+                || request.getNewPassword().trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(createErrorResponse("נדרשים אימייל, קוד וסיסמה חדשה"));
+            }
+            passwordResetService.resetPassword(
+                request.getEmail(),
+                request.getCode(),
+                request.getNewPassword()
+            );
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "הסיסמה עודכנה בהצלחה");
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("אירעה שגיאה באיפוס הסיסמה. נסה שוב מאוחר יותר."));
+        }
+    }
+
     @PostMapping("/resend-verification")
     public ResponseEntity<?> resendVerification(@RequestBody ResendVerificationRequest request) {
         try {
@@ -294,6 +361,56 @@ public class AuthController {
 
         public void setEmail(String email) {
             this.email = email;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ForgotPasswordRequest {
+        private String email;
+
+        public ForgotPasswordRequest() {
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ResetPasswordRequest {
+        private String email;
+        private String code;
+        private String newPassword;
+
+        public ResetPasswordRequest() {
+        }
+
+        public String getEmail() {
+            return email;
+        }
+
+        public void setEmail(String email) {
+            this.email = email;
+        }
+
+        public String getCode() {
+            return code;
+        }
+
+        public void setCode(String code) {
+            this.code = code;
+        }
+
+        public String getNewPassword() {
+            return newPassword;
+        }
+
+        public void setNewPassword(String newPassword) {
+            this.newPassword = newPassword;
         }
     }
 }
