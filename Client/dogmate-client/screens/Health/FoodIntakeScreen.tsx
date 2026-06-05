@@ -15,7 +15,11 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, userAPI, foodStockAPI } from '../../services/api';
+import { dogAPI, userAPI, foodStockAPI, type FoodStockRow } from '../../services/api';
+import ReminderSettingsSection from '../../components/health/ReminderSettingsSection';
+import { DEFAULT_FOOD_NOTIFICATION, type FoodNotificationSettings } from '../../types/notifications';
+import { resyncAllNotifications } from '../../services/notificationScheduler';
+import { useScreenLifecycleGuard } from '../../utils/screenLifecycle';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 
@@ -27,42 +31,112 @@ interface Dog {
 }
 
 const FoodIntakeScreen = ({ navigation, route }: any) => {
+  const inventoryId = route?.params?.inventoryId as string | undefined;
+  const isEditMode = Boolean(inventoryId);
+
   const [userId, setUserId] = useState<string | null>(null);
   const [dogs, setDogs] = useState<Dog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [showDogModal, setShowDogModal] = useState(false);
-  const [selectedDogs, setSelectedDogs] = useState<string[]>([]); // Array of dog IDs
+  const [selectedDogs, setSelectedDogs] = useState<string[]>([]);
   const [dailyConsumption, setDailyConsumption] = useState('');
   const [bagSize, setBagSize] = useState('');
-  const [currentAmount, setCurrentAmount] = useState(''); // כמות נוכחית במלאי (ק״ג)
-
-  // Load user and dogs data - same logic as HomeScreen
-  useFocusEffect(
-    useCallback(() => {
-      loadUserAndDogs();
-    }, [])
+  const [currentAmount, setCurrentAmount] = useState('');
+  const [foodStockId, setFoodStockId] = useState<string | null>(inventoryId ?? null);
+  const [notificationSettings, setNotificationSettings] = useState<FoodNotificationSettings>(
+    DEFAULT_FOOD_NOTIFICATION
   );
 
-  const loadUserAndDogs = async () => {
-    try {
-      setLoading(true);
-      // Fetch current logged-in user - same as HomeScreen
-      const userResponse = await userAPI.getLoggedUsers();
-      if (userResponse.success && userResponse.users && userResponse.users.length > 0) {
-        const currentUser = userResponse.users[0];
-        setUserId(currentUser.id);
+  const {
+    isMountedRef,
+    markMounted,
+    beginAsyncWork,
+    isAsyncWorkCurrent,
+    runDeferredBlurCleanup,
+  } = useScreenLifecycleGuard();
 
-        // Fetch dogs for this user - same as HomeScreen
-        const dogsResponse = await dogAPI.getDogsForUser(currentUser.id);
-        if (dogsResponse.success && dogsResponse.dogs) {
-          setDogs(dogsResponse.dogs);
+  const loadInitialData = useCallback(async (editStockId?: string) => {
+    const generation = beginAsyncWork();
+    try {
+      if (!isAsyncWorkCurrent(generation)) return;
+      setLoading(true);
+      const userResponse = await userAPI.getLoggedUsers();
+      if (!isAsyncWorkCurrent(generation)) return;
+      if (!userResponse.success || !userResponse.users?.length) {
+        Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
+        return;
+      }
+
+      const currentUser = userResponse.users[0];
+      setUserId(currentUser.id);
+
+      const dogsResponse = await dogAPI.getDogsForUser(currentUser.id);
+      if (!isAsyncWorkCurrent(generation)) return;
+      if (dogsResponse.success && dogsResponse.dogs) {
+        setDogs(dogsResponse.dogs);
+      }
+
+      if (editStockId) {
+        setFoodStockId(editStockId);
+        const stocksResponse = await foodStockAPI.getFoodStocksForUser(currentUser.id);
+        if (!isAsyncWorkCurrent(generation)) return;
+        const stock: FoodStockRow | undefined = stocksResponse.foodStocks?.find(
+          (s: FoodStockRow) => s.id === editStockId
+        );
+
+        if (!stock) {
+          if (!isAsyncWorkCurrent(generation)) return;
+          Alert.alert('שגיאה', 'מלאי מזון לא נמצא', [
+            { text: 'אישור', onPress: () => navigation.goBack() },
+          ]);
+          return;
         }
+
+        setBagSize(String(stock.bagSizeInKg));
+        setCurrentAmount(String(stock.currentLevelInKg));
+        setDailyConsumption(String(stock.dailyConsumptionInGram));
+        setSelectedDogs(stock.dogs?.map((d) => d.id) ?? []);
+        setNotificationSettings({
+          notificationEnabled: stock.notificationEnabled ?? DEFAULT_FOOD_NOTIFICATION.notificationEnabled,
+          lowStockThresholdDays:
+            stock.lowStockThresholdDays ?? DEFAULT_FOOD_NOTIFICATION.lowStockThresholdDays,
+        });
       }
     } catch (error: any) {
-      console.error('Error loading user/dogs:', error);
-      Alert.alert('שגיאה', 'שגיאה בטעינת הנתונים');
+      if (!isAsyncWorkCurrent(generation)) return;
+      console.error('Error loading food intake data:', error);
+      Alert.alert('שגיאה', error?.message || 'שגיאה בטעינת הנתונים');
     } finally {
-      setLoading(false);
+      if (isAsyncWorkCurrent(generation)) {
+        setLoading(false);
+      }
+    }
+  }, [beginAsyncWork, isAsyncWorkCurrent, navigation]);
+
+  useFocusEffect(
+    useCallback(() => {
+      markMounted();
+      void loadInitialData(inventoryId);
+      return () => {
+        runDeferredBlurCleanup(() => {
+          if (!isMountedRef.current) return;
+          setShowDogModal(false);
+        });
+      };
+    }, [inventoryId, loadInitialData, markMounted, runDeferredBlurCleanup, isMountedRef])
+  );
+
+  const refreshDogsList = async () => {
+    const uid = userId;
+    if (!uid) return;
+    try {
+      const dogsResponse = await dogAPI.getDogsForUser(uid);
+      if (dogsResponse.success && dogsResponse.dogs) {
+        setDogs(dogsResponse.dogs);
+      }
+    } catch (error) {
+      console.warn('Failed to refresh dogs list:', error);
     }
   };
 
@@ -156,6 +230,41 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
     }
 
     try {
+      setSaving(true);
+
+      if (isEditMode && foodStockId && userId) {
+        await foodStockAPI.updateFoodStock(
+          foodStockId,
+          'מזון כלבים',
+          bagKg,
+          dailyGrams,
+          currentKg,
+          notificationSettings.notificationEnabled,
+          notificationSettings.lowStockThresholdDays
+        );
+
+        const stocksResponse = await foodStockAPI.getFoodStocksForUser(userId);
+        const stock: FoodStockRow | undefined = stocksResponse.foodStocks?.find(
+          (s: FoodStockRow) => s.id === foodStockId
+        );
+        const linkedDogIds = new Set(stock?.dogs?.map((d) => d.id) ?? []);
+        for (const dogId of selectedDogs) {
+          if (!linkedDogIds.has(dogId)) {
+            await foodStockAPI.connectFoodStockToDog(dogId, foodStockId);
+          }
+        }
+
+        await resyncAllNotifications(userId);
+
+        Alert.alert('הצלחה', 'מלאי המזון עודכן בהצלחה!', [
+          {
+            text: 'אישור',
+            onPress: () => navigation.navigate('FoodInventoryHub', { refresh: true }),
+          },
+        ]);
+        return;
+      }
+
       // Save to database - create food stock for the first dog
       const firstDogId = selectedDogs[0];
       const response = await foodStockAPI.createFoodStock(
@@ -177,6 +286,22 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
         }
       }
 
+      if (response.foodStock?.id) {
+        await foodStockAPI.updateFoodStock(
+          response.foodStock.id,
+          'מזון כלבים',
+          bagKg,
+          dailyGrams,
+          currentKg,
+          notificationSettings.notificationEnabled,
+          notificationSettings.lowStockThresholdDays
+        );
+      }
+
+      if (userId) {
+        await resyncAllNotifications(userId);
+      }
+
       Alert.alert('הצלחה', 'מלאי המזון נשמר בהצלחה!', [
         {
           text: 'אישור',
@@ -186,6 +311,8 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
     } catch (error: any) {
       console.error('Error saving food stock:', error);
       Alert.alert('שגיאה', error.message || 'שגיאה בשמירת מלאי המזון');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -206,7 +333,9 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
         {/* Header */}
         <View style={styles.header}>
           <View style={{ width: 40 }} />
-          <Text style={styles.headerTitle}>חישוב מלאי מזון</Text>
+          <Text style={styles.headerTitle}>
+            {isEditMode ? 'עריכת מלאי מזון' : 'חישוב מלאי מזון'}
+          </Text>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
@@ -226,8 +355,7 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
             <TouchableOpacity
               style={styles.pickerInput}
               onPress={async () => {
-                // Reload dogs before opening modal - same as HomeScreen does
-                await loadUserAndDogs();
+                await refreshDogsList();
                 setShowDogModal(true);
               }}
               activeOpacity={0.7}
@@ -296,13 +424,26 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
             </View>
           </View>
 
+          <ReminderSettingsSection
+            variant="food"
+            value={notificationSettings}
+            onChange={setNotificationSettings}
+          />
+
           {/* Calculate Button */}
           <TouchableOpacity
-            style={styles.calculateButton}
+            style={[styles.calculateButton, saving && styles.calculateButtonDisabled]}
             onPress={handleCalculate}
             activeOpacity={0.85}
+            disabled={saving}
           >
-            <Text style={styles.calculateButtonText}>חשב והצג</Text>
+            {saving ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.calculateButtonText}>
+                {isEditMode ? 'שמור שינויים' : 'חשב והצג'}
+              </Text>
+            )}
           </TouchableOpacity>
         </ScrollView>
 
@@ -494,7 +635,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
@@ -513,7 +654,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginLeft: 8,
     borderWidth: 1,
     borderColor: '#E0D5C7',
   },
@@ -533,6 +674,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
+  },
+  calculateButtonDisabled: {
+    opacity: 0.7,
   },
   calculateButtonText: {
     color: '#FFFFFF',

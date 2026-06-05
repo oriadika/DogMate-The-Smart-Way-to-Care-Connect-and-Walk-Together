@@ -1,5 +1,5 @@
 // screens/HomeScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   SafeAreaView,
   View,
@@ -15,14 +15,21 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, reminderAPI, userAPI } from '../services/api';
-import { scheduleReminderNotification, cancelReminderNotification } from '../services/notifications';
+import { dogAPI, reminderAPI, userAPI, type ReminderRow } from '../services/api';
+import { cancelReminderNotification } from '../services/notifications';
+import { loadNotificationPreferences } from '../services/notificationPreferences';
+import { resyncAllNotifications } from '../services/notificationScheduler';
+import { getReminderCountdown, sortRemindersNearestFirst } from '../utils/daysDisplay';
+import websocketService from '../services/websocket';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
 const TEXT_DARK = '#5C4033'; // Dark brown for text
 const CARD_BG = '#faf0e6'; // Lighter beige for inputs/cards
 const BORDER_COLOR = '#E0D5C7'; // Border color
+
+/** Let Axios home fetches complete before WebSocket / notification side effects run. */
+const HOME_FOCUS_SIDE_EFFECTS_DELAY_MS = 1500;
 
 type HomeCacheEntry = {
   userName: string;
@@ -74,10 +81,13 @@ const HomeScreen = ({ navigation, route }: any) => {
   const [selectedReminder, setSelectedReminder] = useState<any | null>(null);
   const [showReminderDetails, setShowReminderDetails] = useState(false);
 
+  const loadInFlightRef = useRef(false);
+  const notificationsSyncedForUserRef = useRef<string | null>(null);
+  const userNameRef = useRef(route?.params?.userFirstName || userName);
+  userNameRef.current = route?.params?.userFirstName || userName;
+
   // Get user data from route params (passed from LoginScreen) - use state as fallback
   const currentUserId = route?.params?.userId || userId;
-  const currentUserName = route?.params?.userFirstName || userName;
-  const currentUserLastName = route?.params?.userLastName || userLastName;
 
   // Update state when route params change (e.g., on first login)
   React.useEffect(() => {
@@ -97,9 +107,16 @@ const HomeScreen = ({ navigation, route }: any) => {
     React.useCallback(() => {
       if (!currentUserId) return;
 
-      if (route?.params?.refresh === true) {
+      const forceRefresh =
+        route?.params?.refresh === true || dirtyHomeDataUsers.has(currentUserId);
+
+      if (forceRefresh) {
         homeDataCache.delete(currentUserId);
-        navigation.setParams({ refresh: false });
+        dirtyHomeDataUsers.delete(currentUserId);
+        notificationsSyncedForUserRef.current = null;
+        if (route?.params?.refresh === true) {
+          navigation.setParams({ refresh: false });
+        }
       }
 
       const cached = homeDataCache.get(currentUserId);
@@ -113,26 +130,55 @@ const HomeScreen = ({ navigation, route }: any) => {
         setLoading(true);
       }
 
-      // Always fetch fresh data when screen gets focus
-      loadUserAndDogs(currentUserId, currentUserName, { showLoader: !cached });
+      const shouldSyncNotifications =
+        forceRefresh || notificationsSyncedForUserRef.current !== currentUserId;
 
-      // Keep screen fresh while user stays on it
+      void loadUserAndDogs(currentUserId, userNameRef.current, {
+        showLoader: !cached,
+        syncNotifications: false,
+      });
+
+      const deferredSideEffectsTimer = setTimeout(() => {
+        void websocketService.ensureConnected(currentUserId);
+        if (shouldSyncNotifications) {
+          void (async () => {
+            try {
+              await loadNotificationPreferences(currentUserId);
+              await resyncAllNotifications(currentUserId);
+              notificationsSyncedForUserRef.current = currentUserId;
+            } catch (error) {
+              console.warn('Deferred home notification sync failed:', error);
+            }
+          })();
+        }
+      }, HOME_FOCUS_SIDE_EFFECTS_DELAY_MS);
+
       const intervalId = setInterval(() => {
-        loadUserAndDogs(currentUserId, currentUserName, { showLoader: false });
-      }, 5000);
+        void loadUserAndDogs(currentUserId, userNameRef.current, {
+          showLoader: false,
+          syncNotifications: false,
+        });
+      }, 30000);
 
       return () => {
+        clearTimeout(deferredSideEffectsTimer);
         clearInterval(intervalId);
       };
-    }, [currentUserId, currentUserName, route?.params?.refresh, navigation])
+    }, [currentUserId, navigation, route?.params?.refresh])
   );
 
   const loadUserAndDogs = async (
     userIdToLoad: string,
     userNameToLoad?: string,
-    options?: { showLoader?: boolean }
+    options?: { showLoader?: boolean; syncNotifications?: boolean }
   ) => {
+    if (loadInFlightRef.current) {
+      return;
+    }
+    loadInFlightRef.current = true;
+
     const shouldShowLoader = options?.showLoader ?? false;
+    const shouldSyncNotifications = options?.syncNotifications ?? false;
 
     try {
       if (shouldShowLoader) {
@@ -187,13 +233,14 @@ const HomeScreen = ({ navigation, route }: any) => {
       let nextReminders: any[] = [];
       if (remindersSettled.status === 'fulfilled') {
         const remindersResponse = remindersSettled.value;
-        nextReminders =
+        nextReminders = sortRemindersNearestFirst(
           remindersResponse.success && remindersResponse.reminders
             ? remindersResponse.reminders
-            : [];
+            : []
+        );
       } else {
         console.warn('Error loading reminders:', remindersSettled.reason);
-        nextReminders = priorCache?.reminders ?? [];
+        nextReminders = sortRemindersNearestFirst(priorCache?.reminders ?? []);
       }
 
       const nextSignature = buildDataSignature(nextDogs, nextReminders);
@@ -217,24 +264,9 @@ const HomeScreen = ({ navigation, route }: any) => {
 
       dirtyHomeDataUsers.delete(userIdToLoad);
 
-      // Schedule notifications for future reminders
-      const now = new Date();
-      for (const reminder of nextReminders) {
-        if (!reminder?.remindAt) {
-          continue;
-        }
-        const reminderDate = new Date(reminder.remindAt);
-        if (isNaN(reminderDate.getTime())) {
-          continue;
-        }
-        if (reminderDate > now) {
-          await scheduleReminderNotification(
-            reminder.id,
-            reminder.title,
-            reminder.description || 'זמן לתזכורת!',
-            reminderDate
-          );
-        }
+      if (shouldSyncNotifications) {
+        await loadNotificationPreferences(userIdToLoad);
+        await resyncAllNotifications(userIdToLoad);
       }
     } catch (error: any) {
       console.error('Error loading user/dogs:', error);
@@ -242,6 +274,7 @@ const HomeScreen = ({ navigation, route }: any) => {
         Alert.alert('שגיאה', 'שגיאה בטעינת הנתונים');
       }
     } finally {
+      loadInFlightRef.current = false;
       if (shouldShowLoader) {
         setLoading(false);
       }
@@ -274,6 +307,29 @@ const HomeScreen = ({ navigation, route }: any) => {
       console.warn('Error formatting date:', error);
       return 'תאריך לא תקין';
     }
+  };
+
+  const parseReminderDate = (dateValue: any): Date | null => {
+    if (!dateValue) return null;
+    const date = new Date(dateValue);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const formatReminderDateOnly = (dateValue: any): string => {
+    const date = parseReminderDate(dateValue);
+    if (!date) return '—';
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
+
+  const formatReminderTimeOnly = (dateValue: any): string => {
+    const date = parseReminderDate(dateValue);
+    if (!date) return '—';
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
   };
 
   /** חודש בלי הספרה 1; חודשיים לגיל שניים; N חודשים אחרת */
@@ -414,7 +470,7 @@ const HomeScreen = ({ navigation, route }: any) => {
               
               // Refresh dogs list
               if (currentUserId) {
-                loadUserAndDogs(currentUserId, currentUserName);
+                loadUserAndDogs(currentUserId, userNameRef.current, { syncNotifications: true });
               }
             } catch (error: any) {
               console.error('Error deleting dog:', error);
@@ -427,10 +483,52 @@ const HomeScreen = ({ navigation, route }: any) => {
     );
   };
 
-  const handleDeleteReminder = (reminderId: string, reminderTitle: string) => {
+  const navigateToSystemReminderSource = (reminder: ReminderRow) => {
+    if (!reminder.sourceType || !reminder.sourceId) {
+      Alert.alert('שגיאה', 'לא ניתן לפתוח את מקור התזכורת');
+      return;
+    }
+    setShowReminderDetails(false);
+    switch (reminder.sourceType) {
+      case 'FOOD':
+        navigation.navigate('FoodIntake', { inventoryId: reminder.sourceId, userId: currentUserId });
+        break;
+      case 'VACCINATION':
+        navigation.navigate('VaccinationForm', {
+          userId: currentUserId,
+          vaccinationId: reminder.sourceId,
+        });
+        break;
+      case 'MEDICATION':
+        navigation.navigate('MedicationForm', {
+          userId: currentUserId,
+          medicationId: reminder.sourceId,
+        });
+        break;
+      default:
+        Alert.alert('שגיאה', 'סוג תזכורת לא מוכר');
+    }
+  };
+
+  const handleDeleteReminder = (reminder: ReminderRow) => {
+    if (reminder.systemGenerated) {
+      Alert.alert(
+        'תזכורת אוטומטית',
+        'תזכורת זו נוצרה אוטומטית מהמערכת. כדי להסיר אותה, עדכן את הגדרות ההתראות בפריט המקור.',
+        [
+          { text: 'ביטול', style: 'cancel' },
+          {
+            text: 'פתח הגדרות',
+            onPress: () => navigateToSystemReminderSource(reminder),
+          },
+        ]
+      );
+      return;
+    }
+
     Alert.alert(
       'מחיקת תזכורת',
-      `האם אתה בטוח שברצונך למחוק את "${reminderTitle}"?`,
+      `האם אתה בטוח שברצונך למחוק את "${reminder.title}"?`,
       [
         {
           text: 'ביטול',
@@ -447,16 +545,16 @@ const HomeScreen = ({ navigation, route }: any) => {
               }
 
               // Cancel the notification before deleting the reminder
-              await cancelReminderNotification(reminderId);
+              await cancelReminderNotification(reminder.id);
 
-              await reminderAPI.deleteReminder(userId, reminderId);
+              await reminderAPI.deleteReminder(userId, reminder.id);
               Alert.alert('הצלחה', `התזכורת נמחקה בהצלחה`);
               setShowReminderDetails(false);
               dirtyHomeDataUsers.add(userId);
               
               // Refresh reminders list
               if (currentUserId) {
-                loadUserAndDogs(currentUserId, currentUserName);
+                loadUserAndDogs(currentUserId, userNameRef.current, { syncNotifications: true });
               }
             } catch (error: any) {
               console.error('Error deleting reminder:', error);
@@ -556,8 +654,8 @@ const HomeScreen = ({ navigation, route }: any) => {
               onPress={() => navigation.navigate('Settings', {
                 userId: currentUserId,
                 email: route?.params?.email,
-                userFirstName: currentUserName,
-                userLastName: currentUserLastName,
+                userFirstName: userNameRef.current || userName,
+                userLastName: userLastName,
               })}
             >
               <Ionicons name="settings-outline" size={28} color="#5C4033" />
@@ -647,7 +745,10 @@ const HomeScreen = ({ navigation, route }: any) => {
                 {reminders && reminders.length > 0 ? (
                   <FlatList
                     data={reminders}
-                    renderItem={({ item: reminder }) => (
+                    renderItem={({ item: reminder }) => {
+                      const countdown = getReminderCountdown(reminder.remindAt);
+                      const isPast = countdown?.isPast ?? false;
+                      return (
                       <TouchableOpacity 
                         style={styles.reminderCard}
                         onPress={() => {
@@ -656,20 +757,41 @@ const HomeScreen = ({ navigation, route }: any) => {
                         }}
                       >
                         <View style={styles.reminderContent}>
-                          <Text style={styles.reminderTitle}>{reminder.title}</Text>
+                          <View style={styles.reminderTitleRow}>
+                            <Text style={styles.reminderTitle}>{reminder.title}</Text>
+                            {reminder.systemGenerated ? (
+                              <Ionicons name="notifications" size={16} color={PRIMARY_COLOR} />
+                            ) : null}
+                          </View>
                           {reminder.description && (
                             <Text style={styles.reminderDescription}>{reminder.description}</Text>
                           )}
                           <Text style={styles.reminderDogs}>{getDogText(reminder.dogIds)}</Text>
                           <Text style={styles.reminderDate}>{formatReminderDateTime(reminder.remindAt)}</Text>
                         </View>
-                        <View style={[styles.reminderStatus, reminder.sent && styles.reminderSent]}>
-                          <Text style={styles.reminderStatusText}>
-                            {reminder.sent ? '✓' : '⏰'}
-                          </Text>
-                        </View>
+                        {isPast ? (
+                          <View style={styles.reminderStatusContainer}>
+                            <Text style={styles.reminderStatusLabel}>סטטוס</Text>
+                            <Text style={[styles.reminderStatusValue, { color: PRIMARY_COLOR }]}>✓</Text>
+                            <Text style={styles.reminderStatusSubtext}>(עבר הזמן)</Text>
+                          </View>
+                        ) : countdown ? (
+                          <View style={styles.reminderStatusContainer}>
+                            <Text style={styles.reminderStatusLabel}>{countdown.label}</Text>
+                            <Text style={[styles.reminderStatusValue, { color: countdown.urgencyColor }]}>
+                              {countdown.displayValue}
+                            </Text>
+                            <Text style={styles.reminderStatusSubtext}>{countdown.subtext}</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.reminderStatusContainer}>
+                            <Text style={styles.reminderStatusLabel}>ימים עד התזכורת:</Text>
+                            <Text style={[styles.reminderStatusValue, { color: '#8B7355' }]}>—</Text>
+                          </View>
+                        )}
                       </TouchableOpacity>
-                    )}
+                      );
+                    }}
                     keyExtractor={(item, index) => item.id ? item.id.toString() : `reminder-${index}`}
                     scrollEnabled={false}
                   />
@@ -691,52 +813,136 @@ const HomeScreen = ({ navigation, route }: any) => {
           onRequestClose={() => setShowReminderDetails(false)}
         >
           <SafeAreaView style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <TouchableOpacity onPress={() => setShowReminderDetails(false)}>
+            <View style={styles.detailsHeader}>
+              <TouchableOpacity
+                onPress={() => setShowReminderDetails(false)}
+                style={styles.detailsBackButton}
+              >
                 <Ionicons name="arrow-forward" size={28} color={TEXT_DARK} />
               </TouchableOpacity>
-              <Text style={styles.modalTitle}>פרטי התזכורת</Text>
+              <Text style={styles.detailsHeaderTitle}>פרטי התזכורת</Text>
               <View style={{ width: 28 }} />
             </View>
 
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-              <View style={styles.detailsCard}>
-                <Text style={styles.detailsLabel}>שם</Text>
-                <Text style={styles.detailsValue}>{selectedReminder?.title}</Text>
-              </View>
-
-              {selectedReminder?.description && (
-                <View style={styles.detailsCard}>
-                  <Text style={styles.detailsLabel}>תיאור</Text>
-                  <Text style={styles.detailsValue}>{selectedReminder.description}</Text>
+            <ScrollView
+              style={styles.modalContent}
+              contentContainerStyle={styles.detailsContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.detailsFormSection}>
+                <View style={styles.detailsInputGroup}>
+                  <Text style={styles.detailsFormLabel}>שם האירוע</Text>
+                  <View style={styles.detailsFormInput}>
+                    <Text style={styles.detailsFormInputText}>{selectedReminder?.title || '—'}</Text>
+                  </View>
                 </View>
-              )}
 
-              <View style={styles.detailsCard}>
-                <Text style={styles.detailsLabel}>תאריך ושעה</Text>
-                <Text style={styles.detailsValue}>{formatReminderDateTime(selectedReminder?.remindAt)}</Text>
+                <View style={styles.detailsInputGroup}>
+                  <Text style={styles.detailsFormLabel}>תיאור</Text>
+                  <View style={[styles.detailsFormInput, styles.detailsFormTextArea]}>
+                    <Text style={styles.detailsFormInputText}>
+                      {selectedReminder?.description?.trim() || 'ללא תיאור'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.detailsInputGroup}>
+                  <Text style={styles.detailsFormLabel}>למי מיועדת התזכורת?</Text>
+                  <View style={styles.detailsPickerInput}>
+                    <Text style={styles.detailsFormInputText}>
+                      {getDogText(selectedReminder?.dogIds || [])}
+                    </Text>
+                  </View>
+                </View>
               </View>
 
-              <View style={styles.detailsCard}>
-                <Text style={styles.detailsValue}>{getDogText(selectedReminder?.dogIds || [])}</Text>
+              <View style={styles.detailsDateTimeSection}>
+                <View style={styles.detailsInputGroup}>
+                  <Text style={styles.detailsFormLabel}>תאריך</Text>
+                  <View style={styles.detailsDateTimeCard}>
+                    <View style={styles.detailsDateTimeCardContent}>
+                      <View style={styles.detailsDateTimeCardLeft}>
+                        <MaterialCommunityIcons name="calendar" size={24} color={PRIMARY_COLOR} />
+                        <Text style={styles.detailsDateTimeLabel}>
+                          {formatReminderDateOnly(selectedReminder?.remindAt)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.detailsInputGroup}>
+                  <Text style={styles.detailsFormLabel}>שעה</Text>
+                  <View style={styles.detailsDateTimeCard}>
+                    <View style={styles.detailsDateTimeCardContent}>
+                      <View style={styles.detailsDateTimeCardLeft}>
+                        <MaterialCommunityIcons name="clock-outline" size={24} color={PRIMARY_COLOR} />
+                        <Text style={styles.detailsDateTimeLabel}>
+                          {formatReminderTimeOnly(selectedReminder?.remindAt)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
               </View>
 
-              <View style={styles.detailsCard}>
-                <Text style={styles.detailsLabel}>סטטוס</Text>
-                <Text style={[styles.detailsValue, selectedReminder?.sent && { color: PRIMARY_COLOR }]}>
-                  {selectedReminder?.sent ? '✓ נשלח' : '⏰ ממתין'}
-                </Text>
+              <View style={styles.detailsInputGroup}>
+                <Text style={styles.detailsFormLabel}>סטטוס</Text>
+                <View style={styles.detailsFormInput}>
+                  <Text
+                    style={[
+                      styles.detailsFormInputText,
+                      getReminderCountdown(selectedReminder?.remindAt)?.isPast && { color: PRIMARY_COLOR, fontWeight: '700' },
+                    ]}
+                  >
+                    {getReminderCountdown(selectedReminder?.remindAt)?.isPast ? 'עבר הזמן ✓' : 'ממתין ⏰'}
+                  </Text>
+                </View>
               </View>
+
+              {selectedReminder?.systemGenerated ? (
+                <>
+                  <Text style={styles.systemReminderHint}>
+                    תזכורת זו נוצרה אוטומטית מהמערכת. לעריכת ההגדרות, פתח את הפריט המקור.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.detailsSubmitButton}
+                    onPress={() => navigateToSystemReminderSource(selectedReminder as ReminderRow)}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="settings-outline" size={20} color="#fff" />
+                    <Text style={styles.detailsSubmitButtonText}>פתח הגדרות מקור</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+              <TouchableOpacity
+                style={styles.detailsSubmitButton}
+                onPress={() => {
+                  setShowReminderDetails(false);
+                  navigation.navigate('AddReminder', {
+                    userId: currentUserId,
+                    reminder: selectedReminder,
+                  });
+                }}
+                activeOpacity={0.85}
+              >
+                <MaterialCommunityIcons name="pencil" size={20} color="#fff" />
+                <Text style={styles.detailsSubmitButtonText}>ערוך תזכורת</Text>
+              </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.deleteButton}
+                style={styles.detailsDeleteButton}
                 onPress={() => {
-                  handleDeleteReminder(selectedReminder?.id, selectedReminder?.title);
+                  handleDeleteReminder(selectedReminder as ReminderRow);
                 }}
+                activeOpacity={0.85}
               >
                 <MaterialCommunityIcons name="trash-can" size={20} color="#fff" />
-                <Text style={styles.deleteButtonText}>מחוק תזכורת</Text>
+                <Text style={styles.detailsDeleteButtonText}>מחוק תזכורת</Text>
               </TouchableOpacity>
+                </>
+              )}
             </ScrollView>
           </SafeAreaView>
         </Modal>
@@ -956,24 +1162,45 @@ const styles = StyleSheet.create({
   reminderContent: {
     flex: 1,
     marginRight: 12,
+    alignSelf: 'stretch',
   },
   reminderTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#5C4033',
     textAlign: 'right',
+    writingDirection: 'rtl',
+    flex: 1,
+  },
+  reminderTitleRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    width: '100%',
     marginBottom: 4,
+  },
+  systemReminderHint: {
+    fontSize: 14,
+    color: '#8B7355',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+    marginBottom: 16,
+    lineHeight: 20,
   },
   reminderDescription: {
     fontSize: 13,
     color: '#8B7355',
     textAlign: 'right',
+    writingDirection: 'rtl',
+    width: '100%',
     marginBottom: 4,
   },
   reminderDogs: {
     fontSize: 12,
     color: '#7FB069',
     textAlign: 'right',
+    writingDirection: 'rtl',
+    width: '100%',
     marginBottom: 4,
     fontWeight: '500',
   },
@@ -981,80 +1208,194 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#A9A9A9',
     textAlign: 'right',
+    writingDirection: 'rtl',
+    width: '100%',
   },
-  reminderStatus: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F0F0F0',
-    justifyContent: 'center',
+  reminderStatusContainer: {
     alignItems: 'center',
+    minWidth: 88,
+    marginLeft: 4,
   },
-  reminderSent: {
-    backgroundColor: '#E8F5E9',
+  reminderStatusLabel: {
+    fontSize: 11,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 4,
+    writingDirection: 'rtl',
   },
-  reminderStatusText: {
-    fontSize: 16,
+  reminderStatusValue: {
+    fontSize: 32,
     fontWeight: '700',
+    textAlign: 'center',
   },
-  // Modal Styles
+  reminderStatusSubtext: {
+    fontSize: 11,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 3,
+    writingDirection: 'rtl',
+  },
+  // Modal Styles — matches AddReminderScreen layout
   modalContainer: {
     flex: 1,
     backgroundColor: BG_COLOR,
+    width: '100%',
+    alignSelf: 'stretch',
   },
-  modalHeader: {
-    flexDirection: 'row',
+  detailsHeader: {
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER_COLOR,
   },
-  modalTitle: {
+  detailsBackButton: {
+    padding: 5,
+  },
+  detailsHeaderTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: TEXT_DARK,
   },
   modalContent: {
     flex: 1,
-    padding: 20,
+    width: '100%',
+    alignSelf: 'stretch',
   },
-  detailsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: PRIMARY_COLOR,
+  detailsContent: {
+    padding: 24,
+    paddingBottom: 40,
+    width: '100%',
+    alignSelf: 'stretch',
   },
-  detailsLabel: {
-    fontSize: 12,
+  detailsFormSection: {
+    marginBottom: 2,
+  },
+  detailsInputGroup: {
+    marginBottom: 20,
+  },
+  detailsFormLabel: {
+    fontSize: 16,
     fontWeight: '600',
-    color: '#8B7355',
+    color: TEXT_DARK,
     marginBottom: 8,
-    textTransform: 'uppercase',
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
-  detailsValue: {
+  detailsFormInput: {
+    backgroundColor: CARD_BG,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  detailsFormTextArea: {
+    minHeight: 100,
+    justifyContent: 'flex-start',
+  },
+  detailsFormInputText: {
     fontSize: 16,
     color: TEXT_DARK,
+    textAlign: 'right',
+    writingDirection: 'rtl',
     lineHeight: 24,
   },
-  deleteButton: {
-    backgroundColor: '#E74C3C',
+  detailsPickerInput: {
+    backgroundColor: CARD_BG,
     borderRadius: 12,
+    paddingHorizontal: 16,
     paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  detailsDateTimeSection: {
+    marginBottom: 24,
+  },
+  detailsDateTimeCard: {
+    backgroundColor: CARD_BG,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  detailsDateTimeCardContent: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  detailsDateTimeCardLeft: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    flex: 1,
+  },
+  detailsDateTimeLabel: {
+    fontSize: 16,
+    color: TEXT_DARK,
+    fontWeight: '600',
+    marginRight: 12,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  detailsSubmitButton: {
+    backgroundColor: PRIMARY_COLOR,
+    borderRadius: 16,
+    paddingVertical: 16,
     paddingHorizontal: 20,
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  deleteButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+  detailsSubmitButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    marginRight: 8,
+    writingDirection: 'rtl',
+  },
+  detailsDeleteButton: {
+    backgroundColor: '#E74C3C',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    marginTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  detailsDeleteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    marginRight: 8,
+    writingDirection: 'rtl',
   },
   // New styles for dogs display
   loadingContainer: {

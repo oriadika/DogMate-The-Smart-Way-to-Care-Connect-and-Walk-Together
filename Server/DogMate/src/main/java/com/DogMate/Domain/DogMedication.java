@@ -47,6 +47,19 @@ public class DogMedication {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "notification_enabled", nullable = false)
+    private boolean notificationEnabled = false;
+
+    /** Comma-separated times, e.g. "08:00,20:00" */
+    @Column(name = "schedule_times", columnDefinition = "TEXT")
+    private String scheduleTimes = "08:00";
+
+    @Column(name = "frequency_type", nullable = false)
+    private String frequencyType = MedicationFrequencyType.DAILY.name();
+
+    @Column(name = "frequency_interval", nullable = false)
+    private int frequencyInterval = 1;
+
     protected DogMedication() {
     }
 
@@ -117,5 +130,37 @@ public class DogMedication {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public boolean isNotificationEnabled() {
+        return notificationEnabled;
+    }
+
+    public void setNotificationEnabled(boolean notificationEnabled) {
+        this.notificationEnabled = notificationEnabled;
+    }
+
+    public String getScheduleTimes() {
+        return scheduleTimes;
+    }
+
+    public void setScheduleTimes(String scheduleTimes) {
+        this.scheduleTimes = scheduleTimes != null && !scheduleTimes.isBlank() ? scheduleTimes.trim() : "08:00";
+    }
+
+    public String getFrequencyType() {
+        return frequencyType;
+    }
+
+    public void setFrequencyType(String frequencyType) {
+        this.frequencyType = frequencyType != null ? frequencyType.trim().toUpperCase() : MedicationFrequencyType.DAILY.name();
+    }
+
+    public int getFrequencyInterval() {
+        return frequencyInterval;
+    }
+
+    public void setFrequencyInterval(int frequencyInterval) {
+        this.frequencyInterval = Math.max(1, frequencyInterval);
     }
 }

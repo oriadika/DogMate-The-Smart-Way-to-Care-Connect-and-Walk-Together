@@ -1,7 +1,7 @@
 package com.DogMate.Service;
 
-import com.DogMate.Domain.Dog;
 import com.DogMate.Domain.FoodStock;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -32,4 +32,8 @@ public interface IFoodStockRepository {
      * @return true if food stock exists, false otherwise
      */
     boolean existsById(UUID id);
+
+    List<FoodStock> findAllForRegularUserWithDogs(UUID userId);
+
+    Optional<FoodStock> findByIdWithDogs(UUID id);
 }

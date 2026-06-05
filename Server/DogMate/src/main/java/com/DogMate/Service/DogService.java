@@ -30,16 +30,19 @@ public class DogService {
     private final IUserRepository userRepository;
     private final IFoodStockRepository foodStockRepository;
     private final ReminderService reminderService;
+    private final HealthReminderSyncService healthReminderSyncService;
 
     @Autowired
     public DogService(IDogRepository dogRepository, IDogRelationshipRepository dogRelationshipRepository, 
                       IUserRepository userRepository, IFoodStockRepository foodStockRepository,
-                      ReminderService reminderService) {
+                      ReminderService reminderService,
+                      HealthReminderSyncService healthReminderSyncService) {
         this.dogRepository = dogRepository;
         this.dogRelationshipRepository = dogRelationshipRepository;
         this.userRepository = userRepository;
         this.foodStockRepository = foodStockRepository;
         this.reminderService = reminderService;
+        this.healthReminderSyncService = healthReminderSyncService;
     }
 
     /**
@@ -167,6 +170,7 @@ public class DogService {
      * @param relationshipType The type of relationship (OWNER, WALKER, etc.)
      * @throws IllegalArgumentException if user or dog not found
      */
+    @Transactional
     @CacheEvict(cacheNames = "dogsByUser", key = "#userId")
     public void connectDogToUser(UUID userId, UUID dogId, RelationshipType relationshipType) {
         
@@ -208,6 +212,7 @@ public class DogService {
      * @param dogId The ID of the dog
      * @throws IllegalArgumentException if user or dog not found
      */
+    @Transactional
     @Caching(evict = {
         @CacheEvict(cacheNames = "dogsByUser", key = "#userId"),
         @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
@@ -249,6 +254,7 @@ public class DogService {
      * @param dogId The ID of the dog
      * @return Optional containing the dog if found
      */
+    @Transactional(readOnly = true)
     public Optional<Dog> getDogById(UUID dogId) {
         return dogRepository.findById(dogId);
     }
@@ -257,6 +263,7 @@ public class DogService {
      * Delete a dog
      * @param dogId The ID of the dog to delete
      */
+    @Transactional
     @Caching(evict = {
         @CacheEvict(cacheNames = "dogsByUser", allEntries = true),
         @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
@@ -287,6 +294,11 @@ public class DogService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "dogsByUser", allEntries = true),
+            @CacheEvict(cacheNames = "foodStocksByUser", allEntries = true),
+            @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
+    })
     public FoodStock addFoodStockToDog(
             UUID dogId,
             String brandName,
@@ -304,6 +316,7 @@ public class DogService {
             // disconnect (owning side)
             oldFoodStock.removeDog(dog);
             if (oldFoodStock.getDogs().isEmpty()) {
+                healthReminderSyncService.deleteFoodStockReminder(oldFoodStock.getId());
                 foodStockRepository.deleteById(oldFoodStock.getId());
             }
         }
@@ -325,15 +338,22 @@ public class DogService {
         dog.setFoodStock(foodStock);
 
         // persist the updated foodStock with the dog relationship
-        return foodStockRepository.save(foodStock);
+        FoodStock saved = foodStockRepository.save(foodStock);
+        healthReminderSyncService.syncFoodStockReminder(saved);
+        return saved;
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "dogsByUser", allEntries = true),
+            @CacheEvict(cacheNames = "foodStocksByUser", allEntries = true),
+            @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
+    })
     public boolean addDogToFoodStock(UUID dogId, UUID foodStockId) {
         Dog dog = dogRepository.findById(dogId)
                 .orElseThrow(() -> new IllegalArgumentException("לא נמצא כלב עם המזהה: " + dogId));
 
-        FoodStock foodStock = foodStockRepository.findById(foodStockId)
+        FoodStock foodStock = foodStockRepository.findByIdWithDogs(foodStockId)
                 .orElseThrow(() -> new IllegalArgumentException("לא נמצא מלאי מזון עם המזהה: " + foodStockId));
 
         // disconnect (owning side)
@@ -341,6 +361,7 @@ public class DogService {
         if (oldFoodStock != null) {
             oldFoodStock.removeDog(dog);
             if (oldFoodStock.getDogs().isEmpty()) {
+                healthReminderSyncService.deleteFoodStockReminder(oldFoodStock.getId());
                 foodStockRepository.deleteById(oldFoodStock.getId());
             }
         }
@@ -351,7 +372,9 @@ public class DogService {
         // optional but good for consistency on both sides
         dog.setFoodStock(foodStock);
 
-        // persist
+        foodStockRepository.save(foodStock);
+        dogRepository.save(dog);
+        healthReminderSyncService.syncFoodStockReminder(foodStock);
         return true;
     }
 
@@ -369,6 +392,7 @@ public class DogService {
      * @param userId The ID of the user
      * @return List of dogs owned/associated with the user
      */
+    @Transactional(readOnly = true)
     @Cacheable(cacheNames = "dogsByUser", key = "#userId")
     public List<Dog> getDogsForUser(UUID userId) {
         return dogRepository.findAllForRegularUser(userId);
@@ -377,6 +401,7 @@ public class DogService {
     /**
      * First non-blank dog profile image URL for map markers (e.g. logged-users API).
      */
+    @Transactional(readOnly = true)
     public Optional<String> getFirstMapDogProfileImageUrl(UUID userId) {
         List<Dog> userDogs = getDogsForUser(userId);
         for (Dog dog : userDogs) {
@@ -391,6 +416,7 @@ public class DogService {
     /**
      * Same dog as map avatar when possible: first with profile image; otherwise first dog of the user.
      */
+    @Transactional(readOnly = true)
     public Optional<Dog> getPrimaryDogForMap(UUID userId) {
         List<Dog> userDogs = getDogsForUser(userId);
         if (userDogs.isEmpty()) {
@@ -408,6 +434,7 @@ public class DogService {
     /**
      * Adds mapDogName, mapDogBreed, mapDogBirthdate (ISO), mapDogAgeYears to userInfo when a dog exists.
      */
+    @Transactional(readOnly = true)
     public void putMapDogSummaryFields(UUID userId, Map<String, Object> userInfo) {
         getPrimaryDogForMap(userId).ifPresent(dog -> {
             if (dog.getName() != null && !dog.getName().isBlank()) {
@@ -423,6 +450,7 @@ public class DogService {
         });
     }
 
+    @Transactional(readOnly = true)
     public List<Dog> getAllDogsforUser(UUID userId) {
         return dogRepository.findAllForRegularUser(userId);
     }
@@ -432,6 +460,7 @@ public class DogService {
      * Service layer - only orchestration
      * @return List of all dogs in the database
      */
+    @Transactional(readOnly = true)
     public java.util.List<Dog> getAllDogs() {
         // Get all users from repository (orchestration)
         // UserRepository extends JpaRepository which provides findAll() method
@@ -441,30 +470,42 @@ public class DogService {
         throw new IllegalStateException("מאגר הכלבים לא מוגדר כראוי");
     }
 
-    public List<FoodStockDTO> getUserFoodStocks(UUID userId) {
-        List<Dog> userDogs = getDogsForUser(userId);
-        List<FoodStock> userFoodStocks =  userDogs.stream()
-                .map(Dog::getFoodStock)
-                .filter(stock -> stock != null).distinct()
-                .collect(Collectors.toList());
-
-        List<FoodStockDTO> foodStockDTOs = new ArrayList<>();
-        for (FoodStock stock : userFoodStocks) {
-            foodStockDTOs.add(new FoodStockDTO(stock));
-        }
-        return foodStockDTOs;
+    @Transactional(readOnly = true)
+    public List<FoodStock> getUserFoodStockEntities(UUID userId) {
+        return foodStockRepository.findAllForRegularUserWithDogs(userId);
     }
 
+    @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "foodStocksByUser", key = "#userId")
+    public List<FoodStockDTO> getUserFoodStocks(UUID userId) {
+        return foodStockRepository.findAllForRegularUserWithDogs(userId).stream()
+                .map(FoodStockDTO::new)
+                .toList();
+    }
+
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "foodStocksByUser", allEntries = true),
+            @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
+    })
     public FoodStockDTO renewFoodStock(UUID foodStockId) {
-        FoodStock foodStock = foodStockRepository.findById(foodStockId)
+        FoodStock foodStock = foodStockRepository.findByIdWithDogs(foodStockId)
                 .orElseThrow(() -> new IllegalArgumentException("לא נמצא מלאי מזון עם המזהה: " + foodStockId));
         foodStock.renewStock();
         FoodStock updatedStock = foodStockRepository.save(foodStock);
+        healthReminderSyncService.syncFoodStockReminder(updatedStock);
         return new FoodStockDTO(updatedStock);
     }
 
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "dogsByUser", allEntries = true),
+            @CacheEvict(cacheNames = "foodStocksByUser", allEntries = true),
+            @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
+    })
     public void deleteFoodStock(UUID foodStockId) {
-        FoodStock foodStock = foodStockRepository.findById(foodStockId)
+        healthReminderSyncService.deleteFoodStockReminder(foodStockId);
+        FoodStock foodStock = foodStockRepository.findByIdWithDogs(foodStockId)
                 .orElseThrow(() -> new IllegalArgumentException("לא נמצא מלאי מזון עם המזהה: " + foodStockId));
         List<Dog> dogs = foodStock.getDogs();        
         for (Dog dog : new ArrayList<>(dogs)) {
@@ -476,8 +517,13 @@ public class DogService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "dogsByUser", allEntries = true),
+            @CacheEvict(cacheNames = "foodStocksByUser", allEntries = true),
+            @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
+    })
     public FoodStockDTO updateFoodStock(UUID foodStockId, FoodStockDTO foodStockDTO) {
-        FoodStock foodStock = foodStockRepository.findById(foodStockId)
+        FoodStock foodStock = foodStockRepository.findByIdWithDogs(foodStockId)
                 .orElseThrow(() -> new IllegalArgumentException("לא נמצא מלאי מזון עם המזהה: " + foodStockId));
 
         validateFoodStockInput(
@@ -491,8 +537,11 @@ public class DogService {
         foodStock.setBagSizeInKg(foodStockDTO.getBagSizeInKg());
         foodStock.setCurrentLevelInKg(foodStockDTO.getCurrentLevelInKg());
         foodStock.setDailyConsumptionInGram(foodStockDTO.getDailyConsumptionInGram());
+        foodStock.setNotificationEnabled(foodStockDTO.isNotificationEnabled());
+        foodStock.setLowStockThresholdDays(foodStockDTO.getLowStockThresholdDays());
 
         FoodStock updatedStock = foodStockRepository.save(foodStock);
+        healthReminderSyncService.syncFoodStockReminder(updatedStock);
         return new FoodStockDTO(updatedStock);
     }
 
@@ -517,6 +566,7 @@ public class DogService {
     }
 
 
+    @Transactional(readOnly = true)
     public List<DogMoodLogDTO> getMoodLogsByDogId(UUID dogId) {
         Dog dog = dogRepository.findById(dogId)
                 .orElseThrow(() -> new RuntimeException("Dog not found"));
@@ -539,6 +589,7 @@ public class DogService {
         dogRepository.save(dog);
     }
 
+    @Transactional(readOnly = true)
     public List<Dog> searchDogs(String text){
         return dogRepository.searchDogs(text.trim());
     }

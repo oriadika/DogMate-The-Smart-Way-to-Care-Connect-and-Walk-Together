@@ -913,6 +913,19 @@ export const dogWalkerAPI = {
 };
 
 // Reminder API methods
+export interface ReminderRow {
+  id: string;
+  userId?: string;
+  dogIds: string[];
+  title: string;
+  description?: string | null;
+  remindAt: string;
+  notificationEnabled?: boolean;
+  sourceType?: 'FOOD' | 'VACCINATION' | 'MEDICATION' | null;
+  sourceId?: string | null;
+  systemGenerated?: boolean;
+}
+
 export const reminderAPI = {
   /**
    * Create a new reminder for a user
@@ -963,6 +976,39 @@ export const reminderAPI = {
   },
 
   /**
+   * Update an existing reminder
+   */
+  updateReminder: async (
+    userId: string,
+    reminderId: string,
+    title: string,
+    description: string,
+    remindAt: Date,
+    dogIds: string[]
+  ): Promise<{ success: boolean; message: string; reminder: any }> => {
+    try {
+      const year = remindAt.getFullYear();
+      const month = String(remindAt.getMonth() + 1).padStart(2, '0');
+      const day = String(remindAt.getDate()).padStart(2, '0');
+      const hours = String(remindAt.getHours()).padStart(2, '0');
+      const minutes = String(remindAt.getMinutes()).padStart(2, '0');
+      const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}`;
+
+      const response = await apiClient.put(`/users/${userId}/reminders/${reminderId}`, {
+        title,
+        description,
+        remindAt: formattedDate,
+        dogIds,
+      });
+      return { success: true, message: 'התזכורת עודכנה בהצלחה', reminder: response.data };
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל עדכון התזכורת';
+      console.error('Failed to update reminder:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
    * Delete a reminder
    */
   deleteReminder: async (userId: string, reminderId: string) => {
@@ -986,6 +1032,8 @@ export interface VaccinationRow {
   nextDueDate?: string | null;
   vetClinicName?: string | null;
   createdAt?: string | null;
+  notificationEnabled?: boolean;
+  remindDaysBefore?: string;
 }
 
 export type VaccinationPayload = {
@@ -994,6 +1042,8 @@ export type VaccinationPayload = {
   administeredDate: string;
   nextDueDate?: string | null;
   vetClinicName?: string | null;
+  notificationEnabled?: boolean;
+  remindDaysBefore?: string;
 };
 
 export const vaccinationAPI = {
@@ -1016,6 +1066,8 @@ export const vaccinationAPI = {
         administeredDate: payload.administeredDate,
         nextDueDate: payload.nextDueDate ?? null,
         vetClinicName: payload.vetClinicName?.trim() || null,
+        notificationEnabled: payload.notificationEnabled,
+        remindDaysBefore: payload.remindDaysBefore,
       });
       return response.data;
     } catch (error: any) {
@@ -1061,6 +1113,10 @@ export interface MedicationRow {
   nextDueDate?: string | null;
   vetClinicName?: string | null;
   createdAt?: string | null;
+  notificationEnabled?: boolean;
+  scheduleTimes?: string;
+  frequencyType?: string;
+  frequencyInterval?: number;
 }
 
 export type MedicationPayload = {
@@ -1069,6 +1125,10 @@ export type MedicationPayload = {
   administeredDate: string;
   nextDueDate?: string | null;
   vetClinicName?: string | null;
+  notificationEnabled?: boolean;
+  scheduleTimes?: string;
+  frequencyType?: string;
+  frequencyInterval?: number;
 };
 
 export const medicationAPI = {
@@ -1091,6 +1151,10 @@ export const medicationAPI = {
         administeredDate: payload.administeredDate,
         nextDueDate: payload.nextDueDate ?? null,
         vetClinicName: payload.vetClinicName?.trim() || null,
+        notificationEnabled: payload.notificationEnabled,
+        scheduleTimes: payload.scheduleTimes,
+        frequencyType: payload.frequencyType,
+        frequencyInterval: payload.frequencyInterval,
       });
       return response.data;
     } catch (error: any) {
@@ -1124,6 +1188,53 @@ export const medicationAPI = {
       console.error('Failed to delete medication:', errorMessage);
       throw new Error(errorMessage);
     }
+  },
+};
+
+export interface FoodStockRow {
+  id: string;
+  brandName: string;
+  bagSizeInKg: number;
+  dailyConsumptionInGram: number;
+  currentLevelInKg: number;
+  notificationEnabled?: boolean;
+  lowStockThresholdDays?: number | null;
+  dogs?: Array<{ id: string; name: string }>;
+}
+
+export interface NotificationPreferencesResponse {
+  success: boolean;
+  preferences: { notificationsEnabled: boolean };
+}
+
+export interface SchedulableNotificationRow {
+  sourceType: 'REMINDER' | 'MEDICATION' | 'VACCINATION' | 'FOOD';
+  sourceId: string;
+  title: string;
+  body: string;
+  triggerAt: string;
+}
+
+export const notificationPreferencesAPI = {
+  get: async (userId: string): Promise<NotificationPreferencesResponse> => {
+    const response = await apiClient.get(`/users/${userId}/notification-preferences`);
+    return response.data;
+  },
+  update: async (
+    userId: string,
+    prefs: { notificationsEnabled: boolean }
+  ): Promise<NotificationPreferencesResponse> => {
+    const response = await apiClient.put(`/users/${userId}/notification-preferences`, prefs);
+    return response.data;
+  },
+};
+
+export const notificationScheduleAPI = {
+  getSchedulable: async (
+    userId: string
+  ): Promise<{ success: boolean; count: number; notifications: SchedulableNotificationRow[] }> => {
+    const response = await apiClient.get(`/users/${userId}/notification-schedule`);
+    return response.data;
   },
 };
 
@@ -1193,13 +1304,23 @@ export const foodStockAPI = {
   /**
    * Update food stock details
    */
-  updateFoodStock: async (foodStockId: string, brandName?: string, bagSize?: number, dailyConsumption?: number, currentLevel?: number) => {
+  updateFoodStock: async (
+    foodStockId: string,
+    brandName?: string,
+    bagSize?: number,
+    dailyConsumption?: number,
+    currentLevel?: number,
+    notificationEnabled?: boolean,
+    lowStockThresholdDays?: number | null
+  ) => {
     try {
       const response = await apiClient.put(`/food-stock/${foodStockId}`, {
         brandName,
-        bagSize,
-        dailyConsumption,
-        currentLevel,
+        bagSizeInKg: bagSize,
+        dailyConsumptionInGram: dailyConsumption,
+        currentLevelInKg: currentLevel,
+        notificationEnabled,
+        lowStockThresholdDays,
       });
       return response.data;
     } catch (error: any) {

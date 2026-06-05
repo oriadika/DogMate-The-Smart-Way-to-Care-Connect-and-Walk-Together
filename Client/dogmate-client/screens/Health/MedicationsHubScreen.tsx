@@ -15,6 +15,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { userAPI, medicationAPI, dogAPI, type MedicationRow } from '../../services/api';
+import { deferScreenCleanup, useScreenLifecycleGuard } from '../../utils/screenLifecycle';
 import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
 import MedicationSortModal, {
   type MedicationSortOption,
@@ -58,12 +59,27 @@ const MedicationsHubScreen = ({ navigation }: any) => {
   const [sortModalVisible, setSortModalVisible] = useState(false);
   const [expandedHistoryByKey, setExpandedHistoryByKey] = useState<Record<string, boolean>>({});
 
-  const closeDogFilterModal = useCallback(() => setDogFilterModalVisible(false), []);
+  const {
+    isMountedRef,
+    markMounted,
+    markUnmounted,
+    cancelInflightAsyncWork,
+    beginAsyncWork,
+    isAsyncWorkCurrent,
+  } = useScreenLifecycleGuard();
+
+  const closeDogFilterModal = useCallback(() => {
+    if (!isMountedRef.current) return;
+    setDogFilterModalVisible(false);
+  }, [isMountedRef]);
 
   const loadMedications = useCallback(async () => {
+    const generation = beginAsyncWork();
     try {
+      if (!isAsyncWorkCurrent(generation)) return;
       setLoading(true);
       const userResponse = await userAPI.getLoggedUsers();
+      if (!isAsyncWorkCurrent(generation)) return;
       if (!userResponse.success || !userResponse.users?.length) {
         Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
         setRows([]);
@@ -75,9 +91,11 @@ const MedicationsHubScreen = ({ navigation }: any) => {
 
       try {
         const res = await medicationAPI.list(uid);
+        if (!isAsyncWorkCurrent(generation)) return;
         const list = Array.isArray(res.medications) ? res.medications : [];
         setRows(list as MedicationRow[]);
       } catch (ve: any) {
+        if (!isAsyncWorkCurrent(generation)) return;
         console.error('Medications load error:', ve);
         Alert.alert('שגיאה', ve?.message || 'שגיאה בטעינת התרופות');
         setRows([]);
@@ -85,6 +103,7 @@ const MedicationsHubScreen = ({ navigation }: any) => {
 
       try {
         const dogsRes = await dogAPI.getDogsForUser(uid);
+        if (!isAsyncWorkCurrent(generation)) return;
         const dogList = dogsRes.success && Array.isArray(dogsRes.dogs) ? dogsRes.dogs : [];
         setUserDogs(
           dogList.map((d: { id?: string; name?: string }) => ({
@@ -93,23 +112,34 @@ const MedicationsHubScreen = ({ navigation }: any) => {
           }))
         );
       } catch (de: any) {
+        if (!isAsyncWorkCurrent(generation)) return;
         console.warn('Dogs list for filter failed:', de);
         setUserDogs([]);
       }
     } catch (e: any) {
+      if (!isAsyncWorkCurrent(generation)) return;
       console.error('Medications hub load error:', e);
       Alert.alert('שגיאה', e?.message || 'שגיאה בטעינת הנתונים');
       setRows([]);
       setUserDogs([]);
     } finally {
-      setLoading(false);
+      if (isAsyncWorkCurrent(generation)) {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [beginAsyncWork, isAsyncWorkCurrent]);
 
   useFocusEffect(
     useCallback(() => {
-      loadMedications();
-    }, [loadMedications])
+      markMounted();
+      void loadMedications();
+      return () => {
+        cancelInflightAsyncWork();
+        deferScreenCleanup(() => {
+          markUnmounted();
+        });
+      };
+    }, [loadMedications, markMounted, markUnmounted, cancelInflightAsyncWork])
   );
 
   const dogsInData = useMemo(() => {
@@ -130,9 +160,11 @@ const MedicationsHubScreen = ({ navigation }: any) => {
   useEffect(() => {
     if (selectedDogId === ALL_DOGS_FILTER) return;
     if (!dogsInData.some((d) => d.id === selectedDogId)) {
-      setSelectedDogId(ALL_DOGS_FILTER);
+      if (isMountedRef.current) {
+        setSelectedDogId(ALL_DOGS_FILTER);
+      }
     }
-  }, [dogsInData, selectedDogId]);
+  }, [dogsInData, selectedDogId, isMountedRef]);
 
   const filteredRows = useMemo(() => {
     if (selectedDogId === ALL_DOGS_FILTER) return rows;

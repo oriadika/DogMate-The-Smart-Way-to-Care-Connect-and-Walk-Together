@@ -14,6 +14,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import FoodInventoryCard from '../../components/FoodInventoryCard';
 import { userAPI, foodStockAPI } from '../../services/api';
+import { resyncAllNotifications } from '../../services/notificationScheduler';
+import { useScreenLifecycleGuard } from '../../utils/screenLifecycle';
 import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
@@ -42,32 +44,38 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
 
+  const {
+    markMounted,
+    beginAsyncWork,
+    isAsyncWorkCurrent,
+    runDeferredBlurCleanup,
+  } = useScreenLifecycleGuard();
+
   // Load food stocks from database
   const loadFoodStocks = useCallback(async () => {
+    const generation = beginAsyncWork();
     try {
+      if (!isAsyncWorkCurrent(generation)) return;
       setLoading(true);
-      
-      // Get current user
+
       const userResponse = await userAPI.getLoggedUsers();
+      if (!isAsyncWorkCurrent(generation)) return;
       if (!userResponse.success || !userResponse.users || userResponse.users.length === 0) {
         Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
-        setLoading(false);
         return;
       }
-      
+
       const currentUser = userResponse.users[0];
       setUserId(currentUser.id);
 
-      // Fetch food stocks for this user
       const response = await foodStockAPI.getFoodStocksForUser(currentUser.id);
-      
+      if (!isAsyncWorkCurrent(generation)) return;
+
       if (response.success && response.foodStocks) {
-        // Transform API response to our format
         const transformedList: InventoryItem[] = response.foodStocks.map((stock: any) => {
-          // Calculate days remaining - currentLevelInKg is in kg, dailyConsumptionInGram is in grams
           const currentGrams = stock.currentLevelInKg * 1000;
-          const daysRemaining = stock.dailyConsumptionInGram > 0 
-            ? Math.floor(currentGrams / stock.dailyConsumptionInGram) 
+          const daysRemaining = stock.dailyConsumptionInGram > 0
+            ? Math.floor(currentGrams / stock.dailyConsumptionInGram)
             : 0;
 
           return {
@@ -84,22 +92,28 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
             brandName: stock.brandName,
           };
         });
-        
+
         setInventoryList(transformedList);
       }
     } catch (error: any) {
+      if (!isAsyncWorkCurrent(generation)) return;
       console.error('Error loading food stocks:', error);
       Alert.alert('שגיאה', 'שגיאה בטעינת מלאי המזון');
     } finally {
-      setLoading(false);
+      if (isAsyncWorkCurrent(generation)) {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [beginAsyncWork, isAsyncWorkCurrent]);
 
-  // Load data when screen is focused
   useFocusEffect(
     useCallback(() => {
-      loadFoodStocks();
-    }, [loadFoodStocks])
+      markMounted();
+      void loadFoodStocks();
+      return () => {
+        runDeferredBlurCleanup();
+      };
+    }, [loadFoodStocks, markMounted, runDeferredBlurCleanup])
   );
 
   // ניווט להוספה (ללא ID)
@@ -127,7 +141,9 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
           onPress: async () => {
             try {
               await foodStockAPI.deleteFoodStock(id);
-              // Reload the list
+              if (userId) {
+                await resyncAllNotifications(userId);
+              }
               loadFoodStocks();
               Alert.alert('הצלחה', 'המלאי נמחק בהצלחה');
             } catch (error: any) {
@@ -143,7 +159,9 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
   const handleBuyNewBag = async (id: string) => {
     try {
       await foodStockAPI.renewFoodStock(id);
-      // Reload the list to get updated values
+      if (userId) {
+        await resyncAllNotifications(userId);
+      }
       loadFoodStocks();
       Alert.alert('הצלחה', 'השק החדש נוסף למלאי בהצלחה!');
     } catch (error: any) {

@@ -16,10 +16,16 @@ public class MedicationService {
 
     private final DogMedicationRepository medicationRepository;
     private final IDogRepository dogRepository;
+    private final HealthReminderSyncService healthReminderSyncService;
 
-    public MedicationService(DogMedicationRepository medicationRepository, IDogRepository dogRepository) {
+    public MedicationService(
+            DogMedicationRepository medicationRepository,
+            IDogRepository dogRepository,
+            HealthReminderSyncService healthReminderSyncService
+    ) {
         this.medicationRepository = medicationRepository;
         this.dogRepository = dogRepository;
+        this.healthReminderSyncService = healthReminderSyncService;
     }
 
     private boolean dogBelongsToUser(UUID userId, UUID dogId) {
@@ -46,7 +52,9 @@ public class MedicationService {
 
     @Transactional
     public MedicationDTO create(UUID userId, UUID dogId, String medicationName, LocalDate administeredDate,
-                                LocalDate nextDueDate, String vetClinicName) {
+                                LocalDate nextDueDate, String vetClinicName,
+                                Boolean notificationEnabled, String scheduleTimes,
+                                String frequencyType, Integer frequencyInterval) {
         if (medicationName == null || medicationName.isBlank()) {
             throw new IllegalArgumentException("חובה להזין שם תרופה");
         }
@@ -61,12 +69,19 @@ public class MedicationService {
         DogMedication entity = new DogMedication(null, dog, medicationName, administeredDate);
         entity.setNextDueDate(nextDueDate);
         entity.setVetClinicName(vetClinicName);
-        return MedicationDTO.fromEntity(medicationRepository.save(entity));
+        NotificationSettingsHelper.applyMedicationSettings(
+                entity, notificationEnabled, scheduleTimes, frequencyType, frequencyInterval
+        );
+        DogMedication saved = medicationRepository.save(entity);
+        healthReminderSyncService.syncMedicationReminder(saved, userId);
+        return MedicationDTO.fromEntity(saved);
     }
 
     @Transactional
     public MedicationDTO update(UUID userId, UUID medicationId, UUID dogId, String medicationName,
-                                LocalDate administeredDate, LocalDate nextDueDate, String vetClinicName) {
+                                LocalDate administeredDate, LocalDate nextDueDate, String vetClinicName,
+                                Boolean notificationEnabled, String scheduleTimes,
+                                String frequencyType, Integer frequencyInterval) {
         DogMedication m = loadOwnedOrThrow(userId, medicationId);
         if (medicationName == null || medicationName.isBlank()) {
             throw new IllegalArgumentException("חובה להזין שם תרופה");
@@ -86,12 +101,18 @@ public class MedicationService {
         m.setAdministeredDate(administeredDate);
         m.setNextDueDate(nextDueDate);
         m.setVetClinicName(vetClinicName);
-        return MedicationDTO.fromEntity(medicationRepository.save(m));
+        NotificationSettingsHelper.applyMedicationSettings(
+                m, notificationEnabled, scheduleTimes, frequencyType, frequencyInterval
+        );
+        DogMedication saved = medicationRepository.save(m);
+        healthReminderSyncService.syncMedicationReminder(saved, userId);
+        return MedicationDTO.fromEntity(saved);
     }
 
     @Transactional
     public void delete(UUID userId, UUID medicationId) {
         DogMedication m = loadOwnedOrThrow(userId, medicationId);
+        healthReminderSyncService.deleteMedicationReminder(medicationId, userId);
         medicationRepository.delete(m);
     }
 }

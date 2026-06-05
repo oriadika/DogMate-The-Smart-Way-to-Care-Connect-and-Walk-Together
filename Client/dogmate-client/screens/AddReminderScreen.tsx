@@ -19,7 +19,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { dogAPI, reminderAPI } from '../services/api';
-import { scheduleReminderNotification } from '../services/notifications';
+import { cancelReminderNotification } from '../services/notifications';
+import { resyncAllNotifications } from '../services/notificationScheduler';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
@@ -37,6 +38,8 @@ interface Dog {
 const AddReminderScreen = ({ navigation, route }: any) => {
   // Get userId from route params (passed from HomeScreen)
   const userIdFromParams = route?.params?.userId;
+  const reminderToEdit = route?.params?.reminder;
+  const isEditing = !!reminderToEdit?.id;
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -97,6 +100,32 @@ const AddReminderScreen = ({ navigation, route }: any) => {
       }
     }
   };
+
+  // Populate form when editing an existing reminder
+  useEffect(() => {
+    if (!reminderToEdit) return;
+
+    if (reminderToEdit.systemGenerated) {
+      Alert.alert(
+        'תזכורת אוטומטית',
+        'לא ניתן לערוך תזכורת שנוצרה אוטומטית. עדכן את הגדרות ההתראות בפריט המקור.',
+        [{ text: 'אישור', onPress: () => navigation.goBack() }]
+      );
+      return;
+    }
+
+    setTitle(reminderToEdit.title || '');
+    setDescription(reminderToEdit.description || '');
+    setSelectedDogs(reminderToEdit.dogIds || []);
+
+    if (reminderToEdit.remindAt) {
+      const reminderDate = new Date(reminderToEdit.remindAt);
+      if (!isNaN(reminderDate.getTime())) {
+        setDate(reminderDate);
+        setTime(reminderDate);
+      }
+    }
+  }, [reminderToEdit]);
 
   // Load user and dogs data
   useFocusEffect(
@@ -201,27 +230,33 @@ const AddReminderScreen = ({ navigation, route }: any) => {
 
     setIsSaving(true);
     try {
-      // Call API to create reminder
-      const response = await reminderAPI.createReminder(
-        userId,
-        title,
-        description,
-        reminderDateTime,
-        selectedDogs
-      );
+      let response;
+      const reminderId = reminderToEdit?.id;
 
-      // Schedule local notification for the reminder
-      if (response.success && response.reminder) {
-        await scheduleReminderNotification(
-          response.reminder.id,
+      if (isEditing && reminderId) {
+        await cancelReminderNotification(reminderId);
+        response = await reminderAPI.updateReminder(
+          userId,
+          reminderId,
           title,
-          description || 'זמן לתזכורת!',
-          reminderDateTime
+          description,
+          reminderDateTime,
+          selectedDogs
+        );
+      } else {
+        response = await reminderAPI.createReminder(
+          userId,
+          title,
+          description,
+          reminderDateTime,
+          selectedDogs
         );
       }
 
+      await resyncAllNotifications(userId);
+
       Alert.alert(
-        'תזכורת נשמרה בהצלחה',
+        isEditing ? 'תזכורת עודכנה בהצלחה' : 'תזכורת נשמרה בהצלחה',
         `שם: ${title}\nתיאור: ${description || '(ללא תיאור)'}\nכלבים: ${selectedDogsNames.join(', ')}\nתאריך: ${formatDate(date)}\nשעה: ${formatTime(time)}`,
         [
           {
@@ -249,7 +284,9 @@ const AddReminderScreen = ({ navigation, route }: any) => {
           >
             <Ionicons name="arrow-forward" size={28} color={TEXT_DARK} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>הוספת תזכורת חדשה</Text>
+          <Text style={styles.headerTitle}>
+            {isEditing ? 'עריכת תזכורת' : 'הוספת תזכורת חדשה'}
+          </Text>
           <View style={{ width: 28 }} />
         </View>
 
@@ -372,7 +409,9 @@ const AddReminderScreen = ({ navigation, route }: any) => {
               {isSaving ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
-                <Text style={styles.submitButtonText}>שמור תזכורת</Text>
+                <Text style={styles.submitButtonText}>
+                  {isEditing ? 'עדכן תזכורת' : 'שמור תזכורת'}
+                </Text>
               )}
             </TouchableOpacity>
           </ScrollView>

@@ -16,6 +16,14 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { dogAPI, medicationAPI, type MedicationRow } from '../../services/api';
+import ReminderSettingsSection from '../../components/health/ReminderSettingsSection';
+import {
+  DEFAULT_MEDICATION_NOTIFICATION,
+  type MedicationNotificationSettings,
+  type MedicationFrequencyType,
+} from '../../types/notifications';
+import { resyncAllNotifications } from '../../services/notificationScheduler';
+import { useScreenLifecycleGuard } from '../../utils/screenLifecycle';
 import MedicationNamePicker from '../../components/health/MedicationNamePicker';
 import MedicationNameAutocompleteInput from '../../components/health/MedicationNameAutocompleteInput';
 import { getUniqueMedicationNamesForDog } from '../../utils/medicationHistory';
@@ -120,8 +128,18 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
   const [datePickerTarget, setDatePickerTarget] = useState<DatePickerTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [notificationSettings, setNotificationSettings] = useState<MedicationNotificationSettings>(
+    DEFAULT_MEDICATION_NOTIFICATION
+  );
 
   const isEdit = Boolean(medicationId);
+
+  const {
+    isMountedRef,
+    beginAsyncWork,
+    isAsyncWorkCurrent,
+    runDeferredBlurCleanup,
+  } = useScreenLifecycleGuard();
 
   const resolvedMedicationName = buildStoredMedicationName(
     form.medicationKey,
@@ -134,6 +152,7 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
   );
 
   useEffect(() => {
+    if (!isMountedRef.current) return;
     setUserId(paramUserId ?? null);
     if (paramMedicationId) {
       const medFields = initialMedicationFields(paramMedicationName ?? '');
@@ -166,6 +185,7 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
     paramAdministeredDate,
     paramNextDueDate,
     paramVetClinicName,
+    isMountedRef,
   ]);
 
   const applyAutoNextDue = useCallback(
@@ -182,15 +202,20 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
 
   const loadFormData = useCallback(async () => {
     if (!paramUserId) {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
       return;
     }
+    const generation = beginAsyncWork();
     try {
+      if (!isAsyncWorkCurrent(generation)) return;
       setLoading(true);
       const [dogsRes, medsRes] = await Promise.all([
         dogAPI.getDogsForUser(paramUserId),
         medicationAPI.list(paramUserId).catch(() => ({ medications: [] })),
       ]);
+      if (!isAsyncWorkCurrent(generation)) return;
       const list = dogsRes.success && Array.isArray(dogsRes.dogs) ? dogsRes.dogs : [];
       setDogs(
         list.map((d: any) => ({
@@ -200,22 +225,42 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
       );
       const meds = Array.isArray(medsRes.medications) ? medsRes.medications : [];
       setMedicationRows(meds as MedicationRow[]);
+      if (paramMedicationId) {
+        const existing = (meds as MedicationRow[]).find((m) => m.id === paramMedicationId);
+        if (existing) {
+          setNotificationSettings({
+            notificationEnabled: existing.notificationEnabled ?? false,
+            scheduleTimes: existing.scheduleTimes ?? '08:00',
+            frequencyType: (existing.frequencyType as MedicationFrequencyType) ?? 'DAILY',
+            frequencyInterval: existing.frequencyInterval ?? 1,
+          });
+        }
+      }
       if (!paramMedicationId && list.length === 1) {
         setForm((prev) => ({ ...prev, selectedDogId: String(list[0].id) }));
       }
     } catch (e: any) {
+      if (!isAsyncWorkCurrent(generation)) return;
       console.error(e);
       Alert.alert('שגיאה', e?.message || 'לא ניתן לטעון את רשימת הכלבים');
       setDogs([]);
       setMedicationRows([]);
     } finally {
-      setLoading(false);
+      if (isAsyncWorkCurrent(generation)) {
+        setLoading(false);
+      }
     }
-  }, [paramUserId, paramMedicationId]);
+  }, [paramUserId, paramMedicationId, beginAsyncWork, isAsyncWorkCurrent, isMountedRef]);
 
   useEffect(() => {
-    loadFormData();
-  }, [loadFormData]);
+    void loadFormData();
+    return () => {
+      runDeferredBlurCleanup(() => {
+        if (!isMountedRef.current) return;
+        setDatePickerTarget(null);
+      });
+    };
+  }, [loadFormData, runDeferredBlurCleanup, isMountedRef]);
 
   const onMedicationKeyChange = (key: IsraelMedicationKey) => {
     setForm((prev) => ({
@@ -288,14 +333,20 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
       administeredDate: toIsoLocal(form.administeredDate),
       nextDueDate: form.nextDueDate ? toIsoLocal(form.nextDueDate) : null,
       vetClinicName: form.vetClinicName.trim() || null,
+      notificationEnabled: notificationSettings.notificationEnabled,
+      scheduleTimes: notificationSettings.scheduleTimes,
+      frequencyType: notificationSettings.frequencyType,
+      frequencyInterval: notificationSettings.frequencyInterval,
     };
     try {
       setSaving(true);
       if (isEdit && medicationId) {
         await medicationAPI.update(userId, medicationId, payload);
+        await resyncAllNotifications(userId);
         Alert.alert('הצלחה', 'התרופה עודכנה', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
       } else {
         await medicationAPI.create(userId, payload);
+        await resyncAllNotifications(userId);
         Alert.alert('הצלחה', 'התרופה נשמר', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
       }
     } catch (e: any) {
@@ -419,6 +470,13 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
             placeholderTextColor="#A9B5C7"
             textAlign="right"
             editable={!saving}
+          />
+
+          <ReminderSettingsSection
+            variant="medication"
+            value={notificationSettings}
+            onChange={setNotificationSettings}
+            disabled={saving}
           />
 
           {Platform.OS === 'ios' && datePickerTarget && (

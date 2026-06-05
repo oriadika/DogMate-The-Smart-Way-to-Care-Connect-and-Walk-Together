@@ -6,7 +6,11 @@ CREATE TABLE IF NOT EXISTS dog_medications (
     administered_date DATE NOT NULL,
     next_due_date DATE,
     vet_clinic_name TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notification_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    schedule_times TEXT DEFAULT '08:00',
+    frequency_type VARCHAR(32) NOT NULL DEFAULT 'DAILY',
+    frequency_interval INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE INDEX IF NOT EXISTS idx_dog_medications_dog_id ON dog_medications (dog_id);

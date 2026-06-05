@@ -58,7 +58,9 @@ public class MedicationController {
             LocalDate date = parseDate(body.getAdministeredDate());
             LocalDate nextDue = parseOptionalDate(body.getNextDueDate());
             MedicationDTO saved = medicationService.create(uid, body.getDogId(), body.getMedicationName(), date,
-                    nextDue, body.getVetClinicName());
+                    nextDue, body.getVetClinicName(),
+                    body.getNotificationEnabled(), body.getScheduleTimes(),
+                    body.getFrequencyType(), body.getFrequencyInterval());
             Map<String, Object> ok = new HashMap<>();
             ok.put("success", true);
             ok.put("medication", saved);
@@ -85,7 +87,9 @@ public class MedicationController {
             LocalDate date = parseDate(body.getAdministeredDate());
             LocalDate nextDue = parseOptionalDate(body.getNextDueDate());
             MedicationDTO saved = medicationService.update(uid, mid, body.getDogId(), body.getMedicationName(), date,
-                    nextDue, body.getVetClinicName());
+                    nextDue, body.getVetClinicName(),
+                    body.getNotificationEnabled(), body.getScheduleTimes(),
+                    body.getFrequencyType(), body.getFrequencyInterval());
             Map<String, Object> ok = new HashMap<>();
             ok.put("success", true);
             ok.put("medication", saved);
@@ -144,6 +148,10 @@ public class MedicationController {
         private String administeredDate;
         private String nextDueDate;
         private String vetClinicName;
+        private Boolean notificationEnabled;
+        private String scheduleTimes;
+        private String frequencyType;
+        private Integer frequencyInterval;
 
         public UUID getDogId() {
             return dogId;
@@ -183,6 +191,38 @@ public class MedicationController {
 
         public void setVetClinicName(String vetClinicName) {
             this.vetClinicName = vetClinicName;
+        }
+
+        public Boolean getNotificationEnabled() {
+            return notificationEnabled;
+        }
+
+        public void setNotificationEnabled(Boolean notificationEnabled) {
+            this.notificationEnabled = notificationEnabled;
+        }
+
+        public String getScheduleTimes() {
+            return scheduleTimes;
+        }
+
+        public void setScheduleTimes(String scheduleTimes) {
+            this.scheduleTimes = scheduleTimes;
+        }
+
+        public String getFrequencyType() {
+            return frequencyType;
+        }
+
+        public void setFrequencyType(String frequencyType) {
+            this.frequencyType = frequencyType;
+        }
+
+        public Integer getFrequencyInterval() {
+            return frequencyInterval;
+        }
+
+        public void setFrequencyInterval(Integer frequencyInterval) {
+            this.frequencyInterval = frequencyInterval;
         }
     }
 
@@ -193,6 +233,10 @@ public class MedicationController {
         private String administeredDate;
         private String nextDueDate;
         private String vetClinicName;
+        private Boolean notificationEnabled;
+        private String scheduleTimes;
+        private String frequencyType;
+        private Integer frequencyInterval;
 
         public UUID getDogId() {
             return dogId;
@@ -232,6 +276,38 @@ public class MedicationController {
 
         public void setVetClinicName(String vetClinicName) {
             this.vetClinicName = vetClinicName;
+        }
+
+        public Boolean getNotificationEnabled() {
+            return notificationEnabled;
+        }
+
+        public void setNotificationEnabled(Boolean notificationEnabled) {
+            this.notificationEnabled = notificationEnabled;
+        }
+
+        public String getScheduleTimes() {
+            return scheduleTimes;
+        }
+
+        public void setScheduleTimes(String scheduleTimes) {
+            this.scheduleTimes = scheduleTimes;
+        }
+
+        public String getFrequencyType() {
+            return frequencyType;
+        }
+
+        public void setFrequencyType(String frequencyType) {
+            this.frequencyType = frequencyType;
+        }
+
+        public Integer getFrequencyInterval() {
+            return frequencyInterval;
+        }
+
+        public void setFrequencyInterval(Integer frequencyInterval) {
+            this.frequencyInterval = frequencyInterval;
         }
     }
 }

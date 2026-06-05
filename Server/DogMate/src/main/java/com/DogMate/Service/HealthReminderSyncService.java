@@ -1,0 +1,225 @@
+package com.DogMate.Service;
+
+import com.DogMate.Domain.Dog;
+import com.DogMate.Domain.DogMedication;
+import com.DogMate.Domain.DogRelationship;
+import com.DogMate.Domain.DogVaccination;
+import com.DogMate.Domain.FoodStock;
+import com.DogMate.Domain.MedicationFrequencyType;
+import com.DogMate.Domain.ReminderSourceType;
+import com.DogMate.Infrastructure.DogRelationshipRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+@Service
+public class HealthReminderSyncService {
+
+    private static final String FOOD_TITLE = "קניית שק מזון";
+    private static final String FOOD_DESCRIPTION = "מלאי המזון עומד להסתים, יש לרכוש שק חדש בהקדם";
+
+    private final ReminderService reminderService;
+    private final NotificationScheduleService notificationScheduleService;
+    private final DogRelationshipRepository dogRelationshipRepository;
+
+    public HealthReminderSyncService(
+            ReminderService reminderService,
+            NotificationScheduleService notificationScheduleService,
+            DogRelationshipRepository dogRelationshipRepository
+    ) {
+        this.reminderService = reminderService;
+        this.notificationScheduleService = notificationScheduleService;
+        this.dogRelationshipRepository = dogRelationshipRepository;
+    }
+
+    @Transactional
+    public void syncFoodStockReminder(FoodStock stock) {
+        if (stock == null || stock.getId() == null) {
+            return;
+        }
+
+        UUID userId = resolveUserIdFromFoodStock(stock);
+        if (userId == null) {
+            return;
+        }
+
+        if (!stock.isNotificationEnabled()) {
+            reminderService.deleteSystemReminder(userId, ReminderSourceType.FOOD, stock.getId());
+            return;
+        }
+
+        LocalDateTime remindAt = notificationScheduleService.computeFoodLowStockTrigger(stock);
+        if (remindAt == null) {
+            reminderService.deleteSystemReminder(userId, ReminderSourceType.FOOD, stock.getId());
+            return;
+        }
+
+        List<UUID> dogIds = stock.getDogs().stream().map(Dog::getID).toList();
+        if (dogIds.isEmpty()) {
+            reminderService.deleteSystemReminder(userId, ReminderSourceType.FOOD, stock.getId());
+            return;
+        }
+
+        reminderService.upsertSystemReminder(
+                userId,
+                ReminderSourceType.FOOD,
+                stock.getId(),
+                dogIds,
+                FOOD_TITLE,
+                FOOD_DESCRIPTION,
+                remindAt,
+                true
+        );
+    }
+
+    @Transactional
+    public void deleteFoodStockReminder(UUID foodStockId) {
+        reminderService.deleteSystemReminderBySource(ReminderSourceType.FOOD, foodStockId);
+    }
+
+    @Transactional
+    public void syncVaccinationReminder(DogVaccination vaccination, UUID userId) {
+        if (vaccination == null || vaccination.getId() == null || userId == null) {
+            return;
+        }
+
+        if (!vaccination.isNotificationEnabled() || vaccination.getNextDueDate() == null) {
+            reminderService.deleteSystemReminder(userId, ReminderSourceType.VACCINATION, vaccination.getId());
+            return;
+        }
+
+        List<LocalDateTime> triggers = notificationScheduleService.computeVaccinationTriggers(
+                vaccination.getNextDueDate(),
+                vaccination.getRemindDaysBefore()
+        );
+        LocalDateTime nextTrigger = triggers.stream()
+                .filter(t -> t.isAfter(LocalDateTime.now()))
+                .min(LocalDateTime::compareTo)
+                .orElse(null);
+
+        if (nextTrigger == null) {
+            reminderService.deleteSystemReminder(userId, ReminderSourceType.VACCINATION, vaccination.getId());
+            return;
+        }
+
+        Dog dog = vaccination.getDog();
+        String dogName = dog != null && dog.getName() != null ? dog.getName() : "כלב";
+        UUID dogId = dog != null ? dog.getID() : null;
+        if (dogId == null) {
+            reminderService.deleteSystemReminder(userId, ReminderSourceType.VACCINATION, vaccination.getId());
+            return;
+        }
+
+        String vaccineName = vaccination.getVaccineName() != null ? vaccination.getVaccineName() : "חיסון";
+        reminderService.upsertSystemReminder(
+                userId,
+                ReminderSourceType.VACCINATION,
+                vaccination.getId(),
+                List.of(dogId),
+                "חיסון: " + vaccineName,
+                "הגיע הזמן לתאם חיסון " + vaccineName + " עבור " + dogName,
+                nextTrigger,
+                true
+        );
+    }
+
+    @Transactional
+    public void deleteVaccinationReminder(UUID vaccinationId, UUID userId) {
+        reminderService.deleteSystemReminder(userId, ReminderSourceType.VACCINATION, vaccinationId);
+    }
+
+    @Transactional
+    public void syncMedicationReminder(DogMedication medication, UUID userId) {
+        if (medication == null || medication.getId() == null || userId == null) {
+            return;
+        }
+
+        if (!medication.isNotificationEnabled()) {
+            reminderService.deleteSystemReminder(userId, ReminderSourceType.MEDICATION, medication.getId());
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime remindAt = null;
+
+        if (medication.getNextDueDate() != null) {
+            LocalDateTime due = medication.getNextDueDate()
+                    .atTime(NotificationScheduleService.DEFAULT_NOTIFICATION_TIME);
+            if (due.isAfter(now)) {
+                remindAt = due;
+            }
+        }
+
+        if (remindAt == null) {
+            MedicationFrequencyType freq = MedicationFrequencyType.fromString(medication.getFrequencyType());
+            List<LocalDateTime> triggers = notificationScheduleService.computeMedicationTriggers(
+                    medication.getScheduleTimes(),
+                    freq,
+                    medication.getFrequencyInterval(),
+                    now,
+                    now.plusDays(NotificationScheduleService.SCHEDULE_HORIZON_DAYS)
+            );
+            remindAt = triggers.stream()
+                    .filter(t -> t.isAfter(now))
+                    .min(LocalDateTime::compareTo)
+                    .orElse(null);
+        }
+
+        if (remindAt == null) {
+            reminderService.deleteSystemReminder(userId, ReminderSourceType.MEDICATION, medication.getId());
+            return;
+        }
+
+        Dog dog = medication.getDog();
+        String dogName = dog != null && dog.getName() != null ? dog.getName() : "כלב";
+        UUID dogId = dog != null ? dog.getID() : null;
+        if (dogId == null) {
+            reminderService.deleteSystemReminder(userId, ReminderSourceType.MEDICATION, medication.getId());
+            return;
+        }
+
+        String medName = medication.getMedicationName() != null ? medication.getMedicationName() : "תרופה";
+        reminderService.upsertSystemReminder(
+                userId,
+                ReminderSourceType.MEDICATION,
+                medication.getId(),
+                List.of(dogId),
+                "תרופה: " + medName,
+                "הגיע הזמן לתת ל-" + dogName + " את " + medName,
+                remindAt,
+                true
+        );
+    }
+
+    @Transactional
+    public void deleteMedicationReminder(UUID medicationId, UUID userId) {
+        reminderService.deleteSystemReminder(userId, ReminderSourceType.MEDICATION, medicationId);
+    }
+
+    private UUID resolveUserIdFromFoodStock(FoodStock stock) {
+        if (stock.getDogs() == null || stock.getDogs().isEmpty()) {
+            return null;
+        }
+        for (Dog dog : stock.getDogs()) {
+            UUID userId = resolveUserIdFromDog(dog);
+            if (userId != null) {
+                return userId;
+            }
+        }
+        return null;
+    }
+
+    private UUID resolveUserIdFromDog(Dog dog) {
+        if (dog == null || dog.getID() == null) {
+            return null;
+        }
+        List<DogRelationship> relationships = dogRelationshipRepository.findByDog_ID(dog.getID());
+        if (relationships.isEmpty()) {
+            return null;
+        }
+        return relationships.get(0).getUserID();
+    }
+}

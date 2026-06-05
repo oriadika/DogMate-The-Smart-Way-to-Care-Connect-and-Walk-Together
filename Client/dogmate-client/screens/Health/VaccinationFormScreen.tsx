@@ -15,7 +15,11 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { dogAPI, vaccinationAPI } from '../../services/api';
+import { dogAPI, vaccinationAPI, type VaccinationRow } from '../../services/api';
+import ReminderSettingsSection from '../../components/health/ReminderSettingsSection';
+import { DEFAULT_VACCINATION_NOTIFICATION, type VaccinationNotificationSettings } from '../../types/notifications';
+import { resyncAllNotifications } from '../../services/notificationScheduler';
+import { useScreenLifecycleGuard } from '../../utils/screenLifecycle';
 import VaccineNamePicker from '../../components/health/VaccineNamePicker';
 import {
   ISRAEL_VACCINE_CUSTOM,
@@ -100,15 +104,26 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
   const [datePickerTarget, setDatePickerTarget] = useState<DatePickerTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [notificationSettings, setNotificationSettings] = useState<VaccinationNotificationSettings>(
+    DEFAULT_VACCINATION_NOTIFICATION
+  );
 
   const isEdit = Boolean(vaccinationId);
   const isCustomVaccine = form.vaccineKey === ISRAEL_VACCINE_CUSTOM;
+
+  const {
+    isMountedRef,
+    beginAsyncWork,
+    isAsyncWorkCurrent,
+    runDeferredBlurCleanup,
+  } = useScreenLifecycleGuard();
 
   const resolvedVaccineName = isCustomVaccine
     ? form.customVaccineName.trim()
     : ISRAEL_VACCINE_OPTIONS.find((o) => o.key === form.vaccineKey)?.label ?? '';
 
   useEffect(() => {
+    if (!isMountedRef.current) return;
     setUserId(paramUserId ?? null);
     if (paramVaccinationId) {
       const vaccineName = paramVaccineName ?? '';
@@ -144,6 +159,7 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
     paramAdministeredDate,
     paramNextDueDate,
     paramVetClinicName,
+    isMountedRef,
   ]);
 
   const applyAutoNextDue = useCallback(
@@ -160,12 +176,20 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
 
   const loadDogs = useCallback(async () => {
     if (!paramUserId) {
-      setLoading(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
       return;
     }
+    const generation = beginAsyncWork();
     try {
+      if (!isAsyncWorkCurrent(generation)) return;
       setLoading(true);
-      const res = await dogAPI.getDogsForUser(paramUserId);
+      const [res, vaxRes] = await Promise.all([
+        dogAPI.getDogsForUser(paramUserId),
+        vaccinationAPI.list(paramUserId).catch(() => ({ vaccinations: [] })),
+      ]);
+      if (!isAsyncWorkCurrent(generation)) return;
       const list = res.success && Array.isArray(res.dogs) ? res.dogs : [];
       setDogs(
         list.map((d: any) => ({
@@ -173,21 +197,41 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
           name: d.name || 'כלב',
         }))
       );
+      if (paramVaccinationId) {
+        const existing = (vaxRes.vaccinations as VaccinationRow[] | undefined)?.find(
+          (v) => v.id === paramVaccinationId
+        );
+        if (existing) {
+          setNotificationSettings({
+            notificationEnabled: existing.notificationEnabled ?? false,
+            remindDaysBefore: existing.remindDaysBefore ?? '7,1',
+          });
+        }
+      }
       if (!paramVaccinationId && list.length === 1) {
         setForm((prev) => ({ ...prev, selectedDogId: String(list[0].id) }));
       }
     } catch (e: any) {
+      if (!isAsyncWorkCurrent(generation)) return;
       console.error(e);
       Alert.alert('שגיאה', e?.message || 'לא ניתן לטעון את רשימת הכלבים');
       setDogs([]);
     } finally {
-      setLoading(false);
+      if (isAsyncWorkCurrent(generation)) {
+        setLoading(false);
+      }
     }
-  }, [paramUserId, paramVaccinationId]);
+  }, [paramUserId, paramVaccinationId, beginAsyncWork, isAsyncWorkCurrent, isMountedRef]);
 
   useEffect(() => {
-    loadDogs();
-  }, [loadDogs]);
+    void loadDogs();
+    return () => {
+      runDeferredBlurCleanup(() => {
+        if (!isMountedRef.current) return;
+        setDatePickerTarget(null);
+      });
+    };
+  }, [loadDogs, runDeferredBlurCleanup, isMountedRef]);
 
   const onVaccineKeyChange = (key: IsraelVaccineKey) => {
     setForm((prev) => ({
@@ -261,14 +305,18 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
       administeredDate: toIsoLocal(form.administeredDate),
       nextDueDate: form.nextDueDate ? toIsoLocal(form.nextDueDate) : null,
       vetClinicName: form.vetClinicName.trim() || null,
+      notificationEnabled: notificationSettings.notificationEnabled,
+      remindDaysBefore: notificationSettings.remindDaysBefore,
     };
     try {
       setSaving(true);
       if (isEdit && vaccinationId) {
         await vaccinationAPI.update(userId, vaccinationId, payload);
+        await resyncAllNotifications(userId);
         Alert.alert('הצלחה', 'החיסון עודכן', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
       } else {
         await vaccinationAPI.create(userId, payload);
+        await resyncAllNotifications(userId);
         Alert.alert('הצלחה', 'החיסון נשמר', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
       }
     } catch (e: any) {
@@ -394,6 +442,13 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
             placeholderTextColor="#A9B5C7"
             textAlign="right"
             editable={!saving}
+          />
+
+          <ReminderSettingsSection
+            variant="vaccination"
+            value={notificationSettings}
+            onChange={setNotificationSettings}
+            disabled={saving}
           />
 
           {Platform.OS === 'ios' && datePickerTarget && (

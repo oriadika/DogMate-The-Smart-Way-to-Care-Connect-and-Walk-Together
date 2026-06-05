@@ -15,7 +15,11 @@ public record MedicationDTO(
         String administeredDate,
         String nextDueDate,
         String vetClinicName,
-        String createdAt
+        String createdAt,
+        boolean notificationEnabled,
+        String scheduleTimes,
+        String frequencyType,
+        int frequencyInterval
 ) {
     public static MedicationDTO fromEntity(DogMedication m) {
         return new MedicationDTO(
@@ -26,7 +30,11 @@ public record MedicationDTO(
                 m.getAdministeredDate().toString(),
                 m.getNextDueDate() != null ? m.getNextDueDate().toString() : null,
                 m.getVetClinicName(),
-                m.getCreatedAt() != null ? m.getCreatedAt().toString() : null
+                m.getCreatedAt() != null ? m.getCreatedAt().toString() : null,
+                m.isNotificationEnabled(),
+                m.getScheduleTimes(),
+                m.getFrequencyType(),
+                m.getFrequencyInterval()
         );
     }
 }

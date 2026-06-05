@@ -25,6 +25,11 @@ public interface IDogRepository {
     Optional<Dog> findById(UUID id);
 
     /**
+     * Find dogs by primary keys (implemented by JpaRepository on {@code DogRepository}).
+     */
+    List<Dog> findAllById(Iterable<UUID> ids);
+
+    /**
      * Delete a dog by ID
      * @param id The UUID of the dog to delete
      */
@@ -57,6 +62,7 @@ public interface IDogRepository {
     @Query("""
         SELECT DISTINCT d FROM Dog d
         INNER JOIN d.dogRelationships dr
+        LEFT JOIN FETCH d.foodStock
         WHERE dr.regularUser.id = :userId
         """)
     List<Dog> findAllForRegularUser(@Param("userId") UUID userId);

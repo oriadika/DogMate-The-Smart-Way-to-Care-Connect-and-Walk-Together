@@ -16,10 +16,16 @@ public class VaccinationService {
 
     private final DogVaccinationRepository vaccinationRepository;
     private final IDogRepository dogRepository;
+    private final HealthReminderSyncService healthReminderSyncService;
 
-    public VaccinationService(DogVaccinationRepository vaccinationRepository, IDogRepository dogRepository) {
+    public VaccinationService(
+            DogVaccinationRepository vaccinationRepository,
+            IDogRepository dogRepository,
+            HealthReminderSyncService healthReminderSyncService
+    ) {
         this.vaccinationRepository = vaccinationRepository;
         this.dogRepository = dogRepository;
+        this.healthReminderSyncService = healthReminderSyncService;
     }
 
     private boolean dogBelongsToUser(UUID userId, UUID dogId) {
@@ -46,7 +52,8 @@ public class VaccinationService {
 
     @Transactional
     public VaccinationDTO create(UUID userId, UUID dogId, String vaccineName, LocalDate administeredDate,
-                                 LocalDate nextDueDate, String vetClinicName) {
+                                 LocalDate nextDueDate, String vetClinicName,
+                                 Boolean notificationEnabled, String remindDaysBefore) {
         if (vaccineName == null || vaccineName.isBlank()) {
             throw new IllegalArgumentException("חובה להזין שם חיסון");
         }
@@ -61,12 +68,16 @@ public class VaccinationService {
         DogVaccination entity = new DogVaccination(null, dog, vaccineName, administeredDate);
         entity.setNextDueDate(nextDueDate);
         entity.setVetClinicName(vetClinicName);
-        return VaccinationDTO.fromEntity(vaccinationRepository.save(entity));
+        NotificationSettingsHelper.applyVaccinationSettings(entity, notificationEnabled, remindDaysBefore);
+        DogVaccination saved = vaccinationRepository.save(entity);
+        healthReminderSyncService.syncVaccinationReminder(saved, userId);
+        return VaccinationDTO.fromEntity(saved);
     }
 
     @Transactional
     public VaccinationDTO update(UUID userId, UUID vaccinationId, UUID dogId, String vaccineName,
-                                 LocalDate administeredDate, LocalDate nextDueDate, String vetClinicName) {
+                                 LocalDate administeredDate, LocalDate nextDueDate, String vetClinicName,
+                                 Boolean notificationEnabled, String remindDaysBefore) {
         DogVaccination v = loadOwnedOrThrow(userId, vaccinationId);
         if (vaccineName == null || vaccineName.isBlank()) {
             throw new IllegalArgumentException("חובה להזין שם חיסון");
@@ -86,12 +97,16 @@ public class VaccinationService {
         v.setAdministeredDate(administeredDate);
         v.setNextDueDate(nextDueDate);
         v.setVetClinicName(vetClinicName);
-        return VaccinationDTO.fromEntity(vaccinationRepository.save(v));
+        NotificationSettingsHelper.applyVaccinationSettings(v, notificationEnabled, remindDaysBefore);
+        DogVaccination saved = vaccinationRepository.save(v);
+        healthReminderSyncService.syncVaccinationReminder(saved, userId);
+        return VaccinationDTO.fromEntity(saved);
     }
 
     @Transactional
     public void delete(UUID userId, UUID vaccinationId) {
         DogVaccination v = loadOwnedOrThrow(userId, vaccinationId);
+        healthReminderSyncService.deleteVaccinationReminder(vaccinationId, userId);
         vaccinationRepository.delete(v);
     }
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,12 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
+import {
+  loadNotificationPreferences,
+  saveNotificationPreferences,
+} from '../services/notificationPreferences';
+import { resyncAllNotifications } from '../services/notificationScheduler';
+import { cancelAllNotifications } from '../services/notifications';
 
 // קומפוננטת עזר לשורה בהגדרות
 const SettingItem = ({ icon, label, onPress, isDestructive, value, onToggle }: any) => (
@@ -54,11 +60,40 @@ const SettingItem = ({ icon, label, onPress, isDestructive, value, onToggle }: a
 const SettingsScreen = ({ navigation, route }: any) => {
   // משתני State לדוגמה
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [prefsLoading, setPrefsLoading] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Get user info from route params
   const userId = route?.params?.userId;
+
+  useEffect(() => {
+    if (!userId) return;
+    setPrefsLoading(true);
+    loadNotificationPreferences(userId)
+      .then((prefs) => setNotificationsEnabled(prefs.notificationsEnabled))
+      .catch(() => setNotificationsEnabled(true))
+      .finally(() => setPrefsLoading(false));
+  }, [userId]);
+
+  const handleNotificationsToggle = async (nextValue: boolean) => {
+    if (!userId) {
+      setNotificationsEnabled(nextValue);
+      return;
+    }
+    try {
+      setNotificationsEnabled(nextValue);
+      await saveNotificationPreferences(userId, { notificationsEnabled: nextValue });
+      if (nextValue) {
+        await resyncAllNotifications(userId);
+      } else {
+        await cancelAllNotifications();
+      }
+    } catch (error: any) {
+      setNotificationsEnabled(!nextValue);
+      Alert.alert('שגיאה', error?.message || 'עדכון הגדרות ההתראות נכשל');
+    }
+  };
   const email = route?.params?.email;
 
   const handleLogout = () => {
@@ -184,8 +219,8 @@ const SettingsScreen = ({ navigation, route }: any) => {
               <SettingItem 
                 label="התראות" 
                 icon="bell-outline" 
-                onToggle={() => setNotificationsEnabled(!notificationsEnabled)}
-                value={notificationsEnabled}
+                onToggle={() => handleNotificationsToggle(!notificationsEnabled)}
+                value={notificationsEnabled && !prefsLoading}
               />
             </View>
           </View>

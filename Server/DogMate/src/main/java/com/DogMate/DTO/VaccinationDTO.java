@@ -15,7 +15,9 @@ public record VaccinationDTO(
         String administeredDate,
         String nextDueDate,
         String vetClinicName,
-        String createdAt
+        String createdAt,
+        boolean notificationEnabled,
+        String remindDaysBefore
 ) {
     public static VaccinationDTO fromEntity(DogVaccination v) {
         return new VaccinationDTO(
@@ -26,7 +28,9 @@ public record VaccinationDTO(
                 v.getAdministeredDate().toString(),
                 v.getNextDueDate() != null ? v.getNextDueDate().toString() : null,
                 v.getVetClinicName(),
-                v.getCreatedAt() != null ? v.getCreatedAt().toString() : null
+                v.getCreatedAt() != null ? v.getCreatedAt().toString() : null,
+                v.isNotificationEnabled(),
+                v.getRemindDaysBefore()
         );
     }
 }

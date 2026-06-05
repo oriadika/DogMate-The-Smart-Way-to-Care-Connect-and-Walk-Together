@@ -28,6 +28,10 @@ public class FoodStockDTO {
 
     private double dailyConsumptionInGram;
 
+    private boolean notificationEnabled;
+
+    private Integer lowStockThresholdDays;
+
     private List<Map<String,Object>> dogs = new ArrayList<>();
 
 
@@ -37,6 +41,8 @@ public class FoodStockDTO {
         this.bagSizeInKg = stock.getBagSizeInKg();
         this.currentLevelInKg = stock.getCurrentLevelInKg();
         this.dailyConsumptionInGram = stock.getDailyConsumptionInGram();
+        this.notificationEnabled = stock.isNotificationEnabled();
+        this.lowStockThresholdDays = stock.getLowStockThresholdDays();
         List<Dog> dogs = stock.getDogs();
         for (Dog dog : dogs) {
             Map<String, Object> dogData = new HashMap<>();
@@ -87,6 +93,22 @@ public class FoodStockDTO {
     }
     public void setDogs(List<Map<String, Object>> dogs) {
         this.dogs = dogs;
+    }
+
+    public boolean isNotificationEnabled() {
+        return notificationEnabled;
+    }
+
+    public void setNotificationEnabled(boolean notificationEnabled) {
+        this.notificationEnabled = notificationEnabled;
+    }
+
+    public Integer getLowStockThresholdDays() {
+        return lowStockThresholdDays;
+    }
+
+    public void setLowStockThresholdDays(Integer lowStockThresholdDays) {
+        this.lowStockThresholdDays = lowStockThresholdDays;
     }
 
 }
