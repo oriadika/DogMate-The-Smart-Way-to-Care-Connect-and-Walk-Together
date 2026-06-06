@@ -19,6 +19,8 @@ import { dogAPI, userAPI, foodStockAPI, type FoodStockRow } from '../../services
 import ReminderSettingsSection from '../../components/health/ReminderSettingsSection';
 import { DEFAULT_FOOD_NOTIFICATION, type FoodNotificationSettings } from '../../types/notifications';
 import { resyncAllNotifications } from '../../services/notificationScheduler';
+import { markHomeDataDirty } from '../../utils/homeDataCache';
+import { markFoodInventoryDirty } from '../../utils/healthDataCache';
 import { useScreenLifecycleGuard } from '../../utils/screenLifecycle';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
@@ -255,6 +257,8 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
         }
 
         await resyncAllNotifications(userId);
+        markHomeDataDirty(userId);
+        markFoodInventoryDirty(userId);
 
         Alert.alert('הצלחה', 'מלאי המזון עודכן בהצלחה!', [
           {
@@ -300,6 +304,8 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
 
       if (userId) {
         await resyncAllNotifications(userId);
+        markHomeDataDirty(userId);
+        markFoodInventoryDirty(userId);
       }
 
       Alert.alert('הצלחה', 'מלאי המזון נשמר בהצלחה!', [

@@ -30,13 +30,25 @@ public class FoodStockController {
 
     @GetMapping("/user/{userId}")
     public ResponseEntity<?> getMyDogsFoodStocks(@PathVariable String userId) {
-        List<FoodStockDTO> stocks = dogService.getUserFoodStocks(UUID.fromString(userId));
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("foodStocks", stocks);
-        
-        return ResponseEntity.ok(response);
+        try {
+            List<FoodStockDTO> stocks = dogService.getUserFoodStocks(UUID.fromString(userId));
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("foodStocks", stocks);
+
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "נכשלה טעינת מלאי המזון: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
     }
 
 

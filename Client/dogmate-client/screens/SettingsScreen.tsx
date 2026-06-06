@@ -19,6 +19,7 @@ import {
 } from '../services/notificationPreferences';
 import { resyncAllNotifications } from '../services/notificationScheduler';
 import { cancelAllNotifications } from '../services/notifications';
+import { clearOwnerSession } from '../utils/ownerSession';
 
 // קומפוננטת עזר לשורה בהגדרות
 const SettingItem = ({ icon, label, onPress, isDestructive, value, onToggle }: any) => (
@@ -106,6 +107,7 @@ const SettingsScreen = ({ navigation, route }: any) => {
     try {
       console.log('Logging out user:', { userId, email });
       await userAPI.logout(userId || '', email || '');
+      clearOwnerSession();
       console.log('User logged out successfully');
       navigation.reset({
         index: 0,

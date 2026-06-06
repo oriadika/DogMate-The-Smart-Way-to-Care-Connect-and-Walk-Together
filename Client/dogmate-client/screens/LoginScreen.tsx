@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
+import { prefetchOwnerData } from '../utils/prefetchOwnerData';
+import { setOwnerSession } from '../utils/ownerSession';
 
 const LoginScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
@@ -43,18 +45,28 @@ const LoginScreen = ({ navigation }: any) => {
         }
       else {
           const role = response.userRole || 'owner';
+          const ownerParams = {
+            userId: response.userId,
+            email: response.email || email.trim(),
+            userFirstName: response.firstName || response.email || email.trim(),
+            userLastName: response.lastName || '',
+            userRole: role,
+            phoneNumber: response.phoneNumber || '',
+          };
+          setOwnerSession(ownerParams);
+          if (role !== 'walker' && response.userId) {
+            await prefetchOwnerData(
+              response.userId,
+              ownerParams.userFirstName,
+              ownerParams.userLastName,
+              { waitForHome: true }
+            );
+          }
           navigation.reset({
               index: 0,
               routes: [{
                   name: role === 'walker' ? 'WalkerHome' : 'Home',
-                  params: {
-                      userId: response.userId,
-                      email: response.email || email.trim(),
-                      userFirstName: response.firstName || response.email || email.trim(),
-                      userLastName: response.lastName || '',
-                      userRole: role,
-                      phoneNumber: response.phoneNumber || '',
-                  }
+                  params: ownerParams,
               }],
           });
     }

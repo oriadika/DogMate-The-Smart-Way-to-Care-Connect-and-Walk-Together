@@ -5,6 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
 import { navigateRoot, rootNavigationRef } from '../../navigation/rootNavigationRef';
+import { getOwnerSession } from '../../utils/ownerSession';
+import { ensureOwnerDataPrefetched } from '../../utils/healthDataCache';
 
 const PRIMARY_COLOR = '#7FB069';
 const BG_COLOR = '#FAEFDD';
@@ -65,6 +67,13 @@ function HealthMenuRow({ onPress, icon, title, description }: HealthMenuRowProps
 const HealthScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
   const bottomPad = Math.max(insets.bottom, 12) + 100;
+
+  React.useEffect(() => {
+    const session = getOwnerSession();
+    if (session.userId) {
+      void ensureOwnerDataPrefetched(session.userId, session.userFirstName, session.userLastName);
+    }
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>

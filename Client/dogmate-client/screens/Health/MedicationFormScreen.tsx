@@ -23,6 +23,8 @@ import {
   type MedicationFrequencyType,
 } from '../../types/notifications';
 import { resyncAllNotifications } from '../../services/notificationScheduler';
+import { markHomeDataDirty } from '../../utils/homeDataCache';
+import { markMedicationsDirty } from '../../utils/healthDataCache';
 import { useScreenLifecycleGuard } from '../../utils/screenLifecycle';
 import MedicationNamePicker from '../../components/health/MedicationNamePicker';
 import MedicationNameAutocompleteInput from '../../components/health/MedicationNameAutocompleteInput';
@@ -343,10 +345,14 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
       if (isEdit && medicationId) {
         await medicationAPI.update(userId, medicationId, payload);
         await resyncAllNotifications(userId);
+        markHomeDataDirty(userId);
+        markMedicationsDirty(userId);
         Alert.alert('הצלחה', 'התרופה עודכנה', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
       } else {
         await medicationAPI.create(userId, payload);
         await resyncAllNotifications(userId);
+        markHomeDataDirty(userId);
+        markMedicationsDirty(userId);
         Alert.alert('הצלחה', 'התרופה נשמר', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
       }
     } catch (e: any) {

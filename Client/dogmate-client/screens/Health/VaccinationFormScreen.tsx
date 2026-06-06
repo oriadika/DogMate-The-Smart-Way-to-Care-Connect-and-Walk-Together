@@ -19,6 +19,8 @@ import { dogAPI, vaccinationAPI, type VaccinationRow } from '../../services/api'
 import ReminderSettingsSection from '../../components/health/ReminderSettingsSection';
 import { DEFAULT_VACCINATION_NOTIFICATION, type VaccinationNotificationSettings } from '../../types/notifications';
 import { resyncAllNotifications } from '../../services/notificationScheduler';
+import { markHomeDataDirty } from '../../utils/homeDataCache';
+import { markVaccinationsDirty } from '../../utils/healthDataCache';
 import { useScreenLifecycleGuard } from '../../utils/screenLifecycle';
 import VaccineNamePicker from '../../components/health/VaccineNamePicker';
 import {
@@ -313,10 +315,14 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
       if (isEdit && vaccinationId) {
         await vaccinationAPI.update(userId, vaccinationId, payload);
         await resyncAllNotifications(userId);
+        markHomeDataDirty(userId);
+        markVaccinationsDirty(userId);
         Alert.alert('הצלחה', 'החיסון עודכן', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
       } else {
         await vaccinationAPI.create(userId, payload);
         await resyncAllNotifications(userId);
+        markHomeDataDirty(userId);
+        markVaccinationsDirty(userId);
         Alert.alert('הצלחה', 'החיסון נשמר', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
       }
     } catch (e: any) {

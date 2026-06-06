@@ -13,9 +13,11 @@ This project does not use Flyway. Run scripts here when deploying or when `sprin
 
 ## Notification columns (2026)
 
-Applied automatically on server startup via `NotificationSchemaMigration`, or run manually:
+Applied automatically on server startup via `ManualDatabaseMigration`, or run manually in this order:
 
 ```bash
+psql "$DATABASE_URL" -f src/main/resources/db/manual/dog_medications.sql
+psql "$DATABASE_URL" -f src/main/resources/db/manual/dog_vaccinations.sql
 psql "$DATABASE_URL" -f src/main/resources/db/manual/notification_schema_update.sql
 ```
 

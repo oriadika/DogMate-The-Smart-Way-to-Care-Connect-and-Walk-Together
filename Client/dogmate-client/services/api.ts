@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { getApiBaseUrlWithPath } from './config';
+import { isAbortError } from '../utils/isAbortError';
 
 
 const API_BASE_URL = getApiBaseUrlWithPath('api');
@@ -737,11 +738,14 @@ export const dogAPI = {
   /**
    * Get all dogs for a user
    */
-  getDogsForUser: async (userId: string) => {
+  getDogsForUser: async (userId: string, options?: { signal?: AbortSignal }) => {
     try {
-      const response = await apiClient.get(`/dogs/user/${userId}`);
+      const response = await apiClient.get(`/dogs/user/${userId}`, {
+        signal: options?.signal,
+      });
       return response.data;
     } catch (error: any) {
+      if (isAbortError(error)) throw error;
       const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון את רשימת הכלבים';
       console.error("Failed to get dogs:", errorMessage);
       throw new Error(errorMessage);
@@ -964,11 +968,14 @@ export const reminderAPI = {
   /**
    * Get all reminders for a user
    */
-  getRemindersForUser: async (userId: string) => {
+  getRemindersForUser: async (userId: string, options?: { signal?: AbortSignal }) => {
     try {
-      const response = await apiClient.get(`/users/${userId}/reminders`);
+      const response = await apiClient.get(`/users/${userId}/reminders`, {
+        signal: options?.signal,
+      });
       return response.data;
     } catch (error: any) {
+      if (isAbortError(error)) throw error;
       const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון תזכורות';
       console.error("Failed to get reminders:", errorMessage);
       throw new Error(errorMessage);

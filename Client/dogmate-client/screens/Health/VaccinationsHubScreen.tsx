@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   SafeAreaView,
   View,
@@ -14,9 +14,22 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { userAPI, vaccinationAPI, dogAPI, type VaccinationRow } from '../../services/api';
+import { vaccinationAPI, type VaccinationRow } from '../../services/api';
 import { deferScreenCleanup, useScreenLifecycleGuard } from '../../utils/screenLifecycle';
-import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
+import {
+  navigateBackToOwnerHealth,
+  navigateToOwnerDashboard,
+} from '../../navigation/ownerNavigation';
+import { resolveOwnerUserId, getOwnerSession } from '../../utils/ownerSession';
+import {
+  clearVaccinationsDirty,
+  fetchDogOptionsForUser,
+  getInitialVaccinationsState,
+  getVaccinationsCache,
+  setVaccinationsCache,
+  shouldForceVaccinationsRefresh,
+  type DogOption,
+} from '../../utils/healthDataCache';
 import VaccinationSortModal, {
   type VaccinationSortOption,
 } from '../../components/health/VaccinationSortModal';
@@ -46,18 +59,21 @@ const ALL_DOGS_FILTER = '__all_dogs__';
 
 const DEFAULT_VACCINATION_SORT: VaccinationSortOption = 'date_desc';
 
-type DogOption = { id: string; name: string };
-
 const VaccinationsHubScreen = ({ navigation }: any) => {
-  const [rows, setRows] = useState<VaccinationRow[]>([]);
-  const [userDogs, setUserDogs] = useState<DogOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const initialUserId = resolveOwnerUserId(undefined, getOwnerSession().userId ?? null);
+  const initial = getInitialVaccinationsState(initialUserId);
+
+  const [rows, setRows] = useState<VaccinationRow[]>(initial.rows);
+  const [userDogs, setUserDogs] = useState<DogOption[]>(initial.userDogs);
+  const [loading, setLoading] = useState(initial.loading);
+  const [userId, setUserId] = useState<string | null>(initial.userId);
   const [selectedDogId, setSelectedDogId] = useState<string>(ALL_DOGS_FILTER);
   const [dogFilterModalVisible, setDogFilterModalVisible] = useState(false);
   const [vaccinationSort, setVaccinationSort] = useState<VaccinationSortOption>(DEFAULT_VACCINATION_SORT);
   const [sortModalVisible, setSortModalVisible] = useState(false);
   const [expandedHistoryByKey, setExpandedHistoryByKey] = useState<Record<string, boolean>>({});
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
 
   const {
     isMountedRef,
@@ -77,57 +93,71 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
     const generation = beginAsyncWork();
     try {
       if (!isAsyncWorkCurrent(generation)) return;
-      setLoading(true);
-      const userResponse = await userAPI.getLoggedUsers();
-      if (!isAsyncWorkCurrent(generation)) return;
-      if (!userResponse.success || !userResponse.users?.length) {
+
+      const uid = resolveOwnerUserId(undefined, userId);
+      if (!uid) {
         Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
         setRows([]);
         setUserDogs([]);
         return;
       }
-      const uid = userResponse.users[0].id as string;
       setUserId(uid);
 
-      try {
-        const res = await vaccinationAPI.list(uid);
-        if (!isAsyncWorkCurrent(generation)) return;
-        const list = Array.isArray(res.vaccinations) ? res.vaccinations : [];
-        setRows(list as VaccinationRow[]);
-      } catch (ve: any) {
-        if (!isAsyncWorkCurrent(generation)) return;
-        console.error('Vaccinations load error:', ve);
-        Alert.alert('שגיאה', ve?.message || 'שגיאה בטעינת החיסונים');
+      const forceRefresh = shouldForceVaccinationsRefresh(uid);
+      const cached = !forceRefresh ? getVaccinationsCache(uid) : undefined;
+
+      if (cached) {
+        setRows(cached.rows);
+        setUserDogs(cached.userDogs);
+        setLoading(false);
+      } else if (rowsRef.current.length === 0) {
+        setLoading(true);
+      }
+
+      if (forceRefresh) {
+        clearVaccinationsDirty(uid);
+      }
+
+      const [vacSettled, dogsSettled] = await Promise.allSettled([
+        vaccinationAPI.list(uid),
+        fetchDogOptionsForUser(uid),
+      ]);
+      if (!isAsyncWorkCurrent(generation)) return;
+
+      let nextRows = cached?.rows ?? rowsRef.current;
+      if (vacSettled.status === 'fulfilled') {
+        nextRows = Array.isArray(vacSettled.value.vaccinations)
+          ? (vacSettled.value.vaccinations as VaccinationRow[])
+          : [];
+        setRows(nextRows);
+      } else if (!cached) {
+        console.error('Vaccinations load error:', vacSettled.reason);
+        Alert.alert('שגיאה', (vacSettled.reason as Error)?.message || 'שגיאה בטעינת החיסונים');
         setRows([]);
       }
 
-      try {
-        const dogsRes = await dogAPI.getDogsForUser(uid);
-        if (!isAsyncWorkCurrent(generation)) return;
-        const dogList = dogsRes.success && Array.isArray(dogsRes.dogs) ? dogsRes.dogs : [];
-        setUserDogs(
-          dogList.map((d: { id?: string; name?: string }) => ({
-            id: String(d.id),
-            name: String(d.name || 'כלב').trim() || 'כלב',
-          }))
-        );
-      } catch (de: any) {
-        if (!isAsyncWorkCurrent(generation)) return;
-        console.warn('Dogs list for filter failed:', de);
+      let nextDogs = cached?.userDogs ?? [];
+      if (dogsSettled.status === 'fulfilled') {
+        nextDogs = dogsSettled.value;
+        setUserDogs(nextDogs);
+      } else if (!cached) {
+        console.warn('Dogs list for filter failed:', dogsSettled.reason);
         setUserDogs([]);
       }
+
+      setVaccinationsCache(uid, { rows: nextRows, userDogs: nextDogs });
     } catch (e: any) {
       if (!isAsyncWorkCurrent(generation)) return;
       console.error('Vaccinations hub load error:', e);
-      Alert.alert('שגיאה', e?.message || 'שגיאה בטעינת הנתונים');
-      setRows([]);
-      setUserDogs([]);
+      if (rowsRef.current.length === 0) {
+        Alert.alert('שגיאה', e?.message || 'שגיאה בטעינת הנתונים');
+      }
     } finally {
       if (isAsyncWorkCurrent(generation)) {
         setLoading(false);
       }
     }
-  }, [beginAsyncWork, isAsyncWorkCurrent]);
+  }, [beginAsyncWork, isAsyncWorkCurrent, userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -283,7 +313,7 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
     setExpandedHistoryByKey((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  if (loading) {
+  if (loading && rows.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingWrap}>
@@ -300,20 +330,14 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.homeBtn}
-            onPress={() => {
-              if (userId) {
-                navigation.navigate('Home', { screen: 'Dashboard', params: { userId } });
-              } else {
-                navigation.goBack();
-              }
-            }}
+            onPress={() => navigateToOwnerDashboard(navigation)}
           >
             <Ionicons name="home-outline" size={24} color={TEXT_DARK} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>החיסונים שלי</Text>
           <TouchableOpacity
             style={styles.backBtn}
-            onPress={() => navigation.navigate('Home', { screen: OWNER_MAIN_TAB.Health })}
+            onPress={() => navigateBackToOwnerHealth(navigation)}
           >
             <Ionicons name="arrow-forward" size={28} color={TEXT_DARK} />
           </TouchableOpacity>

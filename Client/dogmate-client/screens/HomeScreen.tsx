@@ -1,5 +1,5 @@
 // screens/HomeScreen.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   SafeAreaView,
   View,
@@ -12,15 +12,31 @@ import {
   Alert,
   FlatList,
   Modal,
+  InteractionManager,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, reminderAPI, userAPI, type ReminderRow } from '../services/api';
+import { dogAPI, reminderAPI, type ReminderRow } from '../services/api';
 import { cancelReminderNotification } from '../services/notifications';
 import { loadNotificationPreferences } from '../services/notificationPreferences';
 import { resyncAllNotifications } from '../services/notificationScheduler';
 import { getReminderCountdown, sortRemindersNearestFirst } from '../utils/daysDisplay';
-import websocketService from '../services/websocket';
+import {
+  applyHomeCacheToState,
+  buildHomeDataSignature,
+  clearHomeCache,
+  getHomeCache,
+  getInitialHomeState,
+  markHomeDataDirty,
+  setHomeCache,
+  shouldForceHomeRefresh,
+  clearHomeDirty,
+} from '../utils/homeDataCache';
+import { deferScreenCleanup } from '../utils/screenLifecycle';
+import { isAbortError } from '../utils/isAbortError';
+import { getOwnerSession, resolveOwnerUserId } from '../utils/ownerSession';
+import { ensureOwnerDataPrefetched } from '../utils/healthDataCache';
+import { waitForOwnerPrefetchHome } from '../utils/ownerPrefetchCoordinator';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
@@ -28,66 +44,78 @@ const TEXT_DARK = '#5C4033'; // Dark brown for text
 const CARD_BG = '#faf0e6'; // Lighter beige for inputs/cards
 const BORDER_COLOR = '#E0D5C7'; // Border color
 
-/** Let Axios home fetches complete before WebSocket / notification side effects run. */
-const HOME_FOCUS_SIDE_EFFECTS_DELAY_MS = 1500;
-
-type HomeCacheEntry = {
-  userName: string;
-  userLastName: string;
-  dogs: any[];
-  reminders: any[];
-  signature: string;
-};
-
-const homeDataCache = new Map<string, HomeCacheEntry>();
-const dirtyHomeDataUsers = new Set<string>();
-
-/** Fingerprint for profile image so signature changes when photo is replaced without huge strings. */
-const profileImageFingerprint = (url: unknown): string => {
-  const s = typeof url === 'string' ? url : '';
-  if (!s) return '0';
-  const len = s.length;
-  if (len <= 120) return `${len}:${s}`;
-  return `${len}:${s.slice(0, 60)}:${s.slice(-60)}`;
-};
-
-const buildDataSignature = (dogsData: any[], remindersData: any[]): string => {
-  const dogsPart = dogsData
-    .map((d: any) =>
-      [
-        d?.id ?? '',
-        d?.name ?? '',
-        d?.breed ?? '',
-        d?.birthdate ?? '',
-        d?.gender ?? '',
-        profileImageFingerprint(d?.profileImageUrl),
-        d?.weightKg ?? '',
-      ].join(':')
-    )
-    .join('|');
-  const remindersPart = remindersData
-    .map((r: any) => `${r?.id ?? ''}:${r?.title ?? ''}:${r?.remindAt ?? ''}:${r?.sent ?? ''}`)
-    .join('|');
-  return `${dogsData.length}#${remindersData.length}#${dogsPart}#${remindersPart}`;
-};
+/** Defer notification resync until after home HTTP completes. */
+const HOME_NOTIFICATION_SYNC_DELAY_MS = 2000;
 
 const HomeScreen = ({ navigation, route }: any) => {
-  const [userName, setUserName] = useState<string>(route?.params?.userFirstName || '');
-  const [userLastName, setUserLastName] = useState<string>(route?.params?.userLastName || '');
-  const [userId, setUserId] = useState<string | null>(route?.params?.userId || null);
-  const [dogs, setDogs] = useState<any[]>([]);
-  const [reminders, setReminders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const routeUserId = (route?.params?.userId || getOwnerSession().userId) as string | undefined;
+  const initialHome = getInitialHomeState(routeUserId, route?.params?.userFirstName || getOwnerSession().userFirstName);
+
+  const [userName, setUserName] = useState<string>(
+    route?.params?.userFirstName || initialHome.userName
+  );
+  const [userLastName, setUserLastName] = useState<string>(
+    route?.params?.userLastName || initialHome.userLastName
+  );
+  const [userId, setUserId] = useState<string | null>(routeUserId || null);
+  const [dogs, setDogs] = useState<any[]>(initialHome.dogs);
+  const [reminders, setReminders] = useState<any[]>(initialHome.reminders);
+  const [loading, setLoading] = useState(initialHome.loading);
   const [selectedReminder, setSelectedReminder] = useState<any | null>(null);
   const [showReminderDetails, setShowReminderDetails] = useState(false);
 
-  const loadInFlightRef = useRef(false);
+  const loadGenerationRef = useRef(0);
+  const homeFetchAbortRef = useRef<AbortController | null>(null);
+  const isHomeFocusedRef = useRef(false);
   const notificationsSyncedForUserRef = useRef<string | null>(null);
+  const routeRef = useRef(route);
+  const navigationRef = useRef(navigation);
   const userNameRef = useRef(route?.params?.userFirstName || userName);
+  const dogsRef = useRef<any[]>(dogs);
+  const remindersRef = useRef<any[]>(reminders);
+  routeRef.current = route;
+  navigationRef.current = navigation;
   userNameRef.current = route?.params?.userFirstName || userName;
+  dogsRef.current = dogs;
+  remindersRef.current = reminders;
 
-  // Get user data from route params (passed from LoginScreen) - use state as fallback
-  const currentUserId = route?.params?.userId || userId;
+  const cancelHomeFetch = useCallback(() => {
+    loadGenerationRef.current += 1;
+    homeFetchAbortRef.current?.abort();
+    homeFetchAbortRef.current = null;
+  }, []);
+
+  const beginHomeFetch = useCallback(() => {
+    homeFetchAbortRef.current?.abort();
+    loadGenerationRef.current += 1;
+    const generation = loadGenerationRef.current;
+    const abortController = new AbortController();
+    homeFetchAbortRef.current = abortController;
+    return { generation, signal: abortController.signal };
+  }, []);
+
+  const isHomeFetchCurrent = useCallback((generation: number) => {
+    return generation === loadGenerationRef.current;
+  }, []);
+
+  const hydrateFromCache = useCallback((userIdKey: string): boolean => {
+    const cached = getHomeCache(userIdKey);
+    if (!cached) return false;
+    applyHomeCacheToState(cached, { setUserName, setUserLastName, setDogs, setReminders });
+    setLoading(false);
+    return true;
+  }, []);
+
+  // Get user data from route params, session, or state
+  const currentUserId = resolveOwnerUserId(route?.params?.userId, userId);
+
+  // Keep userId state aligned when session survives a partial navigation reset
+  React.useEffect(() => {
+    const resolved = resolveOwnerUserId(route?.params?.userId, userId);
+    if (resolved && resolved !== userId) {
+      setUserId(resolved);
+    }
+  }, [route?.params?.userId, userId]);
 
   // Update state when route params change (e.g., on first login)
   React.useEffect(() => {
@@ -102,80 +130,12 @@ const HomeScreen = ({ navigation, route }: any) => {
     }
   }, [route?.params?.userId, route?.params?.userFirstName, route?.params?.userLastName]);
 
-  // Load data when screen is focused (including when returning from AddDog screen)
-  useFocusEffect(
-    React.useCallback(() => {
-      if (!currentUserId) return;
-
-      const forceRefresh =
-        route?.params?.refresh === true || dirtyHomeDataUsers.has(currentUserId);
-
-      if (forceRefresh) {
-        homeDataCache.delete(currentUserId);
-        dirtyHomeDataUsers.delete(currentUserId);
-        notificationsSyncedForUserRef.current = null;
-        if (route?.params?.refresh === true) {
-          navigation.setParams({ refresh: false });
-        }
-      }
-
-      const cached = homeDataCache.get(currentUserId);
-      if (cached) {
-        setUserName(cached.userName || 'חברים');
-        setUserLastName(cached.userLastName || '');
-        setDogs(cached.dogs || []);
-        setReminders(cached.reminders || []);
-        setLoading(false);
-      } else {
-        setLoading(true);
-      }
-
-      const shouldSyncNotifications =
-        forceRefresh || notificationsSyncedForUserRef.current !== currentUserId;
-
-      void loadUserAndDogs(currentUserId, userNameRef.current, {
-        showLoader: !cached,
-        syncNotifications: false,
-      });
-
-      const deferredSideEffectsTimer = setTimeout(() => {
-        void websocketService.ensureConnected(currentUserId);
-        if (shouldSyncNotifications) {
-          void (async () => {
-            try {
-              await loadNotificationPreferences(currentUserId);
-              await resyncAllNotifications(currentUserId);
-              notificationsSyncedForUserRef.current = currentUserId;
-            } catch (error) {
-              console.warn('Deferred home notification sync failed:', error);
-            }
-          })();
-        }
-      }, HOME_FOCUS_SIDE_EFFECTS_DELAY_MS);
-
-      const intervalId = setInterval(() => {
-        void loadUserAndDogs(currentUserId, userNameRef.current, {
-          showLoader: false,
-          syncNotifications: false,
-        });
-      }, 30000);
-
-      return () => {
-        clearTimeout(deferredSideEffectsTimer);
-        clearInterval(intervalId);
-      };
-    }, [currentUserId, navigation, route?.params?.refresh])
-  );
-
-  const loadUserAndDogs = async (
+  const loadUserAndDogs = useCallback(async (
     userIdToLoad: string,
     userNameToLoad?: string,
     options?: { showLoader?: boolean; syncNotifications?: boolean }
   ) => {
-    if (loadInFlightRef.current) {
-      return;
-    }
-    loadInFlightRef.current = true;
+    const { generation, signal } = beginHomeFetch();
 
     const shouldShowLoader = options?.showLoader ?? false;
     const shouldSyncNotifications = options?.syncNotifications ?? false;
@@ -185,49 +145,30 @@ const HomeScreen = ({ navigation, route }: any) => {
         setLoading(true);
       }
 
-      // Use the userId passed from login instead of fetching logged users
-      setUserId(userIdToLoad);
-      let nextUserName = userNameToLoad || userName || 'חברים';
-      let nextUserLastName = userLastName || '';
-      
-      // If userName is missing, try to fetch it from logged users
-      if (!userNameToLoad) {
-        try {
-          const loggedUsersResponse = await userAPI.getLoggedUsers();
-          if (loggedUsersResponse.success && loggedUsersResponse.users) {
-            const currentUser = loggedUsersResponse.users.find((u: any) => u.id === userIdToLoad);
-            if (currentUser) {
-              nextUserName = currentUser.firstName || 'חברים';
-              nextUserLastName = currentUser.lastName || '';
-            } else {
-              nextUserName = 'חברים';
-            }
-          } else {
-            nextUserName = 'חברים';
-          }
-        } catch (e) {
-          console.log('Could not fetch user info:', e);
-          nextUserName = 'חברים';
-        }
+      if (isHomeFetchCurrent(generation)) {
+        setUserId(userIdToLoad);
       }
 
-      const priorCache = homeDataCache.get(userIdToLoad);
+      let nextUserName = userNameToLoad || userNameRef.current || 'חברים';
+      let nextUserLastName = userLastName || '';
+
+      const priorCache = getHomeCache(userIdToLoad);
 
       const [dogsSettled, remindersSettled] = await Promise.allSettled([
-        dogAPI.getDogsForUser(userIdToLoad),
-        reminderAPI.getRemindersForUser(userIdToLoad),
+        dogAPI.getDogsForUser(userIdToLoad, { signal }),
+        reminderAPI.getRemindersForUser(userIdToLoad, { signal }),
       ]);
+
+      if (!isHomeFetchCurrent(generation)) return;
 
       let nextDogs: any[] = [];
       if (dogsSettled.status === 'fulfilled') {
         const dogsResponse = dogsSettled.value;
         nextDogs = dogsResponse.success && dogsResponse.dogs ? dogsResponse.dogs : [];
       } else {
+        if (isAbortError(dogsSettled.reason)) return;
         console.error('Error loading dogs:', dogsSettled.reason);
-        nextDogs = priorCache?.dogs ?? [];
-        if (shouldShowLoader) {
-          Alert.alert('שגיאה', 'שגיאה בטעינת רשימת הכלבים');
-        }
+        nextDogs = priorCache?.dogs ?? dogsRef.current;
       }
 
       let nextReminders: any[] = [];
@@ -239,21 +180,29 @@ const HomeScreen = ({ navigation, route }: any) => {
             : []
         );
       } else {
+        if (isAbortError(remindersSettled.reason)) return;
         console.warn('Error loading reminders:', remindersSettled.reason);
-        nextReminders = sortRemindersNearestFirst(priorCache?.reminders ?? []);
+        nextReminders = sortRemindersNearestFirst(priorCache?.reminders ?? remindersRef.current);
       }
 
-      const nextSignature = buildDataSignature(nextDogs, nextReminders);
+      if (!isHomeFetchCurrent(generation)) return;
+
+      const nextSignature = buildHomeDataSignature(nextDogs, nextReminders);
       const cached = priorCache;
-      const hasChanged = !cached || cached.signature !== nextSignature || cached.userName !== nextUserName || cached.userLastName !== nextUserLastName;
+      const hasChanged =
+        !cached ||
+        cached.signature !== nextSignature ||
+        cached.userName !== nextUserName ||
+        cached.userLastName !== nextUserLastName;
+
+      setUserName(nextUserName);
+      setUserLastName(nextUserLastName);
+      setDogs(nextDogs);
+      setReminders(nextReminders);
+      setLoading(false);
 
       if (hasChanged) {
-        setUserName(nextUserName);
-        setUserLastName(nextUserLastName);
-        setDogs(nextDogs);
-        setReminders(nextReminders);
-
-        homeDataCache.set(userIdToLoad, {
+        setHomeCache(userIdToLoad, {
           userName: nextUserName,
           userLastName: nextUserLastName,
           dogs: nextDogs,
@@ -262,24 +211,147 @@ const HomeScreen = ({ navigation, route }: any) => {
         });
       }
 
-      dirtyHomeDataUsers.delete(userIdToLoad);
+      clearHomeDirty(userIdToLoad);
 
       if (shouldSyncNotifications) {
         await loadNotificationPreferences(userIdToLoad);
+        if (!isHomeFetchCurrent(generation)) return;
         await resyncAllNotifications(userIdToLoad);
       }
     } catch (error: any) {
+      if (isAbortError(error) || !isHomeFetchCurrent(generation)) return;
       console.error('Error loading user/dogs:', error);
+      if (hydrateFromCache(userIdToLoad)) {
+        setLoading(false);
+        return;
+      }
       if (shouldShowLoader) {
         Alert.alert('שגיאה', 'שגיאה בטעינת הנתונים');
       }
     } finally {
-      loadInFlightRef.current = false;
+      if (!isHomeFetchCurrent(generation)) return;
+      homeFetchAbortRef.current = null;
       if (shouldShowLoader) {
         setLoading(false);
       }
     }
-  };
+  }, [beginHomeFetch, hydrateFromCache, isHomeFetchCurrent, userLastName]);
+
+  // Load data when screen is focused (including when returning from AddDog screen)
+  useFocusEffect(
+    useCallback(() => {
+      const resolvedUserId = resolveOwnerUserId(routeRef.current?.params?.userId, userId);
+      if (!resolvedUserId) return;
+
+      isHomeFocusedRef.current = true;
+
+      const routeParams = routeRef.current?.params;
+      const forceRefresh = shouldForceHomeRefresh(resolvedUserId, routeParams?.refresh === true);
+
+      if (forceRefresh) {
+        clearHomeCache(resolvedUserId);
+        clearHomeDirty(resolvedUserId);
+        notificationsSyncedForUserRef.current = null;
+        if (routeParams?.refresh === true) {
+          setTimeout(() => {
+            navigationRef.current?.setParams?.({ refresh: false });
+          }, 0);
+        }
+      }
+
+      const cached = getHomeCache(resolvedUserId);
+      const hasVisibleData =
+        Boolean(cached) ||
+        dogsRef.current.length > 0 ||
+        remindersRef.current.length > 0;
+
+      if (cached) {
+        applyHomeCacheToState(cached, { setUserName, setUserLastName, setDogs, setReminders });
+      }
+
+      setLoading(!hasVisibleData);
+
+      const shouldSyncNotifications =
+        forceRefresh || notificationsSyncedForUserRef.current !== resolvedUserId;
+
+      void ensureOwnerDataPrefetched(
+        resolvedUserId,
+        userNameRef.current,
+        userLastName
+      );
+
+      const scheduleLoad = async () => {
+        if (!isHomeFocusedRef.current) return;
+
+        let visible =
+          Boolean(getHomeCache(resolvedUserId)) ||
+          dogsRef.current.length > 0 ||
+          remindersRef.current.length > 0;
+
+        if (!visible) {
+          await waitForOwnerPrefetchHome(resolvedUserId);
+          const warmed = getHomeCache(resolvedUserId);
+          if (warmed && isHomeFocusedRef.current) {
+            applyHomeCacheToState(warmed, {
+              setUserName,
+              setUserLastName,
+              setDogs,
+              setReminders,
+            });
+            setLoading(false);
+            visible = true;
+          }
+        }
+
+        void loadUserAndDogs(resolvedUserId, userNameRef.current, {
+          showLoader: !visible,
+          syncNotifications: false,
+        });
+      };
+
+      const interactionTask = hasVisibleData
+        ? InteractionManager.runAfterInteractions(() => {
+            void scheduleLoad();
+          })
+        : null;
+      if (!hasVisibleData) {
+        void scheduleLoad();
+      }
+
+      const notificationSyncTimer = setTimeout(() => {
+        if (!isHomeFocusedRef.current || !shouldSyncNotifications) return;
+        void (async () => {
+          try {
+            await loadNotificationPreferences(resolvedUserId);
+            await resyncAllNotifications(resolvedUserId);
+            notificationsSyncedForUserRef.current = resolvedUserId;
+          } catch (error) {
+            console.warn('Deferred home notification sync failed:', error);
+          }
+        })();
+      }, HOME_NOTIFICATION_SYNC_DELAY_MS);
+
+      const intervalId = setInterval(() => {
+        if (!isHomeFocusedRef.current) return;
+        void loadUserAndDogs(resolvedUserId, userNameRef.current, {
+          showLoader: false,
+          syncNotifications: false,
+        });
+      }, 30000);
+
+      return () => {
+        isHomeFocusedRef.current = false;
+        interactionTask?.cancel();
+        deferScreenCleanup(() => {
+          if (!isHomeFocusedRef.current) {
+            cancelHomeFetch();
+          }
+        });
+        clearTimeout(notificationSyncTimer);
+        clearInterval(intervalId);
+      };
+    }, [currentUserId, userId, cancelHomeFetch, loadUserAndDogs])
+  );
 
   // Format reminder date/time
   const formatReminderDateTime = (dateValue: any): string => {
@@ -466,8 +538,8 @@ const HomeScreen = ({ navigation, route }: any) => {
 
               await dogAPI.deleteDog(userId, dogId);
               Alert.alert('הצלחה', `${dogName} נמחק בהצלחה`);
-              dirtyHomeDataUsers.add(userId);
-              
+              markHomeDataDirty(userId);
+
               // Refresh dogs list
               if (currentUserId) {
                 loadUserAndDogs(currentUserId, userNameRef.current, { syncNotifications: true });
@@ -550,8 +622,8 @@ const HomeScreen = ({ navigation, route }: any) => {
               await reminderAPI.deleteReminder(userId, reminder.id);
               Alert.alert('הצלחה', `התזכורת נמחקה בהצלחה`);
               setShowReminderDetails(false);
-              dirtyHomeDataUsers.add(userId);
-              
+              markHomeDataDirty(userId);
+
               // Refresh reminders list
               if (currentUserId) {
                 loadUserAndDogs(currentUserId, userNameRef.current, { syncNotifications: true });
@@ -663,7 +735,7 @@ const HomeScreen = ({ navigation, route }: any) => {
           </View>
 
           {/* Loading State */}
-          {loading ? (
+          {loading && dogs.length === 0 && reminders.length === 0 ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={PRIMARY_COLOR} />
               <Text style={styles.loadingText}>טוען נתונים...</Text>
@@ -687,7 +759,7 @@ const HomeScreen = ({ navigation, route }: any) => {
                 style={styles.addDogButton}
                 activeOpacity={0.85}
                 onPress={() => {
-                  if (currentUserId) dirtyHomeDataUsers.add(currentUserId);
+                  if (currentUserId) markHomeDataDirty(currentUserId);
                   navigation.navigate('AddDog', { userId: currentUserId });
                 }}
               >
@@ -705,7 +777,7 @@ const HomeScreen = ({ navigation, route }: any) => {
                 <TouchableOpacity
                   style={styles.addDogFab}
                   onPress={() => {
-                    if (currentUserId) dirtyHomeDataUsers.add(currentUserId);
+                    if (currentUserId) markHomeDataDirty(currentUserId);
                     navigation.navigate('AddDog', { userId: currentUserId });
                   }}
                 >
@@ -733,7 +805,7 @@ const HomeScreen = ({ navigation, route }: any) => {
                   <TouchableOpacity
                     style={styles.addReminderButton}
                     onPress={() => {
-                      if (currentUserId) dirtyHomeDataUsers.add(currentUserId);
+                      if (currentUserId) markHomeDataDirty(currentUserId);
                       navigation.navigate('AddReminder', { userId: currentUserId });
                     }}
                     activeOpacity={0.85}
