@@ -16,6 +16,10 @@
       "supportsTablet": true,
       "config": {
         "googleMapsApiKey": ""
+      },
+      "bundleIdentifier": "com.dogmate.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -44,6 +48,11 @@
           "defaultChannel": "default"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "c90b3a31-93e7-4537-b369-0d96e5af42dd"
+      }
+    }
   }
 }
