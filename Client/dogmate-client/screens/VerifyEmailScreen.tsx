@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
 import { setOwnerSession } from '../utils/ownerSession';
 import { prefetchOwnerData } from '../utils/prefetchOwnerData';
+import { scheduleLoginWelcomeMessage } from '../utils/loginWelcomeMessage';
 
 const CODE_LENGTH = 6;
 
@@ -80,6 +81,9 @@ export default function VerifyEmailScreen({ navigation, route }: any) {
             ownerParams.userLastName,
             { waitForHome: true }
           );
+        }
+        if (role !== 'walker') {
+          scheduleLoginWelcomeMessage();
         }
         navigation.reset({
           index: 0,

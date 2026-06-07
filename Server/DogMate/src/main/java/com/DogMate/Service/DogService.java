@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.ArrayList;
 import java.util.Date;
@@ -514,6 +515,77 @@ public class DogService {
             dogRepository.save(dog);
         }
         foodStockRepository.deleteById(foodStockId);
+    }
+
+    /**
+     * Re-enables food-stock alerts when a FOOD reminder is edited from home.
+     * {@code lowStockThresholdDays} is left unchanged — it is the user-facing
+     * "days before the bag runs out" setting from food inventory, not derived from remindAt.
+     */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "dogsByUser", allEntries = true),
+            @CacheEvict(cacheNames = "foodStocksByUser", allEntries = true),
+            @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
+    })
+    public void syncFoodStockFromReminderEdit(UUID foodStockId, List<UUID> dogIds, LocalDateTime remindAt) {
+        FoodStock stock = foodStockRepository.findByIdWithDogs(foodStockId)
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא מלאי מזון עם המזהה: " + foodStockId));
+
+        stock.setNotificationEnabled(true);
+        foodStockRepository.save(stock);
+
+        for (UUID dogId : dogIds) {
+            boolean alreadyLinked = stock.getDogs().stream()
+                    .anyMatch(dog -> dog.getID().equals(dogId));
+            if (!alreadyLinked) {
+                linkDogToFoodStockWithoutReminderSync(dogId, foodStockId);
+            }
+        }
+    }
+
+    /**
+     * Turns off food-stock alerts after the reminder fired so it no longer appears on home.
+     */
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "dogsByUser", allEntries = true),
+            @CacheEvict(cacheNames = "foodStocksByUser", allEntries = true),
+            @CacheEvict(cacheNames = "remindersByUser", allEntries = true)
+    })
+    public void disableFoodStockReminderAfterFired(UUID foodStockId) {
+        FoodStock stock = foodStockRepository.findByIdWithDogs(foodStockId).orElse(null);
+        if (stock == null || !stock.isNotificationEnabled()) {
+            return;
+        }
+        stock.setNotificationEnabled(false);
+        foodStockRepository.save(stock);
+        healthReminderSyncService.syncFoodStockReminder(stock);
+    }
+
+    /** Connects a dog to food stock without touching system reminders (caller already updated the reminder). */
+    private void linkDogToFoodStockWithoutReminderSync(UUID dogId, UUID foodStockId) {
+        Dog dog = dogRepository.findById(dogId)
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא כלב עם המזהה: " + dogId));
+
+        FoodStock foodStock = foodStockRepository.findByIdWithDogs(foodStockId)
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא מלאי מזון עם המזהה: " + foodStockId));
+
+        FoodStock oldFoodStock = dog.getFoodStock();
+        if (oldFoodStock != null && !oldFoodStock.getId().equals(foodStockId)) {
+            oldFoodStock.removeDog(dog);
+            if (oldFoodStock.getDogs().isEmpty()) {
+                healthReminderSyncService.deleteFoodStockReminder(oldFoodStock.getId());
+                foodStockRepository.deleteById(oldFoodStock.getId());
+            } else {
+                foodStockRepository.save(oldFoodStock);
+            }
+        }
+
+        foodStock.addDog(dog);
+        dog.setFoodStock(foodStock);
+        foodStockRepository.save(foodStock);
+        dogRepository.save(dog);
     }
 
     @Transactional

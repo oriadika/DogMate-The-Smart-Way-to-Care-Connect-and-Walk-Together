@@ -20,7 +20,13 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { dogAPI, reminderAPI } from '../services/api';
 import { cancelReminderNotification } from '../services/notifications';
-import { resyncAllNotifications } from '../services/notificationScheduler';
+import { resyncAllNotificationsInBackground } from '../services/notificationScheduler';
+import { getHomeCache, markHomeDataDirty, refreshHomeRemindersFromServer } from '../utils/homeDataCache';
+import { markFoodInventoryDirty, refreshFoodInventoryFromServer } from '../utils/healthDataCache';
+import {
+  clampReminderDescription,
+  REMINDER_DESCRIPTION_MAX_LENGTH,
+} from '../utils/reminderConstants';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
@@ -105,7 +111,7 @@ const AddReminderScreen = ({ navigation, route }: any) => {
   useEffect(() => {
     if (!reminderToEdit) return;
 
-    if (reminderToEdit.systemGenerated) {
+    if (reminderToEdit.systemGenerated && reminderToEdit.sourceType !== 'FOOD') {
       Alert.alert(
         'תזכורת אוטומטית',
         'לא ניתן לערוך תזכורת שנוצרה אוטומטית. עדכן את הגדרות ההתראות בפריט המקור.',
@@ -115,7 +121,7 @@ const AddReminderScreen = ({ navigation, route }: any) => {
     }
 
     setTitle(reminderToEdit.title || '');
-    setDescription(reminderToEdit.description || '');
+    setDescription(clampReminderDescription(reminderToEdit.description || ''));
     setSelectedDogs(reminderToEdit.dogIds || []);
 
     if (reminderToEdit.remindAt) {
@@ -140,18 +146,35 @@ const AddReminderScreen = ({ navigation, route }: any) => {
   );
 
   const loadDogsForUser = async (userIdToLoad: string) => {
+    const cachedDogs = getHomeCache(userIdToLoad)?.dogs;
+    const hasCachedDogs = Boolean(cachedDogs && cachedDogs.length > 0);
+
     try {
-      setLoadingDogs(true);
       setUserId(userIdToLoad);
 
-      // Fetch dogs for this user
+      if (hasCachedDogs) {
+        setDogs(
+          cachedDogs!.map((d: any) => ({
+            id: String(d.id),
+            name: String(d.name || 'כלב'),
+            breed: String(d.breed || ''),
+            profileImageUrl: d.profileImageUrl || d.profileImageURL,
+          }))
+        );
+        setLoadingDogs(false);
+      } else {
+        setLoadingDogs(true);
+      }
+
       const dogsResponse = await dogAPI.getDogsForUser(userIdToLoad);
       if (dogsResponse.success && dogsResponse.dogs) {
         setDogs(dogsResponse.dogs);
       }
     } catch (error: any) {
       console.error('Error loading dogs:', error);
-      Alert.alert('שגיאה', 'שגיאה בטעינת הנתונים');
+      if (!hasCachedDogs) {
+        Alert.alert('שגיאה', 'שגיאה בטעינת הנתונים');
+      }
     } finally {
       setLoadingDogs(false);
     }
@@ -253,7 +276,19 @@ const AddReminderScreen = ({ navigation, route }: any) => {
         );
       }
 
-      await resyncAllNotifications(userId);
+      await resyncAllNotificationsInBackground(userId);
+      if (isEditing && reminderToEdit?.sourceType === 'FOOD') {
+        markHomeDataDirty(userId);
+        markFoodInventoryDirty(userId);
+        try {
+          await Promise.all([
+            refreshFoodInventoryFromServer(userId),
+            refreshHomeRemindersFromServer(userId),
+          ]);
+        } catch (refreshError) {
+          console.warn('Failed to refresh food/home data after reminder edit:', refreshError);
+        }
+      }
 
       Alert.alert(
         isEditing ? 'תזכורת עודכנה בהצלחה' : 'תזכורת נשמרה בהצלחה',
@@ -323,9 +358,13 @@ const AddReminderScreen = ({ navigation, route }: any) => {
                   textAlign="right"
                   multiline
                   numberOfLines={4}
+                  maxLength={REMINDER_DESCRIPTION_MAX_LENGTH}
                   value={description}
-                  onChangeText={setDescription}
+                  onChangeText={(text) => setDescription(clampReminderDescription(text))}
                 />
+                <Text style={styles.charCount}>
+                  {description.length}/{REMINDER_DESCRIPTION_MAX_LENGTH}
+                </Text>
               </View>
 
               {/* Dog Selection Field */}
@@ -670,6 +709,12 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: 'top',
     paddingTop: 14,
+  },
+  charCount: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#8B7355',
+    textAlign: 'left',
   },
   dateTimeSection: {
     marginBottom: 24,

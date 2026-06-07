@@ -1028,6 +1028,18 @@ export const reminderAPI = {
       throw new Error(errorMessage);
     }
   },
+
+  /** Remove expired reminders from home and disable food-stock alerts that already fired. */
+  processExpiredReminders: async (userId: string) => {
+    try {
+      const response = await apiClient.post(`/users/${userId}/reminders/process-expired`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל עיבוד תזכורות שפג תוקפן';
+      console.error('Failed to process expired reminders:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
 };
 
 export interface VaccinationRow {

@@ -14,9 +14,14 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import FoodInventoryCard from '../../components/FoodInventoryCard';
 import { foodStockAPI } from '../../services/api';
-import { resyncAllNotifications } from '../../services/notificationScheduler';
-import { markHomeDataDirty } from '../../utils/homeDataCache';
-import { markFoodInventoryDirty } from '../../utils/healthDataCache';
+import { resyncAllNotificationsInBackground } from '../../services/notificationScheduler';
+import { markHomeDataDirty, shouldForceHomeRefresh } from '../../utils/homeDataCache';
+import {
+  markFoodInventoryDirty,
+  removeFoodInventoryItem,
+  transformFoodStockRow,
+  upsertFoodInventoryItem,
+} from '../../utils/healthDataCache';
 import { useScreenLifecycleGuard } from '../../utils/screenLifecycle';
 import {
   navigateBackToOwnerHealth,
@@ -37,6 +42,8 @@ const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
 const TEXT_DARK = '#5C4033'; // Dark brown for text
 const BORDER_COLOR = '#E0D5C7'; // Border color
+
+type DogInfo = FoodInventoryItem['dogs'][number];
 
 const FoodInventoryHubScreen = ({ navigation, route }: any) => {
   const initialUserId = resolveOwnerUserId(undefined, getOwnerSession().userId ?? null);
@@ -68,8 +75,9 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
       }
       setUserId(uid);
 
-      const forceRefresh = shouldForceFoodInventoryRefresh(uid);
-      const cached = !forceRefresh ? getFoodInventoryCache(uid) : undefined;
+      const forceRefresh =
+        shouldForceFoodInventoryRefresh(uid) || shouldForceHomeRefresh(uid);
+      const cached = getFoodInventoryCache(uid);
 
       if (cached) {
         setInventoryList(cached.items);
@@ -80,6 +88,10 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
 
       if (forceRefresh) {
         clearFoodInventoryDirty(uid);
+      }
+
+      if (!forceRefresh && cached) {
+        return;
       }
 
       const response = await foodStockAPI.getFoodStocksForUser(uid);
@@ -141,12 +153,14 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
             try {
               await foodStockAPI.deleteFoodStock(id);
               if (userId) {
-                await resyncAllNotifications(userId);
+                const nextList = removeFoodInventoryItem(userId, id);
+                setInventoryList(nextList);
                 markHomeDataDirty(userId);
                 markFoodInventoryDirty(userId);
+                resyncAllNotificationsInBackground(userId);
               }
-              loadFoodStocks();
               Alert.alert('הצלחה', 'המלאי נמחק בהצלחה');
+              void loadFoodStocks();
             } catch (error: any) {
               console.error('Error deleting food stock:', error);
               Alert.alert('שגיאה', error.message || 'שגיאה במחיקת המלאי');
@@ -159,14 +173,17 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
 
   const handleBuyNewBag = async (id: string) => {
     try {
-      await foodStockAPI.renewFoodStock(id);
-      if (userId) {
-        await resyncAllNotifications(userId);
+      const renewed = await foodStockAPI.renewFoodStock(id);
+      if (userId && renewed) {
+        const updated = transformFoodStockRow(renewed);
+        const nextList = upsertFoodInventoryItem(userId, updated);
+        setInventoryList(nextList);
         markHomeDataDirty(userId);
         markFoodInventoryDirty(userId);
+        resyncAllNotificationsInBackground(userId);
       }
-      loadFoodStocks();
       Alert.alert('הצלחה', 'השק החדש נוסף למלאי בהצלחה!');
+      void loadFoodStocks();
     } catch (error: any) {
       console.error('Error renewing food stock:', error);
       Alert.alert('שגיאה', error.message || 'שגיאה בחידוש המלאי');
@@ -221,6 +238,8 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
             <FoodInventoryCard
               dogs={item.dogs}
               daysRemaining={item.daysRemaining}
+              daysUntilReminder={item.daysUntilReminder}
+              notificationEnabled={item.notificationEnabled}
               onEditPress={() => handleEditPress(item.id)}
               onDeletePress={() => handleDeletePress(item.id, item.dogs)}
               onBuyNewBag={() => handleBuyNewBag(item.id)}

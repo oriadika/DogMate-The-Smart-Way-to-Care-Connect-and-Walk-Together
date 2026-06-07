@@ -20,7 +20,7 @@ import { dogAPI, reminderAPI, type ReminderRow } from '../services/api';
 import { cancelReminderNotification } from '../services/notifications';
 import { loadNotificationPreferences } from '../services/notificationPreferences';
 import { resyncAllNotifications } from '../services/notificationScheduler';
-import { getReminderCountdown, sortRemindersNearestFirst } from '../utils/daysDisplay';
+import { getReminderCountdown, sortRemindersNearestFirst, filterActiveReminders } from '../utils/daysDisplay';
 import {
   applyHomeCacheToState,
   buildHomeDataSignature,
@@ -33,6 +33,10 @@ import {
   clearHomeDirty,
 } from '../utils/homeDataCache';
 import { deferScreenCleanup } from '../utils/screenLifecycle';
+import {
+  consumeLoginWelcomeMessage,
+  showLoginWelcomeMessage,
+} from '../utils/loginWelcomeMessage';
 import { isAbortError } from '../utils/isAbortError';
 import { getOwnerSession, resolveOwnerUserId } from '../utils/ownerSession';
 import { ensureOwnerDataPrefetched } from '../utils/healthDataCache';
@@ -46,6 +50,15 @@ const BORDER_COLOR = '#E0D5C7'; // Border color
 
 /** Defer notification resync until after home HTTP completes. */
 const HOME_NOTIFICATION_SYNC_DELAY_MS = 2000;
+
+function ReminderCountdownLabel({ unit }: { unit: string }) {
+  return (
+    <Text style={styles.reminderStatusLabel}>
+      <Text style={styles.reminderStatusLabelUnit}>{unit}</Text>
+      {' עד התזכורת:'}
+    </Text>
+  );
+}
 
 const HomeScreen = ({ navigation, route }: any) => {
   const routeUserId = (route?.params?.userId || getOwnerSession().userId) as string | undefined;
@@ -175,9 +188,11 @@ const HomeScreen = ({ navigation, route }: any) => {
       if (remindersSettled.status === 'fulfilled') {
         const remindersResponse = remindersSettled.value;
         nextReminders = sortRemindersNearestFirst(
-          remindersResponse.success && remindersResponse.reminders
-            ? remindersResponse.reminders
-            : []
+          filterActiveReminders(
+            remindersResponse.success && remindersResponse.reminders
+              ? remindersResponse.reminders
+              : []
+          )
         );
       } else {
         if (isAbortError(remindersSettled.reason)) return;
@@ -331,6 +346,14 @@ const HomeScreen = ({ navigation, route }: any) => {
         })();
       }, HOME_NOTIFICATION_SYNC_DELAY_MS);
 
+      let welcomeTimer: ReturnType<typeof setTimeout> | null = null;
+      if (consumeLoginWelcomeMessage()) {
+        welcomeTimer = setTimeout(() => {
+          if (!isHomeFocusedRef.current) return;
+          InteractionManager.runAfterInteractions(showLoginWelcomeMessage);
+        }, 400);
+      }
+
       const intervalId = setInterval(() => {
         if (!isHomeFocusedRef.current) return;
         void loadUserAndDogs(resolvedUserId, userNameRef.current, {
@@ -348,6 +371,7 @@ const HomeScreen = ({ navigation, route }: any) => {
           }
         });
         clearTimeout(notificationSyncTimer);
+        if (welcomeTimer) clearTimeout(welcomeTimer);
         clearInterval(intervalId);
       };
     }, [currentUserId, userId, cancelHomeFetch, loadUserAndDogs])
@@ -849,7 +873,7 @@ const HomeScreen = ({ navigation, route }: any) => {
                           </View>
                         ) : countdown ? (
                           <View style={styles.reminderStatusContainer}>
-                            <Text style={styles.reminderStatusLabel}>{countdown.label}</Text>
+                            <ReminderCountdownLabel unit={countdown.labelUnit} />
                             <Text style={[styles.reminderStatusValue, { color: countdown.urgencyColor }]}>
                               {countdown.displayValue}
                             </Text>
@@ -857,7 +881,7 @@ const HomeScreen = ({ navigation, route }: any) => {
                           </View>
                         ) : (
                           <View style={styles.reminderStatusContainer}>
-                            <Text style={styles.reminderStatusLabel}>ימים עד התזכורת:</Text>
+                            <ReminderCountdownLabel unit="ימים" />
                             <Text style={[styles.reminderStatusValue, { color: '#8B7355' }]}>—</Text>
                           </View>
                         )}
@@ -901,7 +925,7 @@ const HomeScreen = ({ navigation, route }: any) => {
               contentContainerStyle={styles.detailsContent}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.detailsFormSection}>
+              <View style={styles.detailsFieldsSection}>
                 <View style={styles.detailsInputGroup}>
                   <Text style={styles.detailsFormLabel}>שם האירוע</Text>
                   <View style={styles.detailsFormInput}>
@@ -926,9 +950,7 @@ const HomeScreen = ({ navigation, route }: any) => {
                     </Text>
                   </View>
                 </View>
-              </View>
 
-              <View style={styles.detailsDateTimeSection}>
                 <View style={styles.detailsInputGroup}>
                   <Text style={styles.detailsFormLabel}>תאריך</Text>
                   <View style={styles.detailsDateTimeCard}>
@@ -956,34 +978,62 @@ const HomeScreen = ({ navigation, route }: any) => {
                     </View>
                   </View>
                 </View>
-              </View>
 
-              <View style={styles.detailsInputGroup}>
-                <Text style={styles.detailsFormLabel}>סטטוס</Text>
-                <View style={styles.detailsFormInput}>
-                  <Text
-                    style={[
-                      styles.detailsFormInputText,
-                      getReminderCountdown(selectedReminder?.remindAt)?.isPast && { color: PRIMARY_COLOR, fontWeight: '700' },
-                    ]}
-                  >
-                    {getReminderCountdown(selectedReminder?.remindAt)?.isPast ? 'עבר הזמן ✓' : 'ממתין ⏰'}
-                  </Text>
+                <View style={[styles.detailsInputGroup, styles.detailsInputGroupLast]}>
+                  <Text style={styles.detailsFormLabel}>סטטוס</Text>
+                  <View style={styles.detailsFormInput}>
+                    <Text
+                      style={[
+                        styles.detailsFormInputText,
+                        getReminderCountdown(selectedReminder?.remindAt)?.isPast && { color: PRIMARY_COLOR, fontWeight: '700' },
+                      ]}
+                    >
+                      {getReminderCountdown(selectedReminder?.remindAt)?.isPast ? 'עבר הזמן ✓' : 'ממתין ⏰'}
+                    </Text>
+                  </View>
                 </View>
               </View>
 
               {selectedReminder?.systemGenerated ? (
                 <>
                   <Text style={styles.systemReminderHint}>
-                    תזכורת זו נוצרה אוטומטית מהמערכת. לעריכת ההגדרות, פתח את הפריט המקור.
+                    {selectedReminder?.sourceType === 'FOOD'
+                      ? 'תזכורת זו נוצרה אוטומטית ממלאי המזון. ניתן לערוך אותה כאן או לפתוח את הגדרות המלאי.'
+                      : 'תזכורת זו נוצרה אוטומטית מהמערכת. לעריכת ההגדרות, פתח את הפריט המקור.'}
                   </Text>
+                  {selectedReminder?.sourceType === 'FOOD' ? (
+                    <TouchableOpacity
+                      style={styles.detailsSubmitButton}
+                      onPress={() => {
+                        setShowReminderDetails(false);
+                        navigation.navigate('AddReminder', {
+                          userId: currentUserId,
+                          reminder: selectedReminder,
+                        });
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <MaterialCommunityIcons name="pencil" size={20} color="#fff" />
+                      <Text style={styles.detailsSubmitButtonText}>ערוך תזכורת</Text>
+                    </TouchableOpacity>
+                  ) : null}
                   <TouchableOpacity
-                    style={styles.detailsSubmitButton}
+                    style={[
+                      styles.detailsSubmitButton,
+                      selectedReminder?.sourceType === 'FOOD' && styles.detailsSecondaryButton,
+                    ]}
                     onPress={() => navigateToSystemReminderSource(selectedReminder as ReminderRow)}
                     activeOpacity={0.85}
                   >
-                    <Ionicons name="settings-outline" size={20} color="#fff" />
-                    <Text style={styles.detailsSubmitButtonText}>פתח הגדרות מקור</Text>
+                    <Ionicons name="settings-outline" size={20} color={selectedReminder?.sourceType === 'FOOD' ? PRIMARY_COLOR : '#fff'} />
+                    <Text
+                      style={[
+                        styles.detailsSubmitButtonText,
+                        selectedReminder?.sourceType === 'FOOD' && styles.detailsSecondaryButtonText,
+                      ]}
+                    >
+                      פתח הגדרות מקור
+                    </Text>
                   </TouchableOpacity>
                 </>
               ) : (
@@ -1295,6 +1345,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     writingDirection: 'rtl',
   },
+  reminderStatusLabelUnit: {
+    fontWeight: '700',
+    color: '#666',
+  },
   reminderStatusValue: {
     fontSize: 32,
     fontWeight: '700',
@@ -1335,30 +1389,34 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   detailsContent: {
-    padding: 24,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 32,
     width: '100%',
     alignSelf: 'stretch',
   },
-  detailsFormSection: {
-    marginBottom: 2,
+  detailsFieldsSection: {
+    width: '100%',
   },
   detailsInputGroup: {
-    marginBottom: 20,
+    marginBottom: 12,
+  },
+  detailsInputGroupLast: {
+    marginBottom: 4,
   },
   detailsFormLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: TEXT_DARK,
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
   detailsFormInput: {
     backgroundColor: CARD_BG,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: BORDER_COLOR,
     shadowColor: '#000',
@@ -1368,7 +1426,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   detailsFormTextArea: {
-    minHeight: 100,
+    minHeight: 72,
     justifyContent: 'flex-start',
   },
   detailsFormInputText: {
@@ -1381,8 +1439,8 @@ const styles = StyleSheet.create({
   detailsPickerInput: {
     backgroundColor: CARD_BG,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: BORDER_COLOR,
     shadowColor: '#000',
@@ -1391,13 +1449,11 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
   },
-  detailsDateTimeSection: {
-    marginBottom: 24,
-  },
   detailsDateTimeCard: {
     backgroundColor: CARD_BG,
     borderRadius: 12,
-    padding: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: BORDER_COLOR,
     shadowColor: '#000',
@@ -1433,11 +1489,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+    marginTop: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
+  },
+  detailsSecondaryButton: {
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: PRIMARY_COLOR,
+  },
+  detailsSecondaryButtonText: {
+    color: PRIMARY_COLOR,
   },
   detailsSubmitButtonText: {
     color: '#FFFFFF',

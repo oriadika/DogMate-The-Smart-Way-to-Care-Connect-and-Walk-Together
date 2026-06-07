@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import type { NotificationSourceType } from '../types/notifications';
 import { shouldScheduleNotification } from './notificationSchedulerLogic';
+import { handleReminderNotificationDelivered } from '../utils/reminderCompletion';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -144,11 +145,14 @@ export const handleNotificationResponse = (response: Notifications.NotificationR
 
 export const setupNotificationListeners = () => {
   const notificationListener = Notifications.addNotificationReceivedListener((notification) => {
-    console.log('Notification received while app is foregrounded:', notification);
+    const data = notification.request.content.data as { sourceType?: NotificationSourceType };
+    void handleReminderNotificationDelivered(data?.sourceType);
   });
 
   const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
     handleNotificationResponse(response);
+    const data = response.notification.request.content.data as { sourceType?: NotificationSourceType };
+    void handleReminderNotificationDelivered(data?.sourceType);
   });
 
   return () => {

@@ -10,6 +10,10 @@ import { getHomeCache } from './homeDataCache';
 import { runOwnerPrefetch } from './ownerPrefetchCoordinator';
 import { isAbortError } from './isAbortError';
 import { withApiRetry } from './apiRetry';
+import {
+  computeDaysUntilFoodReminder,
+  computeFoodDaysRemaining,
+} from './foodReminderPreview';
 
 export type DogOption = { id: string; name: string };
 
@@ -17,6 +21,9 @@ export type FoodInventoryItem = {
   id: string;
   dogs: Array<{ id: string; name: string; imageUrl?: string }>;
   daysRemaining: number;
+  daysUntilReminder: number | null;
+  notificationEnabled: boolean;
+  lowStockThresholdDays: number | null;
   dailyConsumption: string;
   bagSize: string;
   currentAmount: string;
@@ -54,11 +61,15 @@ export function toDogOptions(dogs: Array<{ id?: string; name?: string }>): DogOp
 
 export function transformFoodStocks(rawStocks: any[]): FoodInventoryItem[] {
   return rawStocks.map((stock: any) => {
-    const currentGrams = stock.currentLevelInKg * 1000;
-    const daysRemaining =
-      stock.dailyConsumptionInGram > 0
-        ? Math.floor(currentGrams / stock.dailyConsumptionInGram)
-        : 0;
+    const daysRemaining = computeFoodDaysRemaining(
+      stock.currentLevelInKg ?? 0,
+      stock.dailyConsumptionInGram ?? 0
+    );
+    const lowStockThresholdDays = stock.lowStockThresholdDays ?? null;
+    const notificationEnabled = Boolean(stock.notificationEnabled);
+    const daysUntilReminder = notificationEnabled
+      ? computeDaysUntilFoodReminder(daysRemaining, lowStockThresholdDays)
+      : null;
 
     return {
       id: stock.id,
@@ -69,6 +80,9 @@ export function transformFoodStocks(rawStocks: any[]): FoodInventoryItem[] {
           imageUrl: dog.profileImageUrl,
         })) || [],
       daysRemaining,
+      daysUntilReminder,
+      notificationEnabled,
+      lowStockThresholdDays,
       dailyConsumption: stock.dailyConsumptionInGram.toString(),
       bagSize: stock.bagSizeInKg.toString(),
       currentAmount: stock.currentLevelInKg.toString(),
@@ -101,6 +115,26 @@ export function setFoodInventoryCache(userId: string, entry: FoodInventoryCacheE
   foodInventoryCache.set(userId, entry);
 }
 
+export function transformFoodStockRow(stock: any): FoodInventoryItem {
+  return transformFoodStocks([stock])[0];
+}
+
+export function removeFoodInventoryItem(userId: string, itemId: string): FoodInventoryItem[] {
+  const cached = getFoodInventoryCache(userId);
+  const items = (cached?.items ?? []).filter((item) => item.id !== itemId);
+  setFoodInventoryCache(userId, { items });
+  return items;
+}
+
+export function upsertFoodInventoryItem(userId: string, item: FoodInventoryItem): FoodInventoryItem[] {
+  const cached = getFoodInventoryCache(userId);
+  const items = cached?.items ?? [];
+  const idx = items.findIndex((i) => i.id === item.id);
+  const next = idx >= 0 ? items.map((i, j) => (j === idx ? item : i)) : [...items, item];
+  setFoodInventoryCache(userId, { items: next });
+  return next;
+}
+
 export function markVaccinationsDirty(userId: string): void {
   dirtyVaccinationsUsers.add(userId);
 }
@@ -111,6 +145,16 @@ export function markMedicationsDirty(userId: string): void {
 
 export function markFoodInventoryDirty(userId: string): void {
   dirtyFoodInventoryUsers.add(userId);
+}
+
+/** Reload food inventory from the server (e.g. after editing a FOOD reminder on home). */
+export async function refreshFoodInventoryFromServer(userId: string): Promise<FoodInventoryItem[]> {
+  const foodResponse = await withApiRetry(() => foodStockAPI.getFoodStocksForUser(userId));
+  const raw = foodResponse.success && foodResponse.foodStocks ? foodResponse.foodStocks : [];
+  const items = transformFoodStocks(raw);
+  setFoodInventoryCache(userId, { items });
+  clearFoodInventoryDirty(userId);
+  return items;
 }
 
 export function shouldForceVaccinationsRefresh(userId: string): boolean {

@@ -1,11 +1,15 @@
 package com.DogMate.Service;
 
-import com.DogMate.Domain.*;
+import com.DogMate.Domain.Dog;
+import com.DogMate.Domain.DogRelationship;
+import com.DogMate.Domain.RegularUser;
+import com.DogMate.Domain.Reminder;
+import com.DogMate.Domain.ReminderSourceType;
 import com.DogMate.Infrastructure.DogRepository;
 import com.DogMate.Infrastructure.ReminderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,11 +21,14 @@ import java.util.stream.Collectors;
 @Service
 public class ReminderService {
 
+    static final int MAX_DESCRIPTION_LENGTH = 200;
+
     private final IReminderRepository reminderRepo;
     private final IUserRepository userRepo;
     private final IDogRepository dogRepository;
     private final NotificationScheduleService notificationScheduleService;
     private final UserNotificationPreferencesService preferencesService;
+    private final DogService dogService;
 
 
     @Autowired
@@ -30,13 +37,15 @@ public class ReminderService {
             IUserRepository userRepo,
             IDogRepository dogRepository,
             NotificationScheduleService notificationScheduleService,
-            UserNotificationPreferencesService preferencesService
+            UserNotificationPreferencesService preferencesService,
+            @Lazy DogService dogService
     ) {
         this.reminderRepo = reminderRepo;
         this.userRepo = userRepo;
         this.dogRepository = dogRepository;
         this.notificationScheduleService = notificationScheduleService;
         this.preferencesService = preferencesService;
+        this.dogService = dogService;
     }
 
     @Transactional
@@ -67,6 +76,8 @@ public class ReminderService {
             throw new IllegalArgumentException("מועד התזכורת חייב להיות בעתיד");
         }
 
+        description = normalizeDescription(description);
+
         List<Dog> dogs = dogRepository.findAllById(dogIds);
         if (dogs.size() != dogIds.size()) {
             throw new IllegalArgumentException("אחד או יותר מהכלבים לא נמצאו במערכת");
@@ -92,7 +103,9 @@ public class ReminderService {
             throw new IllegalArgumentException("אין הרשאה לערוך תזכורת זו");
         }
         if (reminder.isSystemGenerated()) {
-            throw new IllegalArgumentException("לא ניתן לערוך תזכורת שנוצרה אוטומטית מהמערכת");
+            if (!ReminderSourceType.FOOD.equals(reminder.getSourceType()) || reminder.getSourceId() == null) {
+                throw new IllegalArgumentException("לא ניתן לערוך תזכורת שנוצרה אוטומטית מהמערכת");
+            }
         }
 
         if (userRepo.findById(userId).isEmpty()) {
@@ -119,6 +132,8 @@ public class ReminderService {
             throw new IllegalArgumentException("מועד התזכורת חייב להיות בעתיד");
         }
 
+        description = normalizeDescription(description);
+
         List<Dog> dogs = dogRepository.findAllById(dogIds);
         if (dogs.size() != dogIds.size()) {
             throw new IllegalArgumentException("אחד או יותר מהכלבים לא נמצאו במערכת");
@@ -129,7 +144,19 @@ public class ReminderService {
         reminder.setRemindAt(remindAt);
         reminder.setDogIds(new LinkedList<>(dogs));
 
-        return reminderRepo.save(reminder);
+        if (reminder.isSystemGenerated() && ReminderSourceType.FOOD.equals(reminder.getSourceType())) {
+            reminder.setNotificationEnabled(true);
+        }
+
+        Reminder saved = reminderRepo.save(reminder);
+
+        if (saved.isSystemGenerated()
+                && ReminderSourceType.FOOD.equals(saved.getSourceType())
+                && saved.getSourceId() != null) {
+            dogService.syncFoodStockFromReminderEdit(saved.getSourceId(), dogIds, remindAt);
+        }
+
+        return saved;
     }
 
     @Transactional
@@ -148,19 +175,17 @@ public class ReminderService {
         return true;
     }
 
-    @Transactional(readOnly = true)
-    public List<Reminder> getSchedulableRemindersForUser(UUID userId) {
-        boolean globalEnabled = preferencesService.isGlobalNotificationsEnabled(userId);
-        LocalDateTime now = LocalDateTime.now();
-        return getRemindersForUser(userId).stream()
-                .filter(r -> notificationScheduleService.shouldSchedule(globalEnabled, r.isNotificationEnabled()))
-                .filter(r -> r.getRemindAt() != null && r.getRemindAt().isAfter(now))
-                .toList();
+    @Transactional
+    @CacheEvict(cacheNames = "remindersByUser", key = "#userId")
+    public void processExpiredReminders(UUID userId) {
+        processExpiredRemindersInternal(userId);
     }
 
-    @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "remindersByUser", key = "#userId")
+    @Transactional
+    @CacheEvict(cacheNames = "remindersByUser", key = "#userId")
     public List<Reminder> getRemindersForUser(UUID userId) {
+        processExpiredRemindersInternal(userId);
+
         var userAcc = userRepo.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId));
 
@@ -168,8 +193,41 @@ public class ReminderService {
             throw new IllegalArgumentException("רק משתמשים מסוג בעל כלב יכולים לצפות בתזכורות");
         }
 
-        RegularUser regularUser = (RegularUser) userAcc;
-        return reminderRepo.findByRegularUserIdWithDogs(userId);
+        LocalDateTime now = LocalDateTime.now();
+        return reminderRepo.findByRegularUserIdWithDogs(userId).stream()
+                .filter(r -> r.getRemindAt() != null && r.getRemindAt().isAfter(now))
+                .toList();
+    }
+
+    private void processExpiredRemindersInternal(UUID userId) {
+        LocalDateTime now = LocalDateTime.now();
+        List<Reminder> expired = reminderRepo.findByRegularUserIdWithDogs(userId).stream()
+                .filter(r -> r.getRemindAt() != null && !r.getRemindAt().isAfter(now))
+                .toList();
+
+        for (Reminder reminder : expired) {
+            if (reminder.isSystemGenerated()
+                    && ReminderSourceType.FOOD.equals(reminder.getSourceType())
+                    && reminder.getSourceId() != null) {
+                dogService.disableFoodStockReminderAfterFired(reminder.getSourceId());
+            } else if (reminder.isSystemGenerated()
+                    && reminder.getSourceType() != null
+                    && reminder.getSourceId() != null) {
+                deleteSystemReminder(userId, reminder.getSourceType(), reminder.getSourceId());
+            } else {
+                reminderRepo.deleteById(reminder.getId());
+            }
+        }
+    }
+
+    @Transactional
+    public List<Reminder> getSchedulableRemindersForUser(UUID userId) {
+        boolean globalEnabled = preferencesService.isGlobalNotificationsEnabled(userId);
+        LocalDateTime now = LocalDateTime.now();
+        return getRemindersForUser(userId).stream()
+                .filter(r -> notificationScheduleService.shouldSchedule(globalEnabled, r.isNotificationEnabled()))
+                .filter(r -> r.getRemindAt() != null && r.getRemindAt().isAfter(now))
+                .toList();
     }
 
     @Transactional
@@ -258,5 +316,16 @@ public class ReminderService {
         reminderRepo.findBySourceTypeAndSourceIdWithDogs(sourceType, sourceId).ifPresent(r -> {
             deleteSystemReminder(r.getUser().getId(), sourceType, sourceId);
         });
+    }
+
+    private String normalizeDescription(String description) {
+        if (description == null) {
+            return null;
+        }
+        String trimmed = description.trim();
+        if (trimmed.length() > MAX_DESCRIPTION_LENGTH) {
+            throw new IllegalArgumentException("תיאור התזכורת מוגבל ל-" + MAX_DESCRIPTION_LENGTH + " תווים");
+        }
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

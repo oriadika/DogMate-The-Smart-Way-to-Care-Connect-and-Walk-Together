@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { userAPI } from '../services/api';
 import { prefetchOwnerData } from '../utils/prefetchOwnerData';
 import { setOwnerSession } from '../utils/ownerSession';
+import { scheduleLoginWelcomeMessage } from '../utils/loginWelcomeMessage';
 
 const LoginScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
@@ -36,7 +37,6 @@ const LoginScreen = ({ navigation }: any) => {
         password,
       });
 
-      Alert.alert('התחברת בהצלחה', 'ברוך שובך ל-DogMate!');
       if (response.userRole === 'admin') {
           navigation.navigate('Admin', {
             userId: response.userId,
@@ -61,6 +61,9 @@ const LoginScreen = ({ navigation }: any) => {
               ownerParams.userLastName,
               { waitForHome: true }
             );
+          }
+          if (role !== 'walker') {
+            scheduleLoginWelcomeMessage();
           }
           navigation.reset({
               index: 0,

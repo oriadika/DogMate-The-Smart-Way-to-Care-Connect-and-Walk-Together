@@ -9,9 +9,9 @@ import java.util.UUID;
 import com.DogMate.Domain.Dog;
 import com.DogMate.Domain.FoodStock;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.OneToMany;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class FoodStockDTO {
 
     private UUID id;
@@ -34,6 +34,9 @@ public class FoodStockDTO {
 
     private List<Map<String,Object>> dogs = new ArrayList<>();
 
+    /** Required for Jackson request deserialization (PUT /food-stock/{id}). */
+    public FoodStockDTO() {
+    }
 
     public FoodStockDTO(FoodStock stock) {
         this.id = stock.getId();
@@ -43,15 +46,27 @@ public class FoodStockDTO {
         this.dailyConsumptionInGram = stock.getDailyConsumptionInGram();
         this.notificationEnabled = stock.isNotificationEnabled();
         this.lowStockThresholdDays = stock.getLowStockThresholdDays();
-        List<Dog> dogs = stock.getDogs();
-        for (Dog dog : dogs) {
+        List<Dog> stockDogs = stock.getDogs();
+        if (stockDogs == null) {
+            return;
+        }
+        for (Dog dog : stockDogs) {
+            if (dog == null) {
+                continue;
+            }
             Map<String, Object> dogData = new HashMap<>();
-                 dogData.put("id", dog.getID().toString());
-                dogData.put("name", dog.getName());
+            if (dog.getID() != null) {
+                dogData.put("id", dog.getID().toString());
+            }
+            dogData.put("name", dog.getName());
+            if (dog.getBreed() != null) {
                 dogData.put("breed", dog.getBreed());
+            }
+            if (dog.getBirthdate() != null) {
                 dogData.put("birthdate", dog.getBirthdate().toString());
-                dogData.put("gender", dog.getGender());
-                dogData.put("profileImageUrl", dog.getProfileImageURL());  
+            }
+            dogData.put("gender", dog.getGender());
+            dogData.put("profileImageUrl", dog.getProfileImageURL());
             this.dogs.add(dogData);
         }
     }

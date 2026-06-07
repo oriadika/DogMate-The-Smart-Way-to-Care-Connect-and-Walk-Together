@@ -111,6 +111,22 @@ public class ReminderController {
         }
     }
 
+    // POST /api/users/{userId}/reminders/process-expired
+    @PostMapping("/process-expired")
+    public ResponseEntity<?> processExpiredReminders(@PathVariable UUID userId) {
+        try {
+            reminderService.processExpiredReminders(userId);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(500)
+                    .body(createErrorResponse("נכשל עיבוד תזכורות שפג תוקפן: " + e.getMessage()));
+        }
+    }
+
     private ReminderResponse toResponse(Reminder r) {
         ReminderResponse res = new ReminderResponse();
         res.id = r.getId();

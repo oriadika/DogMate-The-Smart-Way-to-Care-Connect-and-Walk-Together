@@ -11,18 +11,31 @@ type DogInfo = {
 type FoodInventoryCardProps = {
   dogs: DogInfo[]; // Array of dogs
   daysRemaining: number;
+  daysUntilReminder?: number | null;
+  notificationEnabled?: boolean;
   onEditPress: () => void;
   onDeletePress: () => void;
   onBuyNewBag: () => void;
 };
 
-const FoodInventoryCard = ({ dogs, daysRemaining, onEditPress, onDeletePress, onBuyNewBag }: FoodInventoryCardProps) => {
+const FoodInventoryCard = ({
+  dogs,
+  daysRemaining,
+  daysUntilReminder = null,
+  notificationEnabled = false,
+  onEditPress,
+  onDeletePress,
+  onBuyNewBag,
+}: FoodInventoryCardProps) => {
   
-  const getStatusColor = () => {
-    if (daysRemaining > 30) return '#28C76F'; // Green - more than 30 days
-    if (daysRemaining > 10) return '#FF9F43'; // Orange - 10-30 days
+  const getStatusColor = (days: number) => {
+    if (days > 30) return '#28C76F'; // Green - more than 30 days
+    if (days > 10) return '#FF9F43'; // Orange - 10-30 days
     return '#EA5455'; // Red - less than 10 days
   };
+
+  const showReminderCountdown =
+    notificationEnabled && daysUntilReminder != null;
 
   // Create header text
   const getHeaderText = () => {
@@ -86,12 +99,17 @@ const FoodInventoryCard = ({ dogs, daysRemaining, onEditPress, onDeletePress, on
 
         <View style={styles.statusContainer}>
           <Text style={styles.statusLabel}>ימים עד לסיום שק המזון:</Text>
-          <Text style={[styles.statusValue, { color: getStatusColor() }]}>
+          <Text style={[styles.statusValue, { color: getStatusColor(daysRemaining) }]}>
             {daysRemaining}
           </Text>
           <Text style={styles.statusSubtext}>
             ({formatDaysToText(daysRemaining)})
           </Text>
+          {showReminderCountdown ? (
+            <Text style={styles.reminderDaysHint}>
+              {daysUntilReminder} {daysUntilReminder === 1 ? 'יום' : 'ימים'} עד לתזכורת
+            </Text>
+          ) : null}
         </View>
       </View>
 
@@ -194,6 +212,12 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginTop: 3,
+  },
+  reminderDaysHint: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 6,
   },
   actionsRow: {
     flexDirection: 'row-reverse',

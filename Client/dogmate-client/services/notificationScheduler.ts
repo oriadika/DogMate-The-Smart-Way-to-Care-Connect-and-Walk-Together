@@ -23,27 +23,51 @@ export const resyncAllNotifications = async (userId: string): Promise<number> =>
 
   const response = await notificationScheduleAPI.getSchedulable(userId);
   const items: SchedulableNotification[] = response.notifications ?? [];
-  let scheduled = 0;
+  const now = new Date();
 
-  for (const item of items) {
-    const triggerDate = new Date(item.triggerAt);
-    if (Number.isNaN(triggerDate.getTime()) || triggerDate <= new Date()) {
-      continue;
-    }
-    const id = await scheduleHealthNotification({
-      sourceType: item.sourceType,
-      sourceId: item.sourceId,
-      title: item.title,
-      body: item.body,
-      triggerAt: triggerDate,
-      globalEnabled,
-      itemEnabled: true,
-    });
-    if (id) scheduled += 1;
-  }
+  const results = await Promise.all(
+    items.map(async (item) => {
+      const triggerDate = new Date(item.triggerAt);
+      if (Number.isNaN(triggerDate.getTime()) || triggerDate <= now) {
+        return null;
+      }
+      return scheduleHealthNotification({
+        sourceType: item.sourceType,
+        sourceId: item.sourceId,
+        title: item.title,
+        body: item.body,
+        triggerAt: triggerDate,
+        globalEnabled,
+        itemEnabled: true,
+      });
+    })
+  );
 
-  return scheduled;
+  return results.filter(Boolean).length;
 };
+
+let pendingResyncUserId: string | null = null;
+let resyncLoopPromise: Promise<void> | null = null;
+
+/** Coalesced background resync — safe to call after every mutation without blocking UI. */
+export function resyncAllNotificationsInBackground(userId: string): void {
+  pendingResyncUserId = userId;
+  if (resyncLoopPromise) return;
+
+  resyncLoopPromise = (async () => {
+    while (pendingResyncUserId) {
+      const uid = pendingResyncUserId;
+      pendingResyncUserId = null;
+      try {
+        await resyncAllNotifications(uid);
+      } catch (error) {
+        console.warn('Background notification resync failed:', error);
+      }
+    }
+  })().finally(() => {
+    resyncLoopPromise = null;
+  });
+}
 
 export const scheduleItemNotifications = async (
   userId: string

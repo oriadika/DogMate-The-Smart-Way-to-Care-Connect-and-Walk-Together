@@ -49,8 +49,8 @@ export function formatDaysToText(days: number): string {
 }
 
 export function getDaysUrgencyColor(days: number): string {
-  if (days > 30) return '#28C76F';
-  if (days > 10) return '#FF9F43';
+  if (days >= 30) return '#28C76F';
+  if (days >= 7) return '#FF9F43';
   return '#EA5455';
 }
 
@@ -66,22 +66,32 @@ export function daysUntilIsoDate(iso: string | null | undefined): number | null 
   return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-const MS_HOUR = 1000 * 60 * 60;
+const MS_MINUTE = 1000 * 60;
+const MS_HOUR = MS_MINUTE * 60;
 const MS_DAY = MS_HOUR * 24;
 
 export type ReminderCountdown = {
   displayValue: number;
-  unit: 'days' | 'hours';
+  unit: 'days' | 'hours' | 'minutes';
+  /** Full label, e.g. "שעות עד התזכורת:" */
   label: string;
+  /** Unit word to bold in UI: "ימים" | "שעות" | "דקות" */
+  labelUnit: string;
   subtext: string;
   urgencyColor: string;
   isPast: boolean;
 };
 
-function urgencyColorForHours(hours: number): string {
-  if (hours <= 6) return '#EA5455';
-  if (hours <= 12) return '#FF9F43';
-  return '#28C76F';
+function countdownLabel(unitWord: string): { label: string; labelUnit: string } {
+  return { labelUnit: unitWord, label: `${unitWord} עד התזכורת:` };
+}
+
+function daysUntilTarget(target: Date): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const t = new Date(target);
+  t.setHours(0, 0, 0, 0);
+  return Math.round((t.getTime() - today.getTime()) / MS_DAY);
 }
 
 /** Days (or hours if under 24h) until a reminder datetime. */
@@ -91,37 +101,63 @@ export function getReminderCountdown(iso: string | null | undefined): ReminderCo
   if (Number.isNaN(target.getTime())) return null;
 
   const diffMs = target.getTime() - Date.now();
+  const calendarDays = daysUntilTarget(target);
+  const urgencyColor = getDaysUrgencyColor(calendarDays <= 0 ? 0 : calendarDays);
+
   if (diffMs <= 0) {
     return {
       displayValue: 0,
       unit: 'hours',
-      label: 'שעות עד התזכורת:',
+      ...countdownLabel('שעות'),
       subtext: '(עבר הזמן)',
       urgencyColor: '#EA5455',
       isPast: true,
     };
   }
 
-  if (diffMs < MS_DAY) {
-    const hours = Math.max(1, Math.ceil(diffMs / MS_HOUR));
-    const hoursText = hours === 1 ? 'שעה' : `${hours} שעות`;
+  if (diffMs >= MS_DAY) {
+    const days = Math.max(1, Math.ceil(diffMs / MS_DAY));
     return {
-      displayValue: hours,
-      unit: 'hours',
-      label: 'שעות עד התזכורת:',
-      subtext: `(${hoursText})`,
-      urgencyColor: urgencyColorForHours(hours),
+      displayValue: days,
+      unit: 'days',
+      ...countdownLabel('ימים'),
+      subtext: `(${formatDaysToText(days)})`,
+      urgencyColor,
       isPast: false,
     };
   }
 
-  const days = Math.floor(diffMs / MS_DAY);
+  if (diffMs >= MS_HOUR) {
+    const hours = Math.max(1, Math.ceil(diffMs / MS_HOUR));
+    if (hours >= 24) {
+      return {
+        displayValue: 1,
+        unit: 'days',
+        ...countdownLabel('ימים'),
+        subtext: `(${formatDaysToText(1)})`,
+        urgencyColor,
+        isPast: false,
+      };
+    }
+    const hoursText = hours === 1 ? 'שעה' : `${hours} שעות`;
+    return {
+      displayValue: hours,
+      unit: 'hours',
+      ...countdownLabel('שעות'),
+      subtext: `(${hoursText})`,
+      urgencyColor,
+      isPast: false,
+    };
+  }
+
+  const minutes = Math.max(1, Math.ceil(diffMs / MS_MINUTE));
+  const minutesText = minutes === 1 ? 'דקה' : `${minutes} דקות`;
   return {
-    displayValue: days,
-    unit: 'days',
-    label: 'ימים עד התזכורת:',
-    subtext: `(${formatDaysToText(days)})`,
-    urgencyColor: getDaysUrgencyColor(days),
+    displayValue: minutes,
+    unit: 'minutes',
+    ...countdownLabel('דקות'),
+    subtext: `(${minutesText})`,
+    urgencyColor: '#EA5455',
     isPast: false,
   };
 }
@@ -130,6 +166,16 @@ function reminderTimestamp(iso: unknown): number | null {
   if (!iso) return null;
   const t = new Date(String(iso)).getTime();
   return Number.isNaN(t) ? null : t;
+}
+
+/** Closest to now first, then farthest. */
+export function filterActiveReminders<T extends { remindAt?: unknown }>(items: T[]): T[] {
+  const now = Date.now();
+  return items.filter((item) => {
+    if (!item.remindAt) return false;
+    const t = new Date(String(item.remindAt)).getTime();
+    return !Number.isNaN(t) && t > now;
+  });
 }
 
 /** Closest to now first, then farthest. */

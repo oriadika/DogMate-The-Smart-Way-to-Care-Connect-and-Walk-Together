@@ -1,5 +1,5 @@
 import { dogAPI, reminderAPI } from '../services/api';
-import { sortRemindersNearestFirst } from './daysDisplay';
+import { sortRemindersNearestFirst, filterActiveReminders } from './daysDisplay';
 import { isAbortError } from './isAbortError';
 
 export type HomeCacheEntry = {
@@ -71,6 +71,50 @@ export function clearHomeDirty(userId: string): void {
   dirtyHomeDataUsers.delete(userId);
 }
 
+export type HomeReminderRow = {
+  id?: string;
+  title?: string;
+  description?: string;
+  remindAt?: string;
+  sourceType?: string;
+  sourceId?: string;
+  dogIds?: string[];
+  systemGenerated?: boolean;
+};
+
+/** FOOD system reminder linked to a food-stock row, if one exists. */
+export function findFoodReminderForStock(
+  reminders: HomeReminderRow[],
+  foodStockId: string
+): HomeReminderRow | null {
+  const match = reminders.find(
+    (r) => r.sourceType === 'FOOD' && String(r.sourceId) === String(foodStockId)
+  );
+  return match ?? null;
+}
+
+/** Reload home reminders after food-inventory or FOOD-reminder edits. */
+export async function refreshHomeRemindersFromServer(userId: string): Promise<HomeReminderRow[]> {
+  const remindersResponse = await reminderAPI.getRemindersForUser(userId);
+  const reminders = sortRemindersNearestFirst(
+    filterActiveReminders(
+      remindersResponse.success && remindersResponse.reminders ? remindersResponse.reminders : []
+    )
+  );
+
+  const cached = getHomeCache(userId);
+  const dogs = cached?.dogs ?? [];
+  setHomeCache(userId, {
+    userName: cached?.userName ?? 'חברים',
+    userLastName: cached?.userLastName ?? '',
+    dogs,
+    reminders,
+    signature: buildHomeDataSignature(dogs, reminders),
+  });
+  clearHomeDirty(userId);
+  return reminders;
+}
+
 export function applyHomeCacheToState(
   cached: HomeCacheEntry,
   setters: {
@@ -122,7 +166,9 @@ export async function prefetchHomeData(
     if (remindersSettled.status === 'fulfilled') {
       const remindersResponse = remindersSettled.value;
       nextReminders = sortRemindersNearestFirst(
-        remindersResponse.success && remindersResponse.reminders ? remindersResponse.reminders : []
+        filterActiveReminders(
+          remindersResponse.success && remindersResponse.reminders ? remindersResponse.reminders : []
+        )
       );
     } else {
       if (isAbortError(remindersSettled.reason)) return;

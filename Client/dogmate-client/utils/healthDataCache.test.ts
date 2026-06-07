@@ -1,12 +1,15 @@
 import {
   getInitialVaccinationsState,
   getVaccinationsCache,
+  getFoodInventoryCache,
   isHealthDataWarm,
+  removeFoodInventoryItem,
   setVaccinationsCache,
   setMedicationsCache,
   setFoodInventoryCache,
   toDogOptions,
   transformFoodStocks,
+  upsertFoodInventoryItem,
 } from './healthDataCache';
 
 describe('healthDataCache', () => {
@@ -41,14 +44,41 @@ describe('healthDataCache', () => {
         dailyConsumptionInGram: 200,
         bagSizeInKg: 12,
         brandName: 'מזון',
+        notificationEnabled: true,
+        lowStockThresholdDays: 10,
         dogs: [{ id: 'd1', name: 'רex', profileImageUrl: null }],
       },
     ]);
     expect(items[0].daysRemaining).toBe(25);
+    expect(items[0].daysUntilReminder).toBe(15);
+    expect(items[0].lowStockThresholdDays).toBe(10);
     expect(items[0].dogs[0].name).toBe('רex');
   });
 
   it('builds dog options from raw dogs', () => {
     expect(toDogOptions([{ id: '1', name: '  בBuddy  ' }])).toEqual([{ id: '1', name: 'בBuddy' }]);
+  });
+
+  it('removes and upserts food inventory cache entries', () => {
+    const item = {
+      id: 'f1',
+      dogs: [{ id: 'd1', name: 'רex' }],
+      daysRemaining: 10,
+      daysUntilReminder: 3,
+      notificationEnabled: true,
+      lowStockThresholdDays: 7,
+      dailyConsumption: '200',
+      bagSize: '12',
+      currentAmount: '5',
+    };
+    setFoodInventoryCache(userId, { items: [item] });
+
+    const afterRemove = removeFoodInventoryItem(userId, 'f1');
+    expect(afterRemove).toHaveLength(0);
+    expect(getFoodInventoryCache(userId)?.items).toHaveLength(0);
+
+    const afterUpsert = upsertFoodInventoryItem(userId, item);
+    expect(afterUpsert).toHaveLength(1);
+    expect(getFoodInventoryCache(userId)?.items[0].id).toBe('f1');
   });
 });

@@ -18,8 +18,7 @@ import java.util.UUID;
 @Service
 public class HealthReminderSyncService {
 
-    private static final String FOOD_TITLE = "קניית שק מזון";
-    private static final String FOOD_DESCRIPTION = "מלאי המזון עומד להסתים, יש לרכוש שק חדש בהקדם";
+    private static final String FOOD_TITLE_PREFIX = "לקנות אוכל ל";
 
     private final ReminderService reminderService;
     private final NotificationScheduleService notificationScheduleService;
@@ -57,22 +56,54 @@ public class HealthReminderSyncService {
             return;
         }
 
-        List<UUID> dogIds = stock.getDogs().stream().map(Dog::getID).toList();
-        if (dogIds.isEmpty()) {
+        List<Dog> dogs = stock.getDogs();
+        if (dogs == null || dogs.isEmpty()) {
             reminderService.deleteSystemReminder(userId, ReminderSourceType.FOOD, stock.getId());
             return;
         }
+
+        List<UUID> dogIds = dogs.stream().map(Dog::getID).toList();
+        String title = buildFoodReminderTitle(dogs);
+        String description = buildFoodReminderDescription(dogs);
 
         reminderService.upsertSystemReminder(
                 userId,
                 ReminderSourceType.FOOD,
                 stock.getId(),
                 dogIds,
-                FOOD_TITLE,
-                FOOD_DESCRIPTION,
+                title,
+                description,
                 remindAt,
                 true
         );
+    }
+
+    static String buildFoodReminderTitle(List<Dog> dogs) {
+        return FOOD_TITLE_PREFIX + formatDogNamesHebrew(dogs);
+    }
+
+    static String buildFoodReminderDescription(List<Dog> dogs) {
+        return "מלאי המזון של " + formatDogNamesHebrew(dogs) + " עומד להיגמר בקרוב...";
+    }
+
+    static String formatDogNamesHebrew(List<Dog> dogs) {
+        List<String> names = dogs.stream()
+                .map(Dog::getName)
+                .filter(name -> name != null && !name.isBlank())
+                .map(String::trim)
+                .toList();
+        if (names.isEmpty()) {
+            return "כלב";
+        }
+        if (names.size() == 1) {
+            return names.get(0);
+        }
+        if (names.size() == 2) {
+            return names.get(0) + " ו" + names.get(1);
+        }
+        String last = names.get(names.size() - 1);
+        String rest = String.join(", ", names.subList(0, names.size() - 1));
+        return rest + " ו" + last;
     }
 
     @Transactional

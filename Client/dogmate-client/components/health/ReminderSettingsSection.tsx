@@ -17,6 +17,13 @@ import type {
   MedicationNotificationSettings,
   VaccinationNotificationSettings,
 } from '../../types/notifications';
+import {
+  buildFoodReminderDescription,
+  buildFoodReminderTitle,
+  computeFoodLowStockReminderAt,
+  foodReminderCountdownSubtext,
+  formatReminderDateTime,
+} from '../../utils/foodReminderPreview';
 
 const PRIMARY_COLOR = '#7FB069';
 const TEXT_DARK = '#5C4033';
@@ -41,6 +48,17 @@ type Props =
       value: FoodNotificationSettings;
       onChange: (value: FoodNotificationSettings) => void;
       disabled?: boolean;
+      previewContext?: {
+        currentKg: number;
+        dailyGrams: number;
+        dogNames: string[];
+      };
+      /** Live FOOD reminder from the server — used when inventory settings match the saved state. */
+      linkedReminder?: {
+        title: string;
+        description: string;
+        remindAt: Date;
+      } | null;
     };
 
 const FREQUENCY_OPTIONS: { id: MedicationFrequencyType; label: string }[] = [
@@ -183,27 +201,79 @@ const ReminderSettingsSection = (props: Props) => {
     );
   };
 
-  const renderFood = (value: FoodNotificationSettings, onChange: (v: FoodNotificationSettings) => void) => (
-    <View style={styles.intervalRow}>
-      <Text style={styles.intervalLabel}>התראה כשיש עוד (ימים)</Text>
-      <TextInput
-        style={styles.intervalInput}
-        keyboardType="number-pad"
-        value={value.lowStockThresholdDays != null ? String(value.lowStockThresholdDays) : ''}
-        onChangeText={(text) => {
-          const parsed = parseInt(text, 10);
-          onChange({
-            ...value,
-            lowStockThresholdDays: Number.isNaN(parsed) ? null : Math.max(1, parsed),
-          });
-        }}
-        editable={!disabled && value.notificationEnabled}
-        textAlign="center"
-        placeholder="7"
-        placeholderTextColor="#A9B5C7"
-      />
-    </View>
-  );
+  const renderFood = (
+    value: FoodNotificationSettings,
+    onChange: (v: FoodNotificationSettings) => void,
+    previewContext?: {
+      currentKg: number;
+      dailyGrams: number;
+      dogNames: string[];
+    },
+    linkedReminder?: {
+      title: string;
+      description: string;
+      remindAt: Date;
+    } | null
+  ) => {
+    const daysRemaining =
+      previewContext && previewContext.dailyGrams > 0
+        ? Math.floor((previewContext.currentKg * 1000) / previewContext.dailyGrams)
+        : null;
+    const computedTriggerAt =
+      previewContext && value.lowStockThresholdDays
+        ? computeFoodLowStockReminderAt(
+            previewContext.currentKg,
+            previewContext.dailyGrams,
+            value.lowStockThresholdDays
+          )
+        : null;
+    const triggerAt = linkedReminder?.remindAt ?? computedTriggerAt;
+    const previewTitle = linkedReminder?.title ?? (previewContext ? buildFoodReminderTitle(previewContext.dogNames) : '');
+    const previewDescription =
+      linkedReminder?.description ??
+      (previewContext ? buildFoodReminderDescription(previewContext.dogNames) : '');
+
+    return (
+      <>
+        <Text style={styles.foodHint}>
+          התזכורת תופיע אוטומטית בדף הבית עם תאריך, שעה וספירה לאחור — כמו תזכורת רגילה.
+        </Text>
+        <View style={styles.intervalRow}>
+          <Text style={styles.intervalLabel}>כמה ימים לפני סיום השק לתזכר?</Text>
+          <TextInput
+            style={styles.intervalInput}
+            keyboardType="number-pad"
+            value={value.lowStockThresholdDays != null ? String(value.lowStockThresholdDays) : ''}
+            onChangeText={(text) => {
+              const parsed = parseInt(text, 10);
+              onChange({
+                ...value,
+                lowStockThresholdDays: Number.isNaN(parsed) ? null : Math.max(1, parsed),
+              });
+            }}
+            editable={!disabled && value.notificationEnabled}
+            textAlign="center"
+            placeholder="7"
+            placeholderTextColor="#A9B5C7"
+          />
+        </View>
+
+        {previewContext && value.lowStockThresholdDays && daysRemaining != null && triggerAt ? (
+          <View style={styles.previewCard}>
+            <View style={styles.previewHeader}>
+              <Text style={styles.previewTitle}>{previewTitle}</Text>
+              <MaterialCommunityIcons name="bell-ring-outline" size={18} color={PRIMARY_COLOR} />
+            </View>
+            <Text style={styles.previewDescription}>{previewDescription}</Text>
+            <Text style={styles.previewMeta}>{formatReminderDateTime(triggerAt)}</Text>
+            <Text style={styles.previewCountdown}>{foodReminderCountdownSubtext(triggerAt)}</Text>
+          </View>
+        ) : value.notificationEnabled ? (
+          <Text style={styles.foodHint}>מלא את שדות המלאי כדי לראות תצוגה מקדימה של התזכורת.</Text>
+        ) : null}
+      </>
+    );
+  };
 
   const enabled = props.value.notificationEnabled;
   const setEnabled = (notificationEnabled: boolean) => {
@@ -230,7 +300,8 @@ const ReminderSettingsSection = (props: Props) => {
         <View style={styles.body}>
           {props.variant === 'medication' && renderMedication(props.value, props.onChange)}
           {props.variant === 'vaccination' && renderVaccination(props.value, props.onChange)}
-          {props.variant === 'food' && renderFood(props.value, props.onChange)}
+          {props.variant === 'food' &&
+            renderFood(props.value, props.onChange, props.previewContext, props.linkedReminder)}
         </View>
       ) : (
         <Text style={styles.hint}>הפעל כדי לקבל התראות עבור פריט זה</Text>
@@ -345,6 +416,56 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAEFDD',
     color: TEXT_DARK,
     fontSize: 16,
+  },
+  foodHint: {
+    marginBottom: 10,
+    color: '#8B7355',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  previewCard: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
+    borderRadius: 12,
+    padding: 14,
+    backgroundColor: '#FAEFDD',
+  },
+  previewHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  previewTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: TEXT_DARK,
+    textAlign: 'right',
+    flex: 1,
+  },
+  previewDescription: {
+    fontSize: 14,
+    color: '#8B7355',
+    textAlign: 'right',
+    writingDirection: 'rtl',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  previewMeta: {
+    fontSize: 14,
+    color: TEXT_DARK,
+    textAlign: 'right',
+    fontWeight: '600',
+  },
+  previewCountdown: {
+    marginTop: 4,
+    fontSize: 13,
+    color: PRIMARY_COLOR,
+    textAlign: 'right',
+    fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,

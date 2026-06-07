@@ -18,7 +18,7 @@ import {
   transformFoodStocks,
 } from './healthDataCache';
 import { prefetchWalkersData, isWalkersDataWarm } from './walkersDataCache';
-import { sortRemindersNearestFirst } from './daysDisplay';
+import { sortRemindersNearestFirst, filterActiveReminders } from './daysDisplay';
 import { isAbortError } from './isAbortError';
 import { withApiRetry } from './apiRetry';
 
@@ -48,7 +48,9 @@ async function prefetchHomeSequential(
 
   const remindersResponse = await withApiRetry(() => reminderAPI.getRemindersForUser(userId));
   const nextReminders = sortRemindersNearestFirst(
-    remindersResponse.success && remindersResponse.reminders ? remindersResponse.reminders : []
+    filterActiveReminders(
+      remindersResponse.success && remindersResponse.reminders ? remindersResponse.reminders : []
+    )
   );
 
   setHomeCache(userId, {
