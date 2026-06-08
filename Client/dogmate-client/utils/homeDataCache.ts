@@ -82,15 +82,39 @@ export type HomeReminderRow = {
   systemGenerated?: boolean;
 };
 
+export const EDITABLE_HEALTH_REMINDER_TYPES = ['FOOD', 'VACCINATION', 'MEDICATION'] as const;
+
+export function findSystemReminderForSource(
+  reminders: HomeReminderRow[],
+  sourceType: string,
+  sourceId: string
+): HomeReminderRow | null {
+  const match = reminders.find(
+    (r) => r.sourceType === sourceType && String(r.sourceId) === String(sourceId)
+  );
+  return match ?? null;
+}
+
 /** FOOD system reminder linked to a food-stock row, if one exists. */
 export function findFoodReminderForStock(
   reminders: HomeReminderRow[],
   foodStockId: string
 ): HomeReminderRow | null {
-  const match = reminders.find(
-    (r) => r.sourceType === 'FOOD' && String(r.sourceId) === String(foodStockId)
-  );
-  return match ?? null;
+  return findSystemReminderForSource(reminders, 'FOOD', foodStockId);
+}
+
+export function findVaccinationReminderForRecord(
+  reminders: HomeReminderRow[],
+  vaccinationId: string
+): HomeReminderRow | null {
+  return findSystemReminderForSource(reminders, 'VACCINATION', vaccinationId);
+}
+
+export function findMedicationReminderForRecord(
+  reminders: HomeReminderRow[],
+  medicationId: string
+): HomeReminderRow | null {
+  return findSystemReminderForSource(reminders, 'MEDICATION', medicationId);
 }
 
 /** Reload home reminders after food-inventory or FOOD-reminder edits. */

@@ -4,7 +4,6 @@ import com.DogMate.Domain.Dog;
 import com.DogMate.Domain.DogMedication;
 import com.DogMate.Domain.DogVaccination;
 import com.DogMate.Domain.FoodStock;
-import com.DogMate.Domain.MedicationFrequencyType;
 import com.DogMate.Domain.RegularUser;
 import com.DogMate.Domain.Reminder;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,7 +11,6 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -39,49 +37,40 @@ class NotificationScheduleServiceTest {
     }
 
     @Test
-    void computeMedicationTriggers_dailyProducesMultipleTimes() {
-        LocalDateTime from = LocalDate.of(2026, 6, 5).atTime(0, 0);
-        LocalDateTime until = from.plusDays(2);
+    void computeMedicationReminderTrigger_schedulesDaysBeforeNextDose() {
+        Dog dog = new Dog(UUID.randomUUID(), "Rex", "Mix", LocalDate.of(2020, 1, 1), 'M', "url");
+        DogMedication med = new DogMedication(null, dog, "Pill", LocalDate.now());
+        med.setNextDueDate(LocalDate.now().plusDays(14));
+        med.setRemindBeforeValue(7);
+        med.setNextDueTime(NotificationScheduleService.DEFAULT_NOTIFICATION_TIME);
 
-        List<LocalDateTime> triggers = service.computeMedicationTriggers(
-                "08:00,20:00",
-                MedicationFrequencyType.DAILY,
-                1,
-                from,
-                until
-        );
-
-        assertTrue(triggers.size() >= 4);
-        assertTrue(triggers.stream().anyMatch(t -> t.toLocalTime().equals(LocalTime.of(8, 0))));
-        assertTrue(triggers.stream().anyMatch(t -> t.toLocalTime().equals(LocalTime.of(20, 0))));
+        LocalDateTime trigger = service.computeMedicationReminderTrigger(med);
+        assertNotNull(trigger);
+        assertEquals(LocalDate.now().plusDays(7).atTime(NotificationScheduleService.DEFAULT_NOTIFICATION_TIME), trigger);
     }
 
     @Test
-    void computeMedicationTriggers_everyXDaysRespectsInterval() {
-        LocalDateTime from = LocalDate.of(2026, 6, 5).atTime(10, 0);
-        LocalDateTime until = from.plusDays(10);
+    void computeMedicationReminderTrigger_schedulesHoursBeforeNextDose() {
+        Dog dog = new Dog(UUID.randomUUID(), "Rex", "Mix", LocalDate.of(2020, 1, 1), 'M', "url");
+        DogMedication med = new DogMedication(null, dog, "Pill", LocalDate.now());
+        med.setNextDueDate(LocalDate.now().plusDays(1));
+        med.setNextDueTime(LocalDateTime.now().plusHours(5).toLocalTime());
+        med.setRemindBeforeValue(2);
+        med.setRemindBeforeUnit(com.DogMate.Domain.RemindBeforeUnit.HOURS);
 
-        List<LocalDateTime> triggers = service.computeMedicationTriggers(
-                "09:00",
-                MedicationFrequencyType.EVERY_X_DAYS,
-                3,
-                from,
-                until
-        );
-
-        assertEquals(3, triggers.size());
-        assertEquals(LocalDate.of(2026, 6, 8).atTime(9, 0), triggers.get(0));
-        assertEquals(LocalDate.of(2026, 6, 11).atTime(9, 0), triggers.get(1));
+        LocalDateTime dueAt = med.getNextDueDate().atTime(med.getNextDueTime());
+        LocalDateTime trigger = service.computeMedicationReminderTrigger(med);
+        assertNotNull(trigger);
+        assertEquals(dueAt.minusHours(2), trigger);
     }
 
     @Test
-    void computeVaccinationTriggers_includesConfiguredLeadDays() {
+    void computeVaccinationReminderTrigger_schedulesDaysBeforeDueDate() {
         LocalDate nextDue = LocalDate.now().plusDays(10);
-        List<LocalDateTime> triggers = service.computeVaccinationTriggers(nextDue, "7,1");
+        LocalDateTime trigger = service.computeVaccinationReminderTrigger(nextDue, "7");
 
-        assertFalse(triggers.isEmpty());
-        assertTrue(triggers.stream().anyMatch(t -> t.toLocalDate().equals(nextDue.minusDays(7))));
-        assertTrue(triggers.stream().anyMatch(t -> t.toLocalDate().equals(nextDue.minusDays(1))));
+        assertNotNull(trigger);
+        assertEquals(LocalDate.now().plusDays(3).atTime(NotificationScheduleService.DEFAULT_NOTIFICATION_TIME), trigger);
     }
 
     @Test
@@ -126,6 +115,8 @@ class NotificationScheduleServiceTest {
         Dog dog = new Dog(UUID.randomUUID(), "Rex", "Mix", LocalDate.of(2020, 1, 1), 'M', "url");
         DogMedication med = new DogMedication(null, dog, "Pill", LocalDate.now());
         med.setNotificationEnabled(true);
+        med.setNextDueDate(LocalDate.now().plusDays(14));
+        med.setRemindBeforeValue(7);
 
         assertTrue(service.buildMedicationTriggers(List.of(med), false).isEmpty());
         assertFalse(service.buildMedicationTriggers(List.of(med), true).isEmpty());

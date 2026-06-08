@@ -1,19 +1,15 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Switch,
-  TouchableOpacity,
   TextInput,
-  Platform,
-  Modal,
+  TouchableOpacity,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type {
   FoodNotificationSettings,
-  MedicationFrequencyType,
   MedicationNotificationSettings,
   VaccinationNotificationSettings,
 } from '../../types/notifications';
@@ -24,6 +20,24 @@ import {
   foodReminderCountdownSubtext,
   formatReminderDateTime,
 } from '../../utils/foodReminderPreview';
+import type { RemindBeforeUnit } from '../../types/notifications';
+import {
+  buildMedicationReminderDescription,
+  buildMedicationReminderTitle,
+  computeMedicationReminderAt,
+  REMIND_BEFORE_UNIT_LABELS,
+} from '../../utils/medicationReminderPreview';
+import {
+  buildVaccinationReminderDescription,
+  buildVaccinationReminderTitle,
+  computeVaccinationReminderAt,
+} from '../../utils/vaccinationReminderPreview';
+
+type LinkedReminderPreview = {
+  title: string;
+  description: string;
+  remindAt: Date;
+};
 
 const PRIMARY_COLOR = '#7FB069';
 const TEXT_DARK = '#5C4033';
@@ -36,12 +50,25 @@ type Props =
       value: MedicationNotificationSettings;
       onChange: (value: MedicationNotificationSettings) => void;
       disabled?: boolean;
+      previewContext?: {
+        nextDueDate: Date | null;
+        nextDueTime: string;
+        medicationName: string;
+        dogName: string;
+      };
+      linkedReminder?: LinkedReminderPreview | null;
     }
   | {
       variant: 'vaccination';
       value: VaccinationNotificationSettings;
       onChange: (value: VaccinationNotificationSettings) => void;
       disabled?: boolean;
+      previewContext?: {
+        nextDueDate: Date | null;
+        vaccineName: string;
+        dogName: string;
+      };
+      linkedReminder?: LinkedReminderPreview | null;
     }
   | {
       variant: 'food';
@@ -54,150 +81,193 @@ type Props =
         dogNames: string[];
       };
       /** Live FOOD reminder from the server — used when inventory settings match the saved state. */
-      linkedReminder?: {
-        title: string;
-        description: string;
-        remindAt: Date;
-      } | null;
+      linkedReminder?: LinkedReminderPreview | null;
     };
-
-const FREQUENCY_OPTIONS: { id: MedicationFrequencyType; label: string }[] = [
-  { id: 'HOURLY', label: 'כל X שעות' },
-  { id: 'DAILY', label: 'יומי' },
-  { id: 'EVERY_X_DAYS', label: 'פעם ב-X ימים' },
-];
-
-const VACCINATION_LEAD_OPTIONS = [14, 7, 3, 1];
-
-function formatTime(date: Date): string {
-  const h = String(date.getHours()).padStart(2, '0');
-  const m = String(date.getMinutes()).padStart(2, '0');
-  return `${h}:${m}`;
-}
-
-function parseTimeToDate(time: string): Date {
-  const [h, m] = time.split(':').map(Number);
-  const d = new Date();
-  d.setHours(h || 8, m || 0, 0, 0);
-  return d;
-}
 
 const ReminderSettingsSection = (props: Props) => {
   const disabled = props.disabled ?? false;
-  const [showTimePicker, setShowTimePicker] = useState(false);
 
-  const renderMedication = (value: MedicationNotificationSettings, onChange: (v: MedicationNotificationSettings) => void) => {
-    const timeDate = parseTimeToDate(value.scheduleTimes.split(',')[0] || '08:00');
+  const renderPreviewCard = (
+    title: string,
+    description: string,
+    triggerAt: Date,
+    emptyHint: string,
+    showEmpty: boolean
+  ) => {
+    if (!triggerAt) {
+      return showEmpty ? <Text style={styles.foodHint}>{emptyHint}</Text> : null;
+    }
+    return (
+      <View style={styles.previewCard}>
+        <View style={styles.previewHeader}>
+          <Text style={styles.previewTitle}>{title}</Text>
+          <MaterialCommunityIcons name="bell-ring-outline" size={18} color={PRIMARY_COLOR} />
+        </View>
+        <Text style={styles.previewDescription}>{description}</Text>
+        <Text style={styles.previewMeta}>{formatReminderDateTime(triggerAt)}</Text>
+        <Text style={styles.previewCountdown}>{foodReminderCountdownSubtext(triggerAt)}</Text>
+      </View>
+    );
+  };
+
+  const renderDaysBeforeField = (
+    label: string,
+    days: number | null,
+    onDaysChange: (days: number | null) => void,
+    emptyPreviewHint: string,
+    previewTitle: string,
+    previewDescription: string,
+    triggerAt: Date | null,
+    showPreview: boolean
+  ) => (
+    <>
+      <Text style={styles.foodHint}>
+        התזכורת תופיע אוטומטית בדף הבית עם תאריך, שעה וספירה לאחור — כמו תזכורת רגילה.
+      </Text>
+      <View style={styles.intervalRow}>
+        <Text style={styles.intervalLabel}>{label}</Text>
+        <TextInput
+          style={styles.intervalInput}
+          keyboardType="number-pad"
+          value={days != null ? String(days) : ''}
+          onChangeText={(text) => {
+            const parsed = parseInt(text, 10);
+            onDaysChange(Number.isNaN(parsed) ? null : Math.max(1, parsed));
+          }}
+          editable={!disabled}
+          textAlign="center"
+          placeholder="7"
+          placeholderTextColor="#A9B5C7"
+        />
+      </View>
+      {triggerAt
+        ? renderPreviewCard(previewTitle, previewDescription, triggerAt, '', false)
+        : showPreview ? (
+            <Text style={styles.foodHint}>{emptyPreviewHint}</Text>
+          ) : null}
+    </>
+  );
+
+  const renderMedicationLeadTimeField = (
+    value: MedicationNotificationSettings,
+    onChange: (v: MedicationNotificationSettings) => void,
+    previewContext?: {
+      nextDueDate: Date | null;
+      nextDueTime: string;
+      medicationName: string;
+      dogName: string;
+    },
+    linkedReminder?: LinkedReminderPreview | null
+  ) => {
+    const units: RemindBeforeUnit[] = ['DAYS', 'HOURS', 'MINUTES'];
+    const canComputePreview =
+      previewContext?.nextDueDate != null &&
+      value.remindBeforeValue != null &&
+      value.remindBeforeValue > 0;
+    const computedTriggerAt = canComputePreview
+      ? computeMedicationReminderAt(
+          previewContext!.nextDueDate,
+          previewContext!.nextDueTime,
+          value.remindBeforeValue,
+          value.remindBeforeUnit
+        )
+      : null;
+    const triggerAt = computedTriggerAt ?? linkedReminder?.remindAt ?? null;
+    const previewTitle = previewContext
+      ? buildMedicationReminderTitle(previewContext.medicationName)
+      : linkedReminder?.title ?? '';
+    const previewDescription = previewContext
+      ? buildMedicationReminderDescription(previewContext.medicationName, previewContext.dogName)
+      : linkedReminder?.description ?? '';
+
     return (
       <>
+        <Text style={styles.foodHint}>
+          התזכורת תופיע אוטומטית בדף הבית עם תאריך, שעה וספירה לאחור — כמו תזכורת רגילה.
+        </Text>
+        <Text style={styles.intervalLabel}>כמה זמן לפני מתן התרופה הבאה לתזכר?</Text>
         <View style={styles.frequencyRow}>
-          {FREQUENCY_OPTIONS.map((opt) => {
-            const selected = value.frequencyType === opt.id;
+          {units.map((unit) => {
+            const selected = value.remindBeforeUnit === unit;
             return (
               <TouchableOpacity
-                key={opt.id}
+                key={unit}
                 style={[styles.chip, selected && styles.chipSelected]}
-                onPress={() => onChange({ ...value, frequencyType: opt.id })}
-                disabled={disabled || !value.notificationEnabled}
+                onPress={() => onChange({ ...value, remindBeforeUnit: unit })}
+                disabled={disabled}
               >
-                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{opt.label}</Text>
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                  {REMIND_BEFORE_UNIT_LABELS[unit]}
+                </Text>
               </TouchableOpacity>
             );
           })}
         </View>
-
-        <TouchableOpacity
-          style={styles.inputRow}
-          onPress={() => setShowTimePicker(true)}
-          disabled={disabled || !value.notificationEnabled}
-        >
-          <Ionicons name="time-outline" size={20} color="#8B7355" />
-          <Text style={styles.inputText}>{value.scheduleTimes || '08:00'}</Text>
-        </TouchableOpacity>
-
-        {(value.frequencyType === 'HOURLY' || value.frequencyType === 'EVERY_X_DAYS') && (
-          <View style={styles.intervalRow}>
-            <Text style={styles.intervalLabel}>
-              {value.frequencyType === 'HOURLY' ? 'כל כמה שעות?' : 'כל כמה ימים?'}
-            </Text>
-            <TextInput
-              style={styles.intervalInput}
-              keyboardType="number-pad"
-              value={String(value.frequencyInterval)}
-              onChangeText={(text) => {
-                const n = Math.max(1, parseInt(text || '1', 10) || 1);
-                onChange({ ...value, frequencyInterval: n });
-              }}
-              editable={!disabled && value.notificationEnabled}
-              textAlign="center"
-            />
+        <View style={styles.intervalRow}>
+          <Text style={styles.intervalLabel}>כמות</Text>
+          <TextInput
+            style={styles.intervalInput}
+            keyboardType="number-pad"
+            value={value.remindBeforeValue != null ? String(value.remindBeforeValue) : ''}
+            onChangeText={(text) => {
+              const parsed = parseInt(text, 10);
+              onChange({
+                ...value,
+                remindBeforeValue: Number.isNaN(parsed) ? null : Math.max(1, parsed),
+              });
+            }}
+            editable={!disabled}
+            textAlign="center"
+            placeholder="7"
+            placeholderTextColor="#A9B5C7"
+          />
+        </View>
+        {triggerAt ? (
+          <View key={`med-preview-${triggerAt.getTime()}-${value.remindBeforeValue}-${value.remindBeforeUnit}`}>
+            {renderPreviewCard(previewTitle, previewDescription, triggerAt, '', false)}
           </View>
-        )}
-
-        {showTimePicker && (
-          Platform.OS === 'ios' ? (
-            <Modal transparent animationType="slide" visible onRequestClose={() => setShowTimePicker(false)}>
-              <View style={styles.modalOverlay}>
-                <View style={styles.modalBox}>
-                  <TouchableOpacity onPress={() => setShowTimePicker(false)}>
-                    <Text style={styles.modalDone}>סיום</Text>
-                  </TouchableOpacity>
-                  <DateTimePicker
-                    value={timeDate}
-                    mode="time"
-                    display="spinner"
-                    is24Hour
-                    onChange={(_, selected) => {
-                      if (selected) onChange({ ...value, scheduleTimes: formatTime(selected) });
-                    }}
-                  />
-                </View>
-              </View>
-            </Modal>
-          ) : (
-            <DateTimePicker
-              value={timeDate}
-              mode="time"
-              is24Hour
-              onChange={(_, selected) => {
-                setShowTimePicker(false);
-                if (selected) onChange({ ...value, scheduleTimes: formatTime(selected) });
-              }}
-            />
-          )
-        )}
+        ) : value.notificationEnabled ? (
+          <Text style={styles.foodHint}>
+            הגדר תאריך ושעת מנה הבאה כדי לראות תצוגה מקדימה של התזכורת.
+          </Text>
+        ) : null}
       </>
     );
   };
 
-  const renderVaccination = (value: VaccinationNotificationSettings, onChange: (v: VaccinationNotificationSettings) => void) => {
-    const selected = new Set(
-      (value.remindDaysBefore || '7,1').split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !Number.isNaN(n))
-    );
-    return (
-      <View style={styles.frequencyRow}>
-        {VACCINATION_LEAD_OPTIONS.map((days) => {
-          const active = selected.has(days);
-          return (
-            <TouchableOpacity
-              key={days}
-              style={[styles.chip, active && styles.chipSelected]}
-              onPress={() => {
-                const next = new Set(selected);
-                if (active) next.delete(days);
-                else next.add(days);
-                const sorted = Array.from(next).sort((a, b) => b - a);
-                onChange({ ...value, remindDaysBefore: sorted.length ? sorted.join(',') : '1' });
-              }}
-              disabled={disabled || !value.notificationEnabled}
-            >
-              <Text style={[styles.chipText, active && styles.chipTextSelected]}>
-                {days === 1 ? 'יום לפני' : `${days} ימים לפני`}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+  const renderVaccination = (
+    value: VaccinationNotificationSettings,
+    onChange: (v: VaccinationNotificationSettings) => void,
+    previewContext?: {
+      nextDueDate: Date | null;
+      vaccineName: string;
+      dogName: string;
+    },
+    linkedReminder?: LinkedReminderPreview | null
+  ) => {
+    const computedTriggerAt =
+      previewContext?.nextDueDate && value.remindDaysBefore
+        ? computeVaccinationReminderAt(previewContext.nextDueDate, value.remindDaysBefore)
+        : null;
+    const triggerAt = linkedReminder?.remindAt ?? computedTriggerAt;
+    const previewTitle =
+      linkedReminder?.title ??
+      (previewContext ? buildVaccinationReminderTitle(previewContext.vaccineName) : '');
+    const previewDescription =
+      linkedReminder?.description ??
+      (previewContext
+        ? buildVaccinationReminderDescription(previewContext.vaccineName, previewContext.dogName)
+        : '');
+
+    return renderDaysBeforeField(
+      'כמה ימים לפני החיסון לתזכר?',
+      value.remindDaysBefore,
+      (remindDaysBefore) => onChange({ ...value, remindDaysBefore }),
+      'הגדר תאריך חיסון הבא כדי לראות תצוגה מקדימה של התזכורת.',
+      previewTitle,
+      previewDescription,
+      triggerAt,
+      value.notificationEnabled
     );
   };
 
@@ -298,8 +368,15 @@ const ReminderSettingsSection = (props: Props) => {
 
       {enabled ? (
         <View style={styles.body}>
-          {props.variant === 'medication' && renderMedication(props.value, props.onChange)}
-          {props.variant === 'vaccination' && renderVaccination(props.value, props.onChange)}
+          {props.variant === 'medication' &&
+            renderMedicationLeadTimeField(
+              props.value,
+              props.onChange,
+              props.previewContext,
+              props.linkedReminder
+            )}
+          {props.variant === 'vaccination' &&
+            renderVaccination(props.value, props.onChange, props.previewContext, props.linkedReminder)}
           {props.variant === 'food' &&
             renderFood(props.value, props.onChange, props.previewContext, props.linkedReminder)}
         </View>

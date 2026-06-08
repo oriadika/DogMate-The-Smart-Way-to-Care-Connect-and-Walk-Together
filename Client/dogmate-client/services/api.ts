@@ -1121,6 +1121,19 @@ export const vaccinationAPI = {
       throw new Error(errorMessage);
     }
   },
+
+  logDose: async (userId: string, vaccinationId: string) => {
+    try {
+      const response = await apiClient.post(`/vaccinations/${vaccinationId}/log-dose`, null, {
+        params: { userId },
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל רישום החיסון';
+      console.error('Failed to log vaccination dose:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
 };
 
 export interface MedicationRow {
@@ -1129,25 +1142,29 @@ export interface MedicationRow {
   dogName: string;
   medicationName: string;
   administeredDate: string;
+  administeredTime?: string | null;
   nextDueDate?: string | null;
+  nextDueTime?: string | null;
   vetClinicName?: string | null;
   createdAt?: string | null;
   notificationEnabled?: boolean;
-  scheduleTimes?: string;
-  frequencyType?: string;
-  frequencyInterval?: number;
+  remindBeforeValue?: number | null;
+  remindBeforeUnit?: string | null;
+  /** @deprecated use remindBeforeValue */
+  remindDaysBefore?: number | null;
 }
 
 export type MedicationPayload = {
   dogId: string;
   medicationName: string;
   administeredDate: string;
+  administeredTime?: string | null;
   nextDueDate?: string | null;
+  nextDueTime?: string | null;
   vetClinicName?: string | null;
   notificationEnabled?: boolean;
-  scheduleTimes?: string;
-  frequencyType?: string;
-  frequencyInterval?: number;
+  remindBeforeValue?: number | null;
+  remindBeforeUnit?: string | null;
 };
 
 export const medicationAPI = {
@@ -1168,12 +1185,13 @@ export const medicationAPI = {
         dogId: payload.dogId,
         medicationName: payload.medicationName,
         administeredDate: payload.administeredDate,
+        administeredTime: payload.administeredTime ?? null,
         nextDueDate: payload.nextDueDate ?? null,
+        nextDueTime: payload.nextDueTime ?? null,
         vetClinicName: payload.vetClinicName?.trim() || null,
         notificationEnabled: payload.notificationEnabled,
-        scheduleTimes: payload.scheduleTimes,
-        frequencyType: payload.frequencyType,
-        frequencyInterval: payload.frequencyInterval,
+        remindBeforeValue: payload.remindBeforeValue,
+        remindBeforeUnit: payload.remindBeforeUnit,
       });
       return response.data;
     } catch (error: any) {
@@ -1205,6 +1223,19 @@ export const medicationAPI = {
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'נכשלה מחיקת התרופה';
       console.error('Failed to delete medication:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  logDose: async (userId: string, medicationId: string) => {
+    try {
+      const response = await apiClient.post(`/medications/${medicationId}/log-dose`, null, {
+        params: { userId },
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל רישום המנה';
+      console.error('Failed to log medication dose:', errorMessage);
       throw new Error(errorMessage);
     }
   },

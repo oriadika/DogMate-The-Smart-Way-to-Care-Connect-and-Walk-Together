@@ -4,13 +4,16 @@ import com.DogMate.Domain.DogMedication;
 import com.DogMate.Domain.DogVaccination;
 import com.DogMate.Domain.FoodStock;
 import com.DogMate.Domain.MedicationFrequencyType;
+import com.DogMate.Domain.RemindBeforeUnit;
 import com.DogMate.Domain.Reminder;
 import com.DogMate.DTO.SchedulableNotificationDTO;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,7 +51,7 @@ public class NotificationScheduleService {
 
     public List<Integer> parseRemindDaysBefore(String remindDaysBefore) {
         if (remindDaysBefore == null || remindDaysBefore.isBlank()) {
-            return List.of(7, 1);
+            return List.of(7);
         }
         List<Integer> days = Arrays.stream(remindDaysBefore.split(","))
                 .map(String::trim)
@@ -64,7 +67,7 @@ public class NotificationScheduleService {
                 .distinct()
                 .sorted(Comparator.reverseOrder())
                 .toList();
-        return days.isEmpty() ? List.of(7, 1) : days;
+        return days.isEmpty() ? List.of(7) : days;
     }
 
     public List<LocalDateTime> computeMedicationTriggers(
@@ -130,23 +133,64 @@ public class NotificationScheduleService {
         return triggers.stream().sorted().limit(MAX_MEDICATION_TRIGGERS).toList();
     }
 
-    public List<LocalDateTime> computeVaccinationTriggers(LocalDate nextDueDate, String remindDaysBefore) {
+    public int resolveRemindDaysBefore(String remindDaysBefore) {
+        List<Integer> parsed = parseRemindDaysBefore(remindDaysBefore);
+        return parsed.isEmpty() ? 7 : parsed.get(0);
+    }
+
+    /** Single home/push trigger: N days before vaccination (mirrors food low-stock math). */
+    public LocalDateTime computeVaccinationReminderTrigger(LocalDate nextDueDate, String remindDaysBefore) {
         if (nextDueDate == null) {
+            return null;
+        }
+        int daysBefore = resolveRemindDaysBefore(remindDaysBefore);
+        if (daysBefore <= 0) {
+            return null;
+        }
+        long daysUntilDue = ChronoUnit.DAYS.between(LocalDate.now(), nextDueDate);
+        if (daysUntilDue <= daysBefore) {
+            return LocalDateTime.now().plusMinutes(1);
+        }
+        long daysUntilReminder = daysUntilDue - daysBefore;
+        return LocalDate.now().plusDays(daysUntilReminder).atTime(DEFAULT_NOTIFICATION_TIME);
+    }
+
+    public List<LocalDateTime> computeVaccinationTriggers(LocalDate nextDueDate, String remindDaysBefore) {
+        LocalDateTime trigger = computeVaccinationReminderTrigger(nextDueDate, remindDaysBefore);
+        if (trigger == null || trigger.isBefore(LocalDateTime.now())) {
             return List.of();
         }
-        List<LocalDateTime> triggers = new ArrayList<>();
-        for (int daysBefore : parseRemindDaysBefore(remindDaysBefore)) {
-            LocalDate remindDate = nextDueDate.minusDays(daysBefore);
-            LocalDateTime trigger = remindDate.atTime(DEFAULT_NOTIFICATION_TIME);
-            if (!trigger.isBefore(LocalDateTime.now())) {
-                triggers.add(trigger);
-            }
+        return List.of(trigger);
+    }
+
+    /** Single home/push trigger: lead time before next medication dose date + time. */
+    public LocalDateTime computeMedicationReminderTrigger(DogMedication medication) {
+        if (medication == null || medication.getNextDueDate() == null) {
+            return null;
         }
-        LocalDateTime dueDay = nextDueDate.atTime(DEFAULT_NOTIFICATION_TIME);
-        if (!dueDay.isBefore(LocalDateTime.now())) {
-            triggers.add(dueDay);
+        Integer leadValue = medication.getRemindBeforeValue();
+        if (leadValue == null || leadValue <= 0) {
+            return null;
         }
-        return triggers.stream().distinct().sorted().toList();
+        LocalTime dueTime = medication.getNextDueTime() != null
+                ? medication.getNextDueTime()
+                : DEFAULT_NOTIFICATION_TIME;
+        LocalDateTime dueAt = medication.getNextDueDate().atTime(dueTime);
+        Duration lead = toLeadDuration(medication.getRemindBeforeUnit(), leadValue);
+        LocalDateTime trigger = dueAt.minus(lead);
+        LocalDateTime now = LocalDateTime.now();
+        if (!trigger.isAfter(now)) {
+            return now.plusMinutes(1);
+        }
+        return trigger;
+    }
+
+    static Duration toLeadDuration(RemindBeforeUnit unit, int value) {
+        return switch (unit != null ? unit : RemindBeforeUnit.DAYS) {
+            case HOURS -> Duration.ofHours(value);
+            case MINUTES -> Duration.ofMinutes(value);
+            case DAYS -> Duration.ofDays(value);
+        };
     }
 
     public LocalDateTime computeFoodLowStockTrigger(FoodStock stock) {
@@ -189,32 +233,25 @@ public class NotificationScheduleService {
             List<DogMedication> medications,
             boolean globalEnabled
     ) {
-        LocalDateTime from = LocalDateTime.now();
-        LocalDateTime until = from.plusDays(SCHEDULE_HORIZON_DAYS);
         List<SchedulableNotificationDTO> result = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
 
         for (DogMedication med : medications) {
             if (!shouldSchedule(globalEnabled, med.isNotificationEnabled())) {
                 continue;
             }
-            MedicationFrequencyType freq = MedicationFrequencyType.fromString(med.getFrequencyType());
-            List<LocalDateTime> triggers = computeMedicationTriggers(
-                    med.getScheduleTimes(),
-                    freq,
-                    med.getFrequencyInterval(),
-                    from,
-                    until
-            );
-            String dogName = med.getDog() != null ? med.getDog().getName() : "כלב";
-            for (LocalDateTime trigger : triggers) {
-                result.add(new SchedulableNotificationDTO(
-                        "MEDICATION",
-                        med.getId(),
-                        "תזכורת תרופה: " + med.getMedicationName(),
-                        "הגיע הזמן לתת ל-" + dogName + " את " + med.getMedicationName(),
-                        trigger.format(ISO_FORMATTER)
-                ));
+            LocalDateTime trigger = computeMedicationReminderTrigger(med);
+            if (trigger == null || trigger.isBefore(now)) {
+                continue;
             }
+            String dogName = med.getDog() != null ? med.getDog().getName() : "כלב";
+            result.add(new SchedulableNotificationDTO(
+                    "MEDICATION",
+                    med.getId(),
+                    "תזכורת תרופה: " + med.getMedicationName(),
+                    "הגיע הזמן לתת ל-" + dogName + " את " + med.getMedicationName(),
+                    trigger.format(ISO_FORMATTER)
+            ));
         }
         return result;
     }

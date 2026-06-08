@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.UUID;
 
 @Entity
@@ -38,8 +39,14 @@ public class DogMedication {
     @Column(name = "administered_date", nullable = false)
     private LocalDate administeredDate;
 
+    @Column(name = "administered_time")
+    private LocalTime administeredTime = LocalTime.of(9, 0);
+
     @Column(name = "next_due_date")
     private LocalDate nextDueDate;
+
+    @Column(name = "next_due_time")
+    private LocalTime nextDueTime = LocalTime.of(9, 0);
 
     @Column(name = "vet_clinic_name", columnDefinition = "TEXT")
     private String vetClinicName;
@@ -59,6 +66,13 @@ public class DogMedication {
 
     @Column(name = "frequency_interval", nullable = false)
     private int frequencyInterval = 1;
+
+    /** Lead time amount before {@link #nextDueDate} + {@link #nextDueTime} to fire the home reminder. */
+    @Column(name = "remind_days_before")
+    private Integer remindBeforeValue = 7;
+
+    @Column(name = "remind_before_unit", nullable = false)
+    private String remindBeforeUnit = RemindBeforeUnit.DAYS.name();
 
     protected DogMedication() {
     }
@@ -112,12 +126,28 @@ public class DogMedication {
         this.administeredDate = administeredDate;
     }
 
+    public LocalTime getAdministeredTime() {
+        return administeredTime;
+    }
+
+    public void setAdministeredTime(LocalTime administeredTime) {
+        this.administeredTime = administeredTime != null ? administeredTime : LocalTime.of(9, 0);
+    }
+
     public LocalDate getNextDueDate() {
         return nextDueDate;
     }
 
     public void setNextDueDate(LocalDate nextDueDate) {
         this.nextDueDate = nextDueDate;
+    }
+
+    public LocalTime getNextDueTime() {
+        return nextDueTime;
+    }
+
+    public void setNextDueTime(LocalTime nextDueTime) {
+        this.nextDueTime = nextDueTime != null ? nextDueTime : LocalTime.of(9, 0);
     }
 
     public String getVetClinicName() {
@@ -162,5 +192,31 @@ public class DogMedication {
 
     public void setFrequencyInterval(int frequencyInterval) {
         this.frequencyInterval = Math.max(1, frequencyInterval);
+    }
+
+    public Integer getRemindBeforeValue() {
+        return remindBeforeValue;
+    }
+
+    public void setRemindBeforeValue(Integer remindBeforeValue) {
+        this.remindBeforeValue = remindBeforeValue != null && remindBeforeValue > 0 ? remindBeforeValue : 7;
+    }
+
+    public RemindBeforeUnit getRemindBeforeUnit() {
+        return RemindBeforeUnit.fromString(remindBeforeUnit);
+    }
+
+    public void setRemindBeforeUnit(RemindBeforeUnit unit) {
+        this.remindBeforeUnit = unit != null ? unit.name() : RemindBeforeUnit.DAYS.name();
+    }
+
+    /** @deprecated use {@link #getRemindBeforeValue()} */
+    public Integer getRemindDaysBefore() {
+        return getRemindBeforeValue();
+    }
+
+    /** @deprecated use {@link #setRemindBeforeValue(Integer)} */
+    public void setRemindDaysBefore(Integer remindDaysBefore) {
+        setRemindBeforeValue(remindDaysBefore);
     }
 }

@@ -157,6 +157,28 @@ export async function refreshFoodInventoryFromServer(userId: string): Promise<Fo
   return items;
 }
 
+export async function refreshVaccinationsFromServer(userId: string): Promise<VaccinationRow[]> {
+  const dogOptions = await fetchDogOptionsForUser(userId);
+  const vaccinationsResponse = await withApiRetry(() => vaccinationAPI.list(userId));
+  const rows = Array.isArray(vaccinationsResponse.vaccinations)
+    ? (vaccinationsResponse.vaccinations as VaccinationRow[])
+    : [];
+  setVaccinationsCache(userId, { rows, userDogs: dogOptions });
+  clearVaccinationsDirty(userId);
+  return rows;
+}
+
+export async function refreshMedicationsFromServer(userId: string): Promise<MedicationRow[]> {
+  const dogOptions = await fetchDogOptionsForUser(userId);
+  const medicationsResponse = await withApiRetry(() => medicationAPI.list(userId));
+  const rows = Array.isArray(medicationsResponse.medications)
+    ? (medicationsResponse.medications as MedicationRow[])
+    : [];
+  setMedicationsCache(userId, { rows, userDogs: dogOptions });
+  clearMedicationsDirty(userId);
+  return rows;
+}
+
 export function shouldForceVaccinationsRefresh(userId: string): boolean {
   return dirtyVaccinationsUsers.has(userId);
 }

@@ -21,11 +21,14 @@ import {
   navigateToOwnerDashboard,
 } from '../../navigation/ownerNavigation';
 import { resolveOwnerUserId, getOwnerSession } from '../../utils/ownerSession';
+import { markHomeDataDirty, shouldForceHomeRefresh } from '../../utils/homeDataCache';
+import { resyncAllNotificationsInBackground } from '../../services/notificationScheduler';
 import {
   clearMedicationsDirty,
   fetchDogOptionsForUser,
   getInitialMedicationsState,
   getMedicationsCache,
+  markMedicationsDirty,
   setMedicationsCache,
   shouldForceMedicationsRefresh,
   type DogOption,
@@ -72,6 +75,7 @@ const MedicationsHubScreen = ({ navigation }: any) => {
   const [medicationSort, setMedicationSort] = useState<MedicationSortOption>(DEFAULT_MEDICATION_SORT);
   const [sortModalVisible, setSortModalVisible] = useState(false);
   const [expandedHistoryByKey, setExpandedHistoryByKey] = useState<Record<string, boolean>>({});
+  const [loggingDoseKey, setLoggingDoseKey] = useState<string | null>(null);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
@@ -103,7 +107,8 @@ const MedicationsHubScreen = ({ navigation }: any) => {
       }
       setUserId(uid);
 
-      const forceRefresh = shouldForceMedicationsRefresh(uid);
+      const forceRefresh =
+        shouldForceMedicationsRefresh(uid) || shouldForceHomeRefresh(uid);
       const cached = !forceRefresh ? getMedicationsCache(uid) : undefined;
 
       if (cached) {
@@ -265,6 +270,9 @@ const MedicationsHubScreen = ({ navigation }: any) => {
         onPress: async () => {
           try {
             await medicationAPI.delete(userId, item.id);
+            markHomeDataDirty(userId);
+            markMedicationsDirty(userId);
+            resyncAllNotificationsInBackground(userId);
             await loadMedications();
             Alert.alert('הצלחה', 'הרישום נמחק');
           } catch (e: any) {
@@ -292,6 +300,9 @@ const MedicationsHubScreen = ({ navigation }: any) => {
               await Promise.all(
                 group.history.map((entry) => medicationAPI.delete(userId, entry.id))
               );
+              markHomeDataDirty(userId);
+              markMedicationsDirty(userId);
+              resyncAllNotificationsInBackground(userId);
               setExpandedHistoryByKey((prev) => {
                 const next = { ...prev };
                 delete next[group.key];
@@ -312,6 +323,26 @@ const MedicationsHubScreen = ({ navigation }: any) => {
   const toggleHistory = useCallback((key: string) => {
     setExpandedHistoryByKey((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
+
+  const handleLogDose = useCallback(
+    async (group: MedicationGroup, latest: MedicationRow) => {
+      if (!userId) return;
+      setLoggingDoseKey(group.key);
+      try {
+        await medicationAPI.logDose(userId, latest.id);
+        markHomeDataDirty(userId);
+        markMedicationsDirty(userId);
+        resyncAllNotificationsInBackground(userId);
+        setExpandedHistoryByKey((prev) => ({ ...prev, [group.key]: true }));
+        await loadMedications();
+      } catch (e: any) {
+        Alert.alert('שגיאה', e?.message || 'רישום המנה נכשל');
+      } finally {
+        setLoggingDoseKey(null);
+      }
+    },
+    [userId, loadMedications]
+  );
 
   if (loading && rows.length === 0) {
     return (
@@ -425,6 +456,8 @@ const MedicationsHubScreen = ({ navigation }: any) => {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onDeleteGroup={handleDeleteGroup}
+              onLogDose={handleLogDose}
+              loggingDose={loggingDoseKey === item.key}
               formatDate={formatDateDisplay}
             />
           )}

@@ -1,6 +1,6 @@
 export type NotificationSourceType = 'REMINDER' | 'MEDICATION' | 'VACCINATION' | 'FOOD';
 
-export type MedicationFrequencyType = 'HOURLY' | 'DAILY' | 'EVERY_X_DAYS';
+export type RemindBeforeUnit = 'DAYS' | 'HOURS' | 'MINUTES';
 
 export interface NotificationPreferences {
   notificationsEnabled: boolean;
@@ -8,14 +8,15 @@ export interface NotificationPreferences {
 
 export interface MedicationNotificationSettings {
   notificationEnabled: boolean;
-  scheduleTimes: string;
-  frequencyType: MedicationFrequencyType;
-  frequencyInterval: number;
+  /** Amount of time before next dose to show the home reminder. */
+  remindBeforeValue: number | null;
+  remindBeforeUnit: RemindBeforeUnit;
 }
 
 export interface VaccinationNotificationSettings {
   notificationEnabled: boolean;
-  remindDaysBefore: string;
+  /** Days before vaccination date to show the home reminder. */
+  remindDaysBefore: number | null;
 }
 
 export interface FoodNotificationSettings {
@@ -33,14 +34,13 @@ export interface SchedulableNotification {
 
 export const DEFAULT_MEDICATION_NOTIFICATION: MedicationNotificationSettings = {
   notificationEnabled: false,
-  scheduleTimes: '08:00',
-  frequencyType: 'DAILY',
-  frequencyInterval: 1,
+  remindBeforeValue: 7,
+  remindBeforeUnit: 'DAYS',
 };
 
 export const DEFAULT_VACCINATION_NOTIFICATION: VaccinationNotificationSettings = {
   notificationEnabled: false,
-  remindDaysBefore: '7,1',
+  remindDaysBefore: 7,
 };
 
 export const DEFAULT_FOOD_NOTIFICATION: FoodNotificationSettings = {

@@ -21,8 +21,20 @@ import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-ico
 import { dogAPI, reminderAPI } from '../services/api';
 import { cancelReminderNotification } from '../services/notifications';
 import { resyncAllNotificationsInBackground } from '../services/notificationScheduler';
-import { getHomeCache, markHomeDataDirty, refreshHomeRemindersFromServer } from '../utils/homeDataCache';
-import { markFoodInventoryDirty, refreshFoodInventoryFromServer } from '../utils/healthDataCache';
+import {
+  EDITABLE_HEALTH_REMINDER_TYPES,
+  getHomeCache,
+  markHomeDataDirty,
+  refreshHomeRemindersFromServer,
+} from '../utils/homeDataCache';
+import {
+  markFoodInventoryDirty,
+  markMedicationsDirty,
+  markVaccinationsDirty,
+  refreshFoodInventoryFromServer,
+  refreshMedicationsFromServer,
+  refreshVaccinationsFromServer,
+} from '../utils/healthDataCache';
 import {
   clampReminderDescription,
   REMINDER_DESCRIPTION_MAX_LENGTH,
@@ -111,7 +123,10 @@ const AddReminderScreen = ({ navigation, route }: any) => {
   useEffect(() => {
     if (!reminderToEdit) return;
 
-    if (reminderToEdit.systemGenerated && reminderToEdit.sourceType !== 'FOOD') {
+    if (
+      reminderToEdit.systemGenerated &&
+      !EDITABLE_HEALTH_REMINDER_TYPES.includes(reminderToEdit.sourceType)
+    ) {
       Alert.alert(
         'תזכורת אוטומטית',
         'לא ניתן לערוך תזכורת שנוצרה אוטומטית. עדכן את הגדרות ההתראות בפריט המקור.',
@@ -277,16 +292,23 @@ const AddReminderScreen = ({ navigation, route }: any) => {
       }
 
       await resyncAllNotificationsInBackground(userId);
-      if (isEditing && reminderToEdit?.sourceType === 'FOOD') {
+      if (isEditing && EDITABLE_HEALTH_REMINDER_TYPES.includes(reminderToEdit?.sourceType)) {
         markHomeDataDirty(userId);
-        markFoodInventoryDirty(userId);
+        const refreshTasks: Promise<unknown>[] = [refreshHomeRemindersFromServer(userId)];
+        if (reminderToEdit?.sourceType === 'FOOD') {
+          markFoodInventoryDirty(userId);
+          refreshTasks.push(refreshFoodInventoryFromServer(userId));
+        } else if (reminderToEdit?.sourceType === 'VACCINATION') {
+          markVaccinationsDirty(userId);
+          refreshTasks.push(refreshVaccinationsFromServer(userId));
+        } else if (reminderToEdit?.sourceType === 'MEDICATION') {
+          markMedicationsDirty(userId);
+          refreshTasks.push(refreshMedicationsFromServer(userId));
+        }
         try {
-          await Promise.all([
-            refreshFoodInventoryFromServer(userId),
-            refreshHomeRemindersFromServer(userId),
-          ]);
+          await Promise.all(refreshTasks);
         } catch (refreshError) {
-          console.warn('Failed to refresh food/home data after reminder edit:', refreshError);
+          console.warn('Failed to refresh health/home data after reminder edit:', refreshError);
         }
       }
 

@@ -3,7 +3,9 @@ package com.DogMate.Service;
 import com.DogMate.Domain.DogMedication;
 import com.DogMate.Domain.DogVaccination;
 import com.DogMate.Domain.FoodStock;
-import com.DogMate.Domain.MedicationFrequencyType;
+import com.DogMate.Domain.RemindBeforeUnit;
+
+import java.time.LocalTime;
 
 final class NotificationSettingsHelper {
 
@@ -13,21 +15,21 @@ final class NotificationSettingsHelper {
     static void applyMedicationSettings(
             DogMedication entity,
             Boolean notificationEnabled,
-            String scheduleTimes,
-            String frequencyType,
-            Integer frequencyInterval
+            Integer remindBeforeValue,
+            RemindBeforeUnit remindBeforeUnit,
+            LocalTime nextDueTime
     ) {
         if (notificationEnabled != null) {
             entity.setNotificationEnabled(notificationEnabled);
         }
-        if (scheduleTimes != null) {
-            entity.setScheduleTimes(scheduleTimes);
+        if (remindBeforeValue != null) {
+            entity.setRemindBeforeValue(remindBeforeValue);
         }
-        if (frequencyType != null) {
-            entity.setFrequencyType(MedicationFrequencyType.fromString(frequencyType).name());
+        if (remindBeforeUnit != null) {
+            entity.setRemindBeforeUnit(remindBeforeUnit);
         }
-        if (frequencyInterval != null) {
-            entity.setFrequencyInterval(frequencyInterval);
+        if (nextDueTime != null) {
+            entity.setNextDueTime(nextDueTime);
         }
     }
 

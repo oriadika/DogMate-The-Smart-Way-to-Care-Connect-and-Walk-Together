@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { MedicationRow } from '../../services/api';
 import type { MedicationGroup } from '../../utils/medicationGroups';
@@ -12,6 +12,7 @@ import {
   formatDaysToText,
   getDaysUrgencyColor,
 } from '../../utils/daysDisplay';
+import { isAdministeredToday } from '../../utils/healthLogDose';
 
 const PRIMARY_COLOR = '#7FB069';
 const TEXT_DARK = '#5C4033';
@@ -26,6 +27,8 @@ type Props = {
   onEdit: (item: MedicationRow) => void;
   onDelete: (item: MedicationRow) => void;
   onDeleteGroup: (group: MedicationGroup) => void;
+  onLogDose?: (group: MedicationGroup, latest: MedicationRow) => void;
+  loggingDose?: boolean;
   formatDate: (iso: string) => string;
 };
 
@@ -36,9 +39,12 @@ export default function MedicationGroupCard({
   onEdit,
   onDelete,
   onDeleteGroup,
+  onLogDose,
+  loggingDose = false,
   formatDate,
 }: Props) {
   const latest = getLatestMedicationRecord(group.history);
+  const loggedToday = latest ? isAdministeredToday(latest.administeredDate) : false;
   const nextDueFromLatest = getLatestNextDueDate(group.history);
   const daysUntilNext = daysUntilIsoDate(nextDueFromLatest);
   const isOverdue = daysUntilNext != null && daysUntilNext < 0;
@@ -60,6 +66,25 @@ export default function MedicationGroupCard({
           ) : (
             <Text style={styles.nextDueMuted}>מנה הבאה: לא נקבע</Text>
           )}
+          {latest && onLogDose ? (
+            <TouchableOpacity
+              style={[
+                styles.logDoseBtn,
+                (loggingDose || loggedToday) && styles.logDoseBtnDisabled,
+              ]}
+              onPress={() => !loggingDose && !loggedToday && onLogDose(group, latest)}
+              disabled={loggingDose || loggedToday}
+              activeOpacity={0.85}
+            >
+              {loggingDose ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.logDoseBtnText}>
+                  {loggedToday ? 'נרשם היום ✓' : 'ניתנה התרופה'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {latest ? (
@@ -198,6 +223,28 @@ const styles = StyleSheet.create({
     color: MUTED,
     marginTop: 4,
     textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  logDoseBtn: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+    maxWidth: '78%',
+    backgroundColor: PRIMARY_COLOR,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 30,
+  },
+  logDoseBtnDisabled: {
+    backgroundColor: '#B4D6A5',
+  },
+  logDoseBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
     writingDirection: 'rtl',
   },
   historySection: {

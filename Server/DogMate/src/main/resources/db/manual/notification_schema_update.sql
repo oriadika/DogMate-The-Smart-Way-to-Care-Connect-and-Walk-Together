@@ -17,6 +17,26 @@ ALTER TABLE dog_medications
 ALTER TABLE dog_medications
     ADD COLUMN IF NOT EXISTS frequency_interval INTEGER NOT NULL DEFAULT 1;
 
+ALTER TABLE dog_medications
+    ADD COLUMN IF NOT EXISTS remind_days_before INTEGER DEFAULT 7;
+
+ALTER TABLE dog_medications
+    ADD COLUMN IF NOT EXISTS remind_before_unit VARCHAR(16) NOT NULL DEFAULT 'DAYS';
+
+ALTER TABLE dog_medications
+    ADD COLUMN IF NOT EXISTS next_due_time TIME DEFAULT '09:00:00';
+
+UPDATE dog_medications SET remind_before_unit = 'DAYS' WHERE remind_before_unit IS NULL;
+
+UPDATE dog_medications SET remind_days_before = 7 WHERE remind_days_before IS NULL;
+
+UPDATE dog_medications SET next_due_time = '09:00:00' WHERE next_due_time IS NULL;
+
+ALTER TABLE dog_medications
+    ADD COLUMN IF NOT EXISTS administered_time TIME DEFAULT '09:00:00';
+
+UPDATE dog_medications SET administered_time = '09:00:00' WHERE administered_time IS NULL;
+
 -- ---------------------------------------------------------------------------
 -- dog_vaccinations
 -- ---------------------------------------------------------------------------
@@ -24,7 +44,9 @@ ALTER TABLE dog_vaccinations
     ADD COLUMN IF NOT EXISTS notification_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 
 ALTER TABLE dog_vaccinations
-    ADD COLUMN IF NOT EXISTS remind_days_before TEXT DEFAULT '7,1';
+    ADD COLUMN IF NOT EXISTS remind_days_before TEXT DEFAULT '7';
+
+UPDATE dog_vaccinations SET remind_days_before = '7' WHERE remind_days_before IS NULL OR remind_days_before = '7,1';
 
 -- ---------------------------------------------------------------------------
 -- food_stocks

@@ -52,7 +52,7 @@ public class DogVaccination {
 
     /** Comma-separated days before due date, e.g. "7,1" */
     @Column(name = "remind_days_before", columnDefinition = "TEXT")
-    private String remindDaysBefore = "7,1";
+    private String remindDaysBefore = "7";
 
     protected DogVaccination() {
     }
@@ -139,6 +139,6 @@ public class DogVaccination {
     }
 
     public void setRemindDaysBefore(String remindDaysBefore) {
-        this.remindDaysBefore = remindDaysBefore != null && !remindDaysBefore.isBlank() ? remindDaysBefore.trim() : "7,1";
+        this.remindDaysBefore = remindDaysBefore != null && !remindDaysBefore.isBlank() ? remindDaysBefore.trim() : "7";
     }
 }

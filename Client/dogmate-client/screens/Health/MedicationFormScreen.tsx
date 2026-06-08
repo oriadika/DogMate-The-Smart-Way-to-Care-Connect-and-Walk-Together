@@ -20,14 +20,31 @@ import ReminderSettingsSection from '../../components/health/ReminderSettingsSec
 import {
   DEFAULT_MEDICATION_NOTIFICATION,
   type MedicationNotificationSettings,
-  type MedicationFrequencyType,
 } from '../../types/notifications';
 import { resyncAllNotifications } from '../../services/notificationScheduler';
-import { markHomeDataDirty } from '../../utils/homeDataCache';
-import { markMedicationsDirty } from '../../utils/healthDataCache';
+import {
+  findMedicationReminderForRecord,
+  markHomeDataDirty,
+  refreshHomeRemindersFromServer,
+  shouldForceHomeRefresh,
+  type HomeReminderRow,
+} from '../../utils/homeDataCache';
+import {
+  clearMedicationsDirty,
+  markMedicationsDirty,
+  refreshMedicationsFromServer,
+  shouldForceMedicationsRefresh,
+} from '../../utils/healthDataCache';
+import {
+  formatTimeHe,
+  parseRemindBeforeUnit,
+  parseStoredNextDueTime,
+  parseStoredRemindBeforeValue,
+} from '../../utils/healthReminderSettings';
 import { useScreenLifecycleGuard } from '../../utils/screenLifecycle';
 import MedicationNamePicker from '../../components/health/MedicationNamePicker';
 import MedicationNameAutocompleteInput from '../../components/health/MedicationNameAutocompleteInput';
+import NextDueCycleOptions from '../../components/health/NextDueCycleOptions';
 import { getUniqueMedicationNamesForDog } from '../../utils/medicationHistory';
 import {
   ISRAEL_MEDICATION_CUSTOM,
@@ -77,10 +94,25 @@ type MedicationFormState = {
   medicationKey: IsraelMedicationKey | null;
   medicationDetailName: string;
   administeredDate: Date;
+  administeredTime: string;
   nextDueDate: Date | null;
+  nextDueTime: string;
   nextDueManuallyEdited: boolean;
+  noNextCycle: boolean;
   vetClinicName: string;
 };
+
+function timeStringToDate(time: string): Date {
+  const normalized = parseStoredNextDueTime(time);
+  const [hour, minute] = normalized.split(':').map((p) => parseInt(p, 10));
+  const d = new Date();
+  d.setHours(hour, minute, 0, 0);
+  return d;
+}
+
+function dateToTimeString(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 
 function initialMedicationFields(storedName: string): Pick<MedicationFormState, 'medicationKey' | 'medicationDetailName'> {
   const trimmed = storedName.trim();
@@ -101,7 +133,10 @@ function buildStoredMedicationName(_key: IsraelMedicationKey | null, detailName:
   return detailName.trim();
 }
 
-type DatePickerTarget = 'administered' | 'nextDue';
+type DatePickerTarget = 'administered' | 'administeredTime' | 'nextDue' | 'nextDueTime';
+
+const isTimePickerTarget = (target: DatePickerTarget | null): boolean =>
+  target === 'nextDueTime' || target === 'administeredTime';
 
 const MedicationFormScreen = ({ navigation, route }: any) => {
   const paramUserId = route?.params?.userId as string | undefined;
@@ -122,8 +157,11 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
       selectedDogId: paramDogId ?? null,
       ...medFields,
       administeredDate: parseIsoToLocalDate(paramAdministeredDate ?? ''),
+      administeredTime: dateToTimeString(new Date()),
       nextDueDate: paramNextDueDate ? parseIsoToLocalDate(paramNextDueDate) : null,
+      nextDueTime: '09:00',
       nextDueManuallyEdited: Boolean(paramNextDueDate),
+      noNextCycle: !paramNextDueDate,
       vetClinicName: paramVetClinicName ?? '',
     };
   });
@@ -133,6 +171,13 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
   const [notificationSettings, setNotificationSettings] = useState<MedicationNotificationSettings>(
     DEFAULT_MEDICATION_NOTIFICATION
   );
+  const [linkedMedicationReminder, setLinkedMedicationReminder] = useState<HomeReminderRow | null>(null);
+  const [loadedSyncSnapshot, setLoadedSyncSnapshot] = useState<{
+    remindBeforeValue: number | null;
+    remindBeforeUnit: string;
+    nextDueDate: string | null;
+    nextDueTime: string;
+  } | null>(null);
 
   const isEdit = Boolean(medicationId);
 
@@ -153,6 +198,66 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
     [medicationRows, form.selectedDogId]
   );
 
+  const selectedDogName =
+    dogs.find((d) => d.id === form.selectedDogId)?.name ?? 'כלב';
+
+  const medicationPreviewContext = {
+    nextDueDate: form.nextDueDate,
+    nextDueTime: form.nextDueTime,
+    medicationName: resolvedMedicationName,
+    dogName: selectedDogName,
+  };
+
+  const linkedReminderPreview = (() => {
+    if (!linkedMedicationReminder?.remindAt || !loadedSyncSnapshot) return null;
+    const reminderDate = new Date(linkedMedicationReminder.remindAt);
+    if (Number.isNaN(reminderDate.getTime())) return null;
+    const nextDueIso = form.nextDueDate ? toIsoLocal(form.nextDueDate) : null;
+    const unchanged =
+      notificationSettings.remindBeforeValue === loadedSyncSnapshot.remindBeforeValue &&
+      notificationSettings.remindBeforeUnit === loadedSyncSnapshot.remindBeforeUnit &&
+      nextDueIso === loadedSyncSnapshot.nextDueDate &&
+      form.nextDueTime === loadedSyncSnapshot.nextDueTime;
+    if (!unchanged) return null;
+    return {
+      title: linkedMedicationReminder.title || '',
+      description: linkedMedicationReminder.description || '',
+      remindAt: reminderDate,
+    };
+  })();
+
+  const applyMedicationRow = (existing: MedicationRow) => {
+    const medFields = initialMedicationFields(existing.medicationName ?? '');
+    setForm({
+      selectedDogId: existing.dogId ?? null,
+      ...medFields,
+      administeredDate: parseIsoToLocalDate(existing.administeredDate ?? ''),
+      administeredTime: parseStoredNextDueTime(existing.administeredTime),
+      nextDueDate: existing.nextDueDate ? parseIsoToLocalDate(existing.nextDueDate) : null,
+      nextDueTime: parseStoredNextDueTime(existing.nextDueTime),
+      nextDueManuallyEdited: Boolean(existing.nextDueDate),
+      noNextCycle: !existing.nextDueDate,
+      vetClinicName: existing.vetClinicName ?? '',
+    });
+    const nextNotificationSettings = {
+      notificationEnabled: existing.notificationEnabled ?? false,
+      remindBeforeValue: parseStoredRemindBeforeValue(
+        existing.remindBeforeValue,
+        existing.remindDaysBefore
+      ),
+      remindBeforeUnit: parseRemindBeforeUnit(existing.remindBeforeUnit),
+    };
+    setNotificationSettings(nextNotificationSettings);
+    setLoadedSyncSnapshot({
+      remindBeforeValue: nextNotificationSettings.remindBeforeValue,
+      remindBeforeUnit: nextNotificationSettings.remindBeforeUnit,
+      nextDueDate: existing.nextDueDate
+        ? toIsoLocal(parseIsoToLocalDate(existing.nextDueDate))
+        : null,
+      nextDueTime: parseStoredNextDueTime(existing.nextDueTime),
+    });
+  };
+
   useEffect(() => {
     if (!isMountedRef.current) return;
     setUserId(paramUserId ?? null);
@@ -163,8 +268,11 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
         selectedDogId: paramDogId ?? null,
         ...medFields,
         administeredDate: parseIsoToLocalDate(paramAdministeredDate ?? ''),
+        administeredTime: dateToTimeString(new Date()),
         nextDueDate: paramNextDueDate ? parseIsoToLocalDate(paramNextDueDate) : null,
+        nextDueTime: '09:00',
         nextDueManuallyEdited: Boolean(paramNextDueDate),
+        noNextCycle: !paramNextDueDate,
         vetClinicName: paramVetClinicName ?? '',
       });
     } else {
@@ -174,8 +282,11 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
         medicationKey: null,
         medicationDetailName: '',
         administeredDate: new Date(),
+        administeredTime: dateToTimeString(new Date()),
         nextDueDate: null,
+        nextDueTime: '09:00',
         nextDueManuallyEdited: false,
+        noNextCycle: false,
         vetClinicName: '',
       });
     }
@@ -194,9 +305,9 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
     (medicationKey: IsraelMedicationKey | null, administeredDate: Date, force = false) => {
       if (!medicationKey) return;
       setForm((prev) => {
-        if (!force && prev.nextDueManuallyEdited) return prev;
+        if (!force && (prev.nextDueManuallyEdited || prev.noNextCycle)) return prev;
         const computed = computeNextDueDate(medicationKey, administeredDate);
-        return { ...prev, nextDueDate: computed };
+        return { ...prev, nextDueDate: computed, noNextCycle: false };
       });
     },
     []
@@ -213,9 +324,20 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
     try {
       if (!isAsyncWorkCurrent(generation)) return;
       setLoading(true);
-      const [dogsRes, medsRes] = await Promise.all([
+      const forceRefresh =
+        shouldForceMedicationsRefresh(paramUserId) || shouldForceHomeRefresh(paramUserId);
+
+      const [dogsRes, meds, reminders] = await Promise.all([
         dogAPI.getDogsForUser(paramUserId),
-        medicationAPI.list(paramUserId).catch(() => ({ medications: [] })),
+        forceRefresh
+          ? refreshMedicationsFromServer(paramUserId)
+          : medicationAPI
+              .list(paramUserId)
+              .then((r) => (r.medications as MedicationRow[]) ?? [])
+              .catch(() => [] as MedicationRow[]),
+        refreshHomeRemindersFromServer(paramUserId).catch(
+          async () => [] as HomeReminderRow[]
+        ),
       ]);
       if (!isAsyncWorkCurrent(generation)) return;
       const list = dogsRes.success && Array.isArray(dogsRes.dogs) ? dogsRes.dogs : [];
@@ -225,17 +347,17 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
           name: d.name || 'כלב',
         }))
       );
-      const meds = Array.isArray(medsRes.medications) ? medsRes.medications : [];
-      setMedicationRows(meds as MedicationRow[]);
+      setMedicationRows(meds);
       if (paramMedicationId) {
-        const existing = (meds as MedicationRow[]).find((m) => m.id === paramMedicationId);
+        const existing = meds.find((m) => m.id === paramMedicationId);
         if (existing) {
-          setNotificationSettings({
-            notificationEnabled: existing.notificationEnabled ?? false,
-            scheduleTimes: existing.scheduleTimes ?? '08:00',
-            frequencyType: (existing.frequencyType as MedicationFrequencyType) ?? 'DAILY',
-            frequencyInterval: existing.frequencyInterval ?? 1,
-          });
+          applyMedicationRow(existing);
+          setLinkedMedicationReminder(
+            findMedicationReminderForRecord(reminders, paramMedicationId)
+          );
+        }
+        if (forceRefresh) {
+          clearMedicationsDirty(paramUserId);
         }
       }
       if (!paramMedicationId && list.length === 1) {
@@ -269,19 +391,41 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
       ...prev,
       medicationKey: key,
       nextDueManuallyEdited: false,
+      noNextCycle: false,
     }));
     applyAutoNextDue(key, form.administeredDate, true);
   };
 
   const onAdministeredDateChange = (selectedDate: Date) => {
     setForm((prev) => ({ ...prev, administeredDate: selectedDate }));
-    if (!form.nextDueManuallyEdited && form.medicationKey) {
+    if (!form.nextDueManuallyEdited && !form.noNextCycle && form.medicationKey) {
       applyAutoNextDue(form.medicationKey, selectedDate, true);
     }
   };
 
+  const clearNextDueCycle = () => {
+    setForm((prev) => ({
+      ...prev,
+      nextDueDate: null,
+      noNextCycle: true,
+      nextDueManuallyEdited: true,
+    }));
+    setNotificationSettings((prev) => ({ ...prev, notificationEnabled: false }));
+  };
+
+  const restoreAutoNextDue = () => {
+    setForm((prev) => ({
+      ...prev,
+      noNextCycle: false,
+      nextDueManuallyEdited: false,
+    }));
+    if (form.medicationKey) {
+      applyAutoNextDue(form.medicationKey, form.administeredDate, true);
+    }
+  };
+
   const onDateChange = (event: any, selectedDate?: Date) => {
-    if (!datePickerTarget) return;
+    if (!datePickerTarget || isTimePickerTarget(datePickerTarget)) return;
     if (Platform.OS === 'android') {
       setDatePickerTarget(null);
       if (event.type === 'dismissed' || !selectedDate) return;
@@ -293,14 +437,33 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
         ...prev,
         nextDueDate: selectedDate ?? null,
         nextDueManuallyEdited: true,
+        noNextCycle: false,
       }));
     }
   };
 
+  const onTimeChange = (event: any, selectedDate?: Date) => {
+    if (!isTimePickerTarget(datePickerTarget)) return;
+    if (Platform.OS === 'android') {
+      setDatePickerTarget(null);
+      if (event.type === 'dismissed' || !selectedDate) return;
+    }
+    const timeStr = dateToTimeString(selectedDate!);
+    setForm((prev) => ({
+      ...prev,
+      ...(datePickerTarget === 'administeredTime'
+        ? { administeredTime: timeStr }
+        : { nextDueTime: timeStr }),
+    }));
+  };
+
   const closeDatePicker = () => setDatePickerTarget(null);
 
-  const activePickerDate =
-    datePickerTarget === 'nextDue'
+  const activePickerDate = isTimePickerTarget(datePickerTarget)
+    ? timeStringToDate(
+        datePickerTarget === 'administeredTime' ? form.administeredTime : form.nextDueTime
+      )
+    : datePickerTarget === 'nextDue'
       ? form.nextDueDate ?? form.administeredDate
       : form.administeredDate;
 
@@ -329,16 +492,32 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
       Alert.alert('שגיאה', validationError);
       return;
     }
+    if (
+      notificationSettings.notificationEnabled &&
+      (notificationSettings.remindBeforeValue == null ||
+        notificationSettings.remindBeforeValue <= 0)
+    ) {
+      Alert.alert('שגיאה', 'יש להגדיר כמה זמן לפני מתן התרופה הבאה תופיע התזכורת בדף הבית');
+      return;
+    }
+    if (notificationSettings.notificationEnabled && !form.nextDueDate) {
+      Alert.alert(
+        'שגיאה',
+        'יש להגדיר תאריך מנה הבאה כדי להפעיל תזכורת, או לבטל את התזכורת לתרופה חד פעמית'
+      );
+      return;
+    }
     const payload = {
       dogId: form.selectedDogId!,
       medicationName: resolvedMedicationName,
       administeredDate: toIsoLocal(form.administeredDate),
+      administeredTime: parseStoredNextDueTime(form.administeredTime),
       nextDueDate: form.nextDueDate ? toIsoLocal(form.nextDueDate) : null,
+      nextDueTime: form.nextDueDate ? parseStoredNextDueTime(form.nextDueTime) : null,
       vetClinicName: form.vetClinicName.trim() || null,
       notificationEnabled: notificationSettings.notificationEnabled,
-      scheduleTimes: notificationSettings.scheduleTimes,
-      frequencyType: notificationSettings.frequencyType,
-      frequencyInterval: notificationSettings.frequencyInterval,
+      remindBeforeValue: notificationSettings.remindBeforeValue,
+      remindBeforeUnit: notificationSettings.remindBeforeUnit,
     };
     try {
       setSaving(true);
@@ -347,12 +526,25 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
         await resyncAllNotifications(userId);
         markHomeDataDirty(userId);
         markMedicationsDirty(userId);
+        try {
+          await Promise.all([
+            refreshMedicationsFromServer(userId),
+            refreshHomeRemindersFromServer(userId),
+          ]);
+        } catch (refreshError) {
+          console.warn('Failed to refresh caches after medication update:', refreshError);
+        }
         Alert.alert('הצלחה', 'התרופה עודכנה', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
       } else {
         await medicationAPI.create(userId, payload);
         await resyncAllNotifications(userId);
         markHomeDataDirty(userId);
         markMedicationsDirty(userId);
+        try {
+          await refreshHomeRemindersFromServer(userId);
+        } catch (refreshError) {
+          console.warn('Failed to refresh home after medication create:', refreshError);
+        }
         Alert.alert('הצלחה', 'התרופה נשמר', [{ text: 'אישור', onPress: () => navigation.goBack() }]);
       }
     } catch (e: any) {
@@ -450,6 +642,19 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
             </View>
           </TouchableOpacity>
 
+          <Text style={styles.label}>שעת המנה</Text>
+          <TouchableOpacity
+            style={styles.input}
+            onPress={() => setDatePickerTarget('administeredTime')}
+            activeOpacity={0.7}
+            disabled={saving}
+          >
+            <View style={styles.dateRow}>
+              <Text style={styles.dateText}>{formatTimeHe(form.administeredTime)}</Text>
+              <Ionicons name="time-outline" size={22} color="#8B7355" />
+            </View>
+          </TouchableOpacity>
+
           <Text style={styles.label}>תאריך המנה הבאה / חידוש</Text>
           <TouchableOpacity
             style={styles.input}
@@ -464,9 +669,38 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
               <Ionicons name="calendar-outline" size={22} color="#8B7355" />
             </View>
           </TouchableOpacity>
-          {form.medicationKey && !form.nextDueManuallyEdited ? (
+          <NextDueCycleOptions
+            hasNextDueDate={Boolean(form.nextDueDate)}
+            isOneTime={form.noNextCycle}
+            onClearNextDue={clearNextDueCycle}
+            onRestoreAuto={restoreAutoNextDue}
+            showRestoreAuto={
+              form.noNextCycle &&
+              form.medicationKey != null &&
+              form.medicationKey !== ISRAEL_MEDICATION_CUSTOM
+            }
+            clearLabel="אין מנה הבאה — חד פעמי"
+            oneTimeHint="חד פעמי — ללא מנה הבאה"
+            disabled={saving}
+          />
+          {form.medicationKey && !form.nextDueManuallyEdited && !form.noNextCycle ? (
             <Text style={styles.autoHint}>חושב אוטומטית לפי מינון ותדירות — ניתן לעריכה</Text>
           ) : null}
+
+          <Text style={styles.label}>שעת המנה הבאה</Text>
+          <TouchableOpacity
+            style={[styles.input, !form.nextDueDate && styles.saveDisabled]}
+            onPress={() => form.nextDueDate && setDatePickerTarget('nextDueTime')}
+            activeOpacity={0.7}
+            disabled={saving || !form.nextDueDate}
+          >
+            <View style={styles.dateRow}>
+              <Text style={[styles.dateText, !form.nextDueDate && styles.datePlaceholder]}>
+                {form.nextDueDate ? formatTimeHe(form.nextDueTime) : 'הגדר תאריך מנה הבאה תחילה'}
+              </Text>
+              <Ionicons name="time-outline" size={22} color="#8B7355" />
+            </View>
+          </TouchableOpacity>
 
           <Text style={styles.label}>שם הוטרינר / המרפאה</Text>
           <TextInput
@@ -483,6 +717,8 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
             value={notificationSettings}
             onChange={setNotificationSettings}
             disabled={saving}
+            previewContext={medicationPreviewContext}
+            linkedReminder={linkedReminderPreview}
           />
 
           {Platform.OS === 'ios' && datePickerTarget && (
@@ -496,9 +732,9 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
                   </View>
                   <DateTimePicker
                     value={activePickerDate}
-                    mode="date"
+                    mode={isTimePickerTarget(datePickerTarget) ? 'time' : 'date'}
                     display="spinner"
-                    onChange={onDateChange}
+                    onChange={isTimePickerTarget(datePickerTarget) ? onTimeChange : onDateChange}
                     maximumDate={datePickerTarget === 'administered' ? new Date() : undefined}
                     minimumDate={datePickerTarget === 'nextDue' ? form.administeredDate : undefined}
                     textColor={TEXT_DARK}
@@ -510,9 +746,9 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
           {Platform.OS === 'android' && datePickerTarget && (
             <DateTimePicker
               value={activePickerDate}
-              mode="date"
+              mode={isTimePickerTarget(datePickerTarget) ? 'time' : 'date'}
               display="default"
-              onChange={onDateChange}
+              onChange={isTimePickerTarget(datePickerTarget) ? onTimeChange : onDateChange}
               maximumDate={datePickerTarget === 'administered' ? new Date() : undefined}
               minimumDate={datePickerTarget === 'nextDue' ? form.administeredDate : undefined}
             />

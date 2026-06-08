@@ -21,11 +21,14 @@ import {
   navigateToOwnerDashboard,
 } from '../../navigation/ownerNavigation';
 import { resolveOwnerUserId, getOwnerSession } from '../../utils/ownerSession';
+import { markHomeDataDirty, shouldForceHomeRefresh } from '../../utils/homeDataCache';
+import { resyncAllNotificationsInBackground } from '../../services/notificationScheduler';
 import {
   clearVaccinationsDirty,
   fetchDogOptionsForUser,
   getInitialVaccinationsState,
   getVaccinationsCache,
+  markVaccinationsDirty,
   setVaccinationsCache,
   shouldForceVaccinationsRefresh,
   type DogOption,
@@ -72,6 +75,7 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
   const [vaccinationSort, setVaccinationSort] = useState<VaccinationSortOption>(DEFAULT_VACCINATION_SORT);
   const [sortModalVisible, setSortModalVisible] = useState(false);
   const [expandedHistoryByKey, setExpandedHistoryByKey] = useState<Record<string, boolean>>({});
+  const [loggingDoseKey, setLoggingDoseKey] = useState<string | null>(null);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
@@ -103,7 +107,8 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
       }
       setUserId(uid);
 
-      const forceRefresh = shouldForceVaccinationsRefresh(uid);
+      const forceRefresh =
+        shouldForceVaccinationsRefresh(uid) || shouldForceHomeRefresh(uid);
       const cached = !forceRefresh ? getVaccinationsCache(uid) : undefined;
 
       if (cached) {
@@ -265,6 +270,9 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
         onPress: async () => {
           try {
             await vaccinationAPI.delete(userId, item.id);
+            markHomeDataDirty(userId);
+            markVaccinationsDirty(userId);
+            resyncAllNotificationsInBackground(userId);
             await loadVaccinations();
             Alert.alert('הצלחה', 'הרישום נמחק');
           } catch (e: any) {
@@ -292,6 +300,9 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
               await Promise.all(
                 group.history.map((entry) => vaccinationAPI.delete(userId, entry.id))
               );
+              markHomeDataDirty(userId);
+              markVaccinationsDirty(userId);
+              resyncAllNotificationsInBackground(userId);
               setExpandedHistoryByKey((prev) => {
                 const next = { ...prev };
                 delete next[group.key];
@@ -312,6 +323,26 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
   const toggleHistory = useCallback((key: string) => {
     setExpandedHistoryByKey((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
+
+  const handleLogDose = useCallback(
+    async (group: VaccinationGroup, latest: VaccinationRow) => {
+      if (!userId) return;
+      setLoggingDoseKey(group.key);
+      try {
+        await vaccinationAPI.logDose(userId, latest.id);
+        markHomeDataDirty(userId);
+        markVaccinationsDirty(userId);
+        resyncAllNotificationsInBackground(userId);
+        setExpandedHistoryByKey((prev) => ({ ...prev, [group.key]: true }));
+        await loadVaccinations();
+      } catch (e: any) {
+        Alert.alert('שגיאה', e?.message || 'רישום החיסון נכשל');
+      } finally {
+        setLoggingDoseKey(null);
+      }
+    },
+    [userId, loadVaccinations]
+  );
 
   if (loading && rows.length === 0) {
     return (
@@ -425,6 +456,8 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onDeleteGroup={handleDeleteGroup}
+              onLogDose={handleLogDose}
+              loggingDose={loggingDoseKey === item.key}
               formatDate={formatDateDisplay}
             />
           )}

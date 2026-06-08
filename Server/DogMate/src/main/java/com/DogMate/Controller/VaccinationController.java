@@ -100,6 +100,25 @@ public class VaccinationController {
         }
     }
 
+    @PostMapping("/{vaccinationId}/log-dose")
+    public ResponseEntity<?> logDose(@PathVariable String vaccinationId, @RequestParam String userId) {
+        try {
+            UUID uid = UUID.fromString(userId);
+            UUID vid = UUID.fromString(vaccinationId);
+            VaccinationDTO saved = vaccinationService.logDose(uid, vid);
+            Map<String, Object> ok = new HashMap<>();
+            ok.put("success", true);
+            ok.put("vaccination", saved);
+            ok.put("message", "החיסון נרשם בהצלחה");
+            return ResponseEntity.ok(ok);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(error("נכשל רישום החיסון: " + e.getMessage()));
+        }
+    }
+
     @DeleteMapping("/{vaccinationId}")
     public ResponseEntity<?> delete(@PathVariable String vaccinationId, @RequestParam String userId) {
         try {

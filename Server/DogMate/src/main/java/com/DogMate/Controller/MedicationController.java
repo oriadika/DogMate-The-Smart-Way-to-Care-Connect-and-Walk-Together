@@ -1,5 +1,6 @@
 package com.DogMate.Controller;
 
+import com.DogMate.Domain.RemindBeforeUnit;
 import com.DogMate.DTO.MedicationDTO;
 import com.DogMate.Service.MedicationService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -16,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -58,9 +61,10 @@ public class MedicationController {
             LocalDate date = parseDate(body.getAdministeredDate());
             LocalDate nextDue = parseOptionalDate(body.getNextDueDate());
             MedicationDTO saved = medicationService.create(uid, body.getDogId(), body.getMedicationName(), date,
-                    nextDue, body.getVetClinicName(),
-                    body.getNotificationEnabled(), body.getScheduleTimes(),
-                    body.getFrequencyType(), body.getFrequencyInterval());
+                    parseOptionalTime(body.getAdministeredTime()), nextDue,
+                    parseOptionalTime(body.getNextDueTime()), body.getVetClinicName(),
+                    body.getNotificationEnabled(), resolveRemindBeforeValue(body),
+                    RemindBeforeUnit.fromString(body.getRemindBeforeUnit()));
             Map<String, Object> ok = new HashMap<>();
             ok.put("success", true);
             ok.put("medication", saved);
@@ -87,9 +91,10 @@ public class MedicationController {
             LocalDate date = parseDate(body.getAdministeredDate());
             LocalDate nextDue = parseOptionalDate(body.getNextDueDate());
             MedicationDTO saved = medicationService.update(uid, mid, body.getDogId(), body.getMedicationName(), date,
-                    nextDue, body.getVetClinicName(),
-                    body.getNotificationEnabled(), body.getScheduleTimes(),
-                    body.getFrequencyType(), body.getFrequencyInterval());
+                    parseOptionalTime(body.getAdministeredTime()), nextDue,
+                    parseOptionalTime(body.getNextDueTime()), body.getVetClinicName(),
+                    body.getNotificationEnabled(), resolveRemindBeforeValue(body),
+                    RemindBeforeUnit.fromString(body.getRemindBeforeUnit()));
             Map<String, Object> ok = new HashMap<>();
             ok.put("success", true);
             ok.put("medication", saved);
@@ -99,6 +104,25 @@ public class MedicationController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(error("נכשל עדכון התרופה: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{medicationId}/log-dose")
+    public ResponseEntity<?> logDose(@PathVariable String medicationId, @RequestParam String userId) {
+        try {
+            UUID uid = UUID.fromString(userId);
+            UUID mid = UUID.fromString(medicationId);
+            MedicationDTO saved = medicationService.logDose(uid, mid);
+            Map<String, Object> ok = new HashMap<>();
+            ok.put("success", true);
+            ok.put("medication", saved);
+            ok.put("message", "המנה נרשמה בהצלחה");
+            return ResponseEntity.ok(ok);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(error(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(error("נכשל רישום המנה: " + e.getMessage()));
         }
     }
 
@@ -141,17 +165,40 @@ public class MedicationController {
         return m;
     }
 
+    private static LocalTime parseOptionalTime(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        return LocalTime.parse(raw.trim(), DateTimeFormatter.ofPattern("H:mm"));
+    }
+
+    private static Integer resolveRemindBeforeValue(CreateMedicationRequest body) {
+        if (body.getRemindBeforeValue() != null) {
+            return body.getRemindBeforeValue();
+        }
+        return body.getRemindDaysBefore();
+    }
+
+    private static Integer resolveRemindBeforeValue(UpdateMedicationRequest body) {
+        if (body.getRemindBeforeValue() != null) {
+            return body.getRemindBeforeValue();
+        }
+        return body.getRemindDaysBefore();
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class CreateMedicationRequest {
         private UUID dogId;
         private String medicationName;
         private String administeredDate;
+        private String administeredTime;
         private String nextDueDate;
         private String vetClinicName;
         private Boolean notificationEnabled;
-        private String scheduleTimes;
-        private String frequencyType;
-        private Integer frequencyInterval;
+        private Integer remindBeforeValue;
+        private String remindBeforeUnit;
+        private Integer remindDaysBefore;
+        private String nextDueTime;
 
         public UUID getDogId() {
             return dogId;
@@ -177,12 +224,28 @@ public class MedicationController {
             this.administeredDate = administeredDate;
         }
 
+        public String getAdministeredTime() {
+            return administeredTime;
+        }
+
+        public void setAdministeredTime(String administeredTime) {
+            this.administeredTime = administeredTime;
+        }
+
         public String getNextDueDate() {
             return nextDueDate;
         }
 
         public void setNextDueDate(String nextDueDate) {
             this.nextDueDate = nextDueDate;
+        }
+
+        public String getNextDueTime() {
+            return nextDueTime;
+        }
+
+        public void setNextDueTime(String nextDueTime) {
+            this.nextDueTime = nextDueTime;
         }
 
         public String getVetClinicName() {
@@ -201,28 +264,28 @@ public class MedicationController {
             this.notificationEnabled = notificationEnabled;
         }
 
-        public String getScheduleTimes() {
-            return scheduleTimes;
+        public Integer getRemindBeforeValue() {
+            return remindBeforeValue;
         }
 
-        public void setScheduleTimes(String scheduleTimes) {
-            this.scheduleTimes = scheduleTimes;
+        public void setRemindBeforeValue(Integer remindBeforeValue) {
+            this.remindBeforeValue = remindBeforeValue;
         }
 
-        public String getFrequencyType() {
-            return frequencyType;
+        public String getRemindBeforeUnit() {
+            return remindBeforeUnit;
         }
 
-        public void setFrequencyType(String frequencyType) {
-            this.frequencyType = frequencyType;
+        public void setRemindBeforeUnit(String remindBeforeUnit) {
+            this.remindBeforeUnit = remindBeforeUnit;
         }
 
-        public Integer getFrequencyInterval() {
-            return frequencyInterval;
+        public Integer getRemindDaysBefore() {
+            return remindDaysBefore;
         }
 
-        public void setFrequencyInterval(Integer frequencyInterval) {
-            this.frequencyInterval = frequencyInterval;
+        public void setRemindDaysBefore(Integer remindDaysBefore) {
+            this.remindDaysBefore = remindDaysBefore;
         }
     }
 
@@ -231,12 +294,14 @@ public class MedicationController {
         private UUID dogId;
         private String medicationName;
         private String administeredDate;
+        private String administeredTime;
         private String nextDueDate;
         private String vetClinicName;
         private Boolean notificationEnabled;
-        private String scheduleTimes;
-        private String frequencyType;
-        private Integer frequencyInterval;
+        private Integer remindBeforeValue;
+        private String remindBeforeUnit;
+        private Integer remindDaysBefore;
+        private String nextDueTime;
 
         public UUID getDogId() {
             return dogId;
@@ -262,12 +327,28 @@ public class MedicationController {
             this.administeredDate = administeredDate;
         }
 
+        public String getAdministeredTime() {
+            return administeredTime;
+        }
+
+        public void setAdministeredTime(String administeredTime) {
+            this.administeredTime = administeredTime;
+        }
+
         public String getNextDueDate() {
             return nextDueDate;
         }
 
         public void setNextDueDate(String nextDueDate) {
             this.nextDueDate = nextDueDate;
+        }
+
+        public String getNextDueTime() {
+            return nextDueTime;
+        }
+
+        public void setNextDueTime(String nextDueTime) {
+            this.nextDueTime = nextDueTime;
         }
 
         public String getVetClinicName() {
@@ -286,28 +367,28 @@ public class MedicationController {
             this.notificationEnabled = notificationEnabled;
         }
 
-        public String getScheduleTimes() {
-            return scheduleTimes;
+        public Integer getRemindBeforeValue() {
+            return remindBeforeValue;
         }
 
-        public void setScheduleTimes(String scheduleTimes) {
-            this.scheduleTimes = scheduleTimes;
+        public void setRemindBeforeValue(Integer remindBeforeValue) {
+            this.remindBeforeValue = remindBeforeValue;
         }
 
-        public String getFrequencyType() {
-            return frequencyType;
+        public String getRemindBeforeUnit() {
+            return remindBeforeUnit;
         }
 
-        public void setFrequencyType(String frequencyType) {
-            this.frequencyType = frequencyType;
+        public void setRemindBeforeUnit(String remindBeforeUnit) {
+            this.remindBeforeUnit = remindBeforeUnit;
         }
 
-        public Integer getFrequencyInterval() {
-            return frequencyInterval;
+        public Integer getRemindDaysBefore() {
+            return remindDaysBefore;
         }
 
-        public void setFrequencyInterval(Integer frequencyInterval) {
-            this.frequencyInterval = frequencyInterval;
+        public void setRemindDaysBefore(Integer remindDaysBefore) {
+            this.remindDaysBefore = remindDaysBefore;
         }
     }
 }

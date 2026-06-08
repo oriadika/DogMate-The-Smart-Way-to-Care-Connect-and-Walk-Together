@@ -29,6 +29,8 @@ public class ReminderService {
     private final NotificationScheduleService notificationScheduleService;
     private final UserNotificationPreferencesService preferencesService;
     private final DogService dogService;
+    private final VaccinationService vaccinationService;
+    private final MedicationService medicationService;
 
 
     @Autowired
@@ -38,7 +40,9 @@ public class ReminderService {
             IDogRepository dogRepository,
             NotificationScheduleService notificationScheduleService,
             UserNotificationPreferencesService preferencesService,
-            @Lazy DogService dogService
+            @Lazy DogService dogService,
+            @Lazy VaccinationService vaccinationService,
+            @Lazy MedicationService medicationService
     ) {
         this.reminderRepo = reminderRepo;
         this.userRepo = userRepo;
@@ -46,6 +50,18 @@ public class ReminderService {
         this.notificationScheduleService = notificationScheduleService;
         this.preferencesService = preferencesService;
         this.dogService = dogService;
+        this.vaccinationService = vaccinationService;
+        this.medicationService = medicationService;
+    }
+
+    private static boolean isEditableHealthSystemReminder(Reminder reminder) {
+        if (!reminder.isSystemGenerated() || reminder.getSourceId() == null) {
+            return false;
+        }
+        String type = reminder.getSourceType();
+        return ReminderSourceType.FOOD.equals(type)
+                || ReminderSourceType.VACCINATION.equals(type)
+                || ReminderSourceType.MEDICATION.equals(type);
     }
 
     @Transactional
@@ -102,10 +118,8 @@ public class ReminderService {
         if (!reminder.getUser().getId().equals(userId)) {
             throw new IllegalArgumentException("אין הרשאה לערוך תזכורת זו");
         }
-        if (reminder.isSystemGenerated()) {
-            if (!ReminderSourceType.FOOD.equals(reminder.getSourceType()) || reminder.getSourceId() == null) {
-                throw new IllegalArgumentException("לא ניתן לערוך תזכורת שנוצרה אוטומטית מהמערכת");
-            }
+        if (reminder.isSystemGenerated() && !isEditableHealthSystemReminder(reminder)) {
+            throw new IllegalArgumentException("לא ניתן לערוך תזכורת שנוצרה אוטומטית מהמערכת");
         }
 
         if (userRepo.findById(userId).isEmpty()) {
@@ -144,16 +158,20 @@ public class ReminderService {
         reminder.setRemindAt(remindAt);
         reminder.setDogIds(new LinkedList<>(dogs));
 
-        if (reminder.isSystemGenerated() && ReminderSourceType.FOOD.equals(reminder.getSourceType())) {
+        if (reminder.isSystemGenerated() && isEditableHealthSystemReminder(reminder)) {
             reminder.setNotificationEnabled(true);
         }
 
         Reminder saved = reminderRepo.save(reminder);
 
-        if (saved.isSystemGenerated()
-                && ReminderSourceType.FOOD.equals(saved.getSourceType())
-                && saved.getSourceId() != null) {
-            dogService.syncFoodStockFromReminderEdit(saved.getSourceId(), dogIds, remindAt);
+        if (saved.isSystemGenerated() && saved.getSourceId() != null) {
+            if (ReminderSourceType.FOOD.equals(saved.getSourceType())) {
+                dogService.syncFoodStockFromReminderEdit(saved.getSourceId(), dogIds, remindAt);
+            } else if (ReminderSourceType.VACCINATION.equals(saved.getSourceType())) {
+                vaccinationService.syncVaccinationFromReminderEdit(saved.getSourceId(), userId);
+            } else if (ReminderSourceType.MEDICATION.equals(saved.getSourceType())) {
+                medicationService.syncMedicationFromReminderEdit(saved.getSourceId(), userId);
+            }
         }
 
         return saved;
@@ -210,6 +228,14 @@ public class ReminderService {
                     && ReminderSourceType.FOOD.equals(reminder.getSourceType())
                     && reminder.getSourceId() != null) {
                 dogService.disableFoodStockReminderAfterFired(reminder.getSourceId());
+            } else if (reminder.isSystemGenerated()
+                    && ReminderSourceType.VACCINATION.equals(reminder.getSourceType())
+                    && reminder.getSourceId() != null) {
+                vaccinationService.resyncVaccinationReminderAfterFired(reminder.getSourceId(), userId);
+            } else if (reminder.isSystemGenerated()
+                    && ReminderSourceType.MEDICATION.equals(reminder.getSourceType())
+                    && reminder.getSourceId() != null) {
+                medicationService.resyncMedicationReminderAfterFired(reminder.getSourceId(), userId);
             } else if (reminder.isSystemGenerated()
                     && reminder.getSourceType() != null
                     && reminder.getSourceId() != null) {

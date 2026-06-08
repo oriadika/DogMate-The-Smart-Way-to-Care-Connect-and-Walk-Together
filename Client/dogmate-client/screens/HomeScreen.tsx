@@ -25,6 +25,7 @@ import {
   applyHomeCacheToState,
   buildHomeDataSignature,
   clearHomeCache,
+  EDITABLE_HEALTH_REMINDER_TYPES,
   getHomeCache,
   getInitialHomeState,
   markHomeDataDirty,
@@ -999,9 +1000,13 @@ const HomeScreen = ({ navigation, route }: any) => {
                   <Text style={styles.systemReminderHint}>
                     {selectedReminder?.sourceType === 'FOOD'
                       ? 'תזכורת זו נוצרה אוטומטית ממלאי המזון. ניתן לערוך אותה כאן או לפתוח את הגדרות המלאי.'
-                      : 'תזכורת זו נוצרה אוטומטית מהמערכת. לעריכת ההגדרות, פתח את הפריט המקור.'}
+                      : selectedReminder?.sourceType === 'VACCINATION'
+                        ? 'תזכורת זו נוצרה אוטומטית מחיסונים. ניתן לערוך אותה כאן או לפתוח את הגדרות החיסון.'
+                        : selectedReminder?.sourceType === 'MEDICATION'
+                          ? 'תזכורת זו נוצרה אוטומטית מתרופות. ניתן לערוך אותה כאן או לפתוח את הגדרות התרופה.'
+                          : 'תזכורת זו נוצרה אוטומטית מהמערכת. לעריכת ההגדרות, פתח את הפריט המקור.'}
                   </Text>
-                  {selectedReminder?.sourceType === 'FOOD' ? (
+                  {EDITABLE_HEALTH_REMINDER_TYPES.includes(selectedReminder?.sourceType) ? (
                     <TouchableOpacity
                       style={styles.detailsSubmitButton}
                       onPress={() => {
@@ -1020,16 +1025,26 @@ const HomeScreen = ({ navigation, route }: any) => {
                   <TouchableOpacity
                     style={[
                       styles.detailsSubmitButton,
-                      selectedReminder?.sourceType === 'FOOD' && styles.detailsSecondaryButton,
+                      EDITABLE_HEALTH_REMINDER_TYPES.includes(selectedReminder?.sourceType) &&
+                        styles.detailsSecondaryButton,
                     ]}
                     onPress={() => navigateToSystemReminderSource(selectedReminder as ReminderRow)}
                     activeOpacity={0.85}
                   >
-                    <Ionicons name="settings-outline" size={20} color={selectedReminder?.sourceType === 'FOOD' ? PRIMARY_COLOR : '#fff'} />
+                    <Ionicons
+                      name="settings-outline"
+                      size={20}
+                      color={
+                        EDITABLE_HEALTH_REMINDER_TYPES.includes(selectedReminder?.sourceType)
+                          ? PRIMARY_COLOR
+                          : '#fff'
+                      }
+                    />
                     <Text
                       style={[
                         styles.detailsSubmitButtonText,
-                        selectedReminder?.sourceType === 'FOOD' && styles.detailsSecondaryButtonText,
+                        EDITABLE_HEALTH_REMINDER_TYPES.includes(selectedReminder?.sourceType) &&
+                          styles.detailsSecondaryButtonText,
                       ]}
                     >
                       פתח הגדרות מקור

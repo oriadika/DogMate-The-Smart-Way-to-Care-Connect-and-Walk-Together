@@ -122,16 +122,11 @@ public class HealthReminderSyncService {
             return;
         }
 
-        List<LocalDateTime> triggers = notificationScheduleService.computeVaccinationTriggers(
+        LocalDateTime nextTrigger = notificationScheduleService.computeVaccinationReminderTrigger(
                 vaccination.getNextDueDate(),
                 vaccination.getRemindDaysBefore()
         );
-        LocalDateTime nextTrigger = triggers.stream()
-                .filter(t -> t.isAfter(LocalDateTime.now()))
-                .min(LocalDateTime::compareTo)
-                .orElse(null);
-
-        if (nextTrigger == null) {
+        if (nextTrigger == null || !nextTrigger.isAfter(LocalDateTime.now())) {
             reminderService.deleteSystemReminder(userId, ReminderSourceType.VACCINATION, vaccination.getId());
             return;
         }
@@ -173,33 +168,8 @@ public class HealthReminderSyncService {
             return;
         }
 
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime remindAt = null;
-
-        if (medication.getNextDueDate() != null) {
-            LocalDateTime due = medication.getNextDueDate()
-                    .atTime(NotificationScheduleService.DEFAULT_NOTIFICATION_TIME);
-            if (due.isAfter(now)) {
-                remindAt = due;
-            }
-        }
-
-        if (remindAt == null) {
-            MedicationFrequencyType freq = MedicationFrequencyType.fromString(medication.getFrequencyType());
-            List<LocalDateTime> triggers = notificationScheduleService.computeMedicationTriggers(
-                    medication.getScheduleTimes(),
-                    freq,
-                    medication.getFrequencyInterval(),
-                    now,
-                    now.plusDays(NotificationScheduleService.SCHEDULE_HORIZON_DAYS)
-            );
-            remindAt = triggers.stream()
-                    .filter(t -> t.isAfter(now))
-                    .min(LocalDateTime::compareTo)
-                    .orElse(null);
-        }
-
-        if (remindAt == null) {
+        LocalDateTime remindAt = notificationScheduleService.computeMedicationReminderTrigger(medication);
+        if (remindAt == null || !remindAt.isAfter(LocalDateTime.now())) {
             reminderService.deleteSystemReminder(userId, ReminderSourceType.MEDICATION, medication.getId());
             return;
         }
