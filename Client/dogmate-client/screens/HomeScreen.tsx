@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, reminderAPI, userAPI } from '../services/api';
+import { dogAPI, reminderAPI, userAPI } from '../services/dogmateApi';
 import { scheduleReminderNotification, cancelReminderNotification } from '../services/notifications';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green

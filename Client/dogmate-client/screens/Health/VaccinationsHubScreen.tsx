@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { userAPI, vaccinationAPI, dogAPI, type VaccinationRow } from '../../services/api';
+import { userAPI, vaccinationAPI, dogAPI, type VaccinationRow } from '../../services/dogmateApi';
 import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
 import VaccinationSortModal, {
   type VaccinationSortOption,

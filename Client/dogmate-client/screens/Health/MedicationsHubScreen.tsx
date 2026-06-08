@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { userAPI, medicationAPI, dogAPI, type MedicationRow } from '../../services/api';
+import { userAPI, medicationAPI, dogAPI, type MedicationRow } from '../../services/dogmateApi';
 import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
 import MedicationSortModal, {
   type MedicationSortOption,

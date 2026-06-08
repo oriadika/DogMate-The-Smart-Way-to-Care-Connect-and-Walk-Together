@@ -18,11 +18,12 @@ import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { userAPI } from '../services/api';
-import websocketService, { type PingNotification } from '../services/websocket';
-import locationService, { LocationService } from '../services/location';
+import { userAPI } from '../services/dogmateApi';
+import websocketService, { type PingNotification } from '../services/dogmateWebsocket';
+import locationService, { LocationService } from '../services/dogmateLocation';
 import { dogMateMapStyle } from '../src/constants/MapStyles';
 import { OWNER_MAIN_TAB } from '../navigation/ownerTabRoutes';
+import { navigateRoot, rootNavigationRef } from '../navigation/rootNavigationRef';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const USERS_REFRESH_INTERVAL_MS = 5000;
@@ -768,12 +769,28 @@ const ProfileScreen = ({ navigation, route }: any) => {
         <View style={styles.headerRow}>
           <TouchableOpacity
             onPress={() => {
-              const parent = navigation.getParent();
-              if (parent && (parent as any).getState?.()?.type === 'tab') {
-                navigation.navigate(OWNER_MAIN_TAB.Dashboard);
-                return;
-              }
-              navigation.goBack();
+              const goToDashboard = () => {
+                const parent = navigation.getParent();
+                if (parent && (parent as any).getState?.()?.type === 'tab') {
+                  try {
+                    parent.navigate(OWNER_MAIN_TAB.Dashboard);
+                    return true;
+                  } catch {}
+                }
+                try {
+                  if (rootNavigationRef?.isReady && rootNavigationRef.isReady()) {
+                    navigateRoot('Home', { screen: OWNER_MAIN_TAB.Dashboard });
+                    return true;
+                  }
+                } catch {}
+                try {
+                  navigation.reset({ index: 0, routes: [{ name: 'Home', params: { screen: OWNER_MAIN_TAB.Dashboard } }] });
+                  return true;
+                } catch (e) {
+                  return false;
+                }
+              };
+              goToDashboard();
             }}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >

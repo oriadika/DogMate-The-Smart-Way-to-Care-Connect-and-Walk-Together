@@ -21,14 +21,14 @@ import {
 } from 'react-native';
 import * as Linking from 'expo-linking';
 import { FontAwesome, FontAwesome5, Ionicons } from '@expo/vector-icons';
-import { userAPI, dogWalkerAPI, type ProfessionalProfileResponse } from '../services/api';
+import { userAPI, dogWalkerAPI, type ProfessionalProfileResponse } from '../services/dogmateApi';
 import HebrewAsciiParensText from '../components/HebrewAsciiParensText';
 import { formatLocationLineForStoredCity } from '../utils/locationFieldCodec';
 import {
   displayAvailabilityFromStored,
   getPricingDisplayLinesFromStored,
 } from '../utils/walkerOfferingDisplay';
-import locationService, { LocationService } from '../services/location';
+import locationService, { LocationService } from '../services/dogmateLocation';
 import WalkerListToolbar from '../components/walkerList/WalkerListToolbar';
 import WalkerFiltersModal from '../components/walkerList/WalkerFiltersModal';
 import WalkerSortModal from '../components/walkerList/WalkerSortModal';
@@ -45,6 +45,7 @@ import {
   normalizeIsraeliMobileToWhatsAppPhoneParam,
 } from '../utils/phoneValidation';
 import { OWNER_MAIN_TAB } from '../navigation/ownerTabRoutes';
+import { navigateRoot, rootNavigationRef } from '../navigation/rootNavigationRef';
 
 const PRIMARY_COLOR = '#7FB069';
 const CALL_BUTTON_GREEN = '#34C759';
@@ -505,12 +506,28 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
       <View style={styles.headerRow}>
         <TouchableOpacity
           onPress={() => {
-            const parent = navigation.getParent();
-            if (parent && (parent as any).getState?.()?.type === 'tab') {
-              navigation.navigate(OWNER_MAIN_TAB.Dashboard);
-              return;
-            }
-            navigation.goBack();
+            const goToDashboard = () => {
+              const parent = navigation.getParent();
+              if (parent && (parent as any).getState?.()?.type === 'tab') {
+                try {
+                  parent.navigate(OWNER_MAIN_TAB.Dashboard);
+                  return true;
+                } catch {}
+              }
+              try {
+                if (rootNavigationRef?.isReady && rootNavigationRef.isReady()) {
+                  navigateRoot('Home', { screen: OWNER_MAIN_TAB.Dashboard });
+                  return true;
+                }
+              } catch {}
+              try {
+                navigation.reset({ index: 0, routes: [{ name: 'Home', params: { screen: OWNER_MAIN_TAB.Dashboard } }] });
+                return true;
+              } catch (e) {
+                return false;
+              }
+            };
+            goToDashboard();
           }}
         >
           <Ionicons name="arrow-forward" size={28} color="#5C4033" />

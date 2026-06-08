@@ -1,4 +1,4 @@
-import type { MedicationRow } from '../services/api';
+import type { MedicationRow } from '../services/dogmateApi';
 import type { MedicationSortOption } from '../components/health/MedicationSortModal';
 
 export type MedicationGroup = {

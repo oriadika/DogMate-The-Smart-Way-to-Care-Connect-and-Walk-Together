@@ -12,7 +12,7 @@ import {
   Modal,
 } from 'react-native';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
-import { userAPI } from '../services/api';
+import { userAPI } from '../services/dogmateApi';
 
 // קומפוננטת עזר לשורה בהגדרות
 const SettingItem = ({ icon, label, onPress, isDestructive, value, onToggle }: any) => (

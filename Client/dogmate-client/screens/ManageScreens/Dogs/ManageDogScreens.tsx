@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import { dogAPI } from "../../../services/api";
+import { dogAPI } from "../../../services/dogmateApi";
 
 const PRIMARY_COLOR = "#7FB069";
 

@@ -18,7 +18,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, Ionicons, Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { dogAPI } from '../services/api';
+import { dogAPI } from '../services/dogmateApi';
 import { OWNER_MAIN_TAB } from '../navigation/ownerTabRoutes';
 
 function parseDogBirthdateToDate(raw: unknown): Date {

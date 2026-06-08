@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, userAPI, foodStockAPI, FoodStockData } from '../../services/api';
+import { dogAPI, userAPI, foodStockAPI, FoodStockData } from '../../services/dogmateApi';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 
