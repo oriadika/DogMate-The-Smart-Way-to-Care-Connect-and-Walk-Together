@@ -251,31 +251,44 @@ export async function fetchDogOptionsForUser(userId: string): Promise<DogOption[
   return toDogOptions(list);
 }
 
+/** Warm health caches in parallel (medications / vaccinations / food for home countdown). */
+export async function warmHealthCountdownCache(
+  userId: string,
+  dogOptions?: DogOption[]
+): Promise<void> {
+  if (isHealthDataWarm(userId)) {
+    return;
+  }
+
+  const resolvedDogOptions = dogOptions ?? (await fetchDogOptionsForUser(userId));
+
+  const [vaccinationsResponse, medicationsResponse, foodResponse] = await Promise.all([
+    withApiRetry(() => vaccinationAPI.list(userId)),
+    withApiRetry(() => medicationAPI.list(userId)),
+    withApiRetry(() => foodStockAPI.getFoodStocksForUser(userId)),
+  ]);
+
+  const vaccinationRows = Array.isArray(vaccinationsResponse.vaccinations)
+    ? (vaccinationsResponse.vaccinations as VaccinationRow[])
+    : [];
+  setVaccinationsCache(userId, { rows: vaccinationRows, userDogs: resolvedDogOptions });
+  clearVaccinationsDirty(userId);
+
+  const medicationRows = Array.isArray(medicationsResponse.medications)
+    ? (medicationsResponse.medications as MedicationRow[])
+    : [];
+  setMedicationsCache(userId, { rows: medicationRows, userDogs: resolvedDogOptions });
+  clearMedicationsDirty(userId);
+
+  const raw = foodResponse.success && foodResponse.foodStocks ? foodResponse.foodStocks : [];
+  setFoodInventoryCache(userId, { items: transformFoodStocks(raw) });
+  clearFoodInventoryDirty(userId);
+}
+
 /** Warm health caches (called after login or when caches are cold). */
 export async function prefetchHealthData(userId: string): Promise<void> {
   try {
-    const cachedDogs = getHomeCache(userId)?.dogs;
-    const dogOptions =
-      cachedDogs && cachedDogs.length > 0 ? toDogOptions(cachedDogs) : toDogOptions([]);
-
-    const vaccinationsResponse = await withApiRetry(() => vaccinationAPI.list(userId));
-    const vaccinationRows = Array.isArray(vaccinationsResponse.vaccinations)
-      ? (vaccinationsResponse.vaccinations as VaccinationRow[])
-      : [];
-    setVaccinationsCache(userId, { rows: vaccinationRows, userDogs: dogOptions });
-    clearVaccinationsDirty(userId);
-
-    const medicationsResponse = await withApiRetry(() => medicationAPI.list(userId));
-    const medicationRows = Array.isArray(medicationsResponse.medications)
-      ? (medicationsResponse.medications as MedicationRow[])
-      : [];
-    setMedicationsCache(userId, { rows: medicationRows, userDogs: dogOptions });
-    clearMedicationsDirty(userId);
-
-    const foodResponse = await withApiRetry(() => foodStockAPI.getFoodStocksForUser(userId));
-    const raw = foodResponse.success && foodResponse.foodStocks ? foodResponse.foodStocks : [];
-    setFoodInventoryCache(userId, { items: transformFoodStocks(raw) });
-    clearFoodInventoryDirty(userId);
+    await warmHealthCountdownCache(userId);
   } catch (error) {
     if (!isAbortError(error)) {
       console.warn('Health prefetch failed:', error);

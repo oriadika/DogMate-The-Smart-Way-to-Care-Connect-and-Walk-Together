@@ -3,14 +3,10 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import type { VaccinationRow } from '../../services/api';
 import type { VaccinationGroup } from '../../utils/vaccinationGroups';
+import { getLatestVaccinationRecord } from '../../utils/vaccinationGroups';
 import {
-  getLatestNextDueDate,
-  getLatestVaccinationRecord,
-} from '../../utils/vaccinationGroups';
-import {
-  daysUntilIsoDate,
-  formatDaysToText,
-  getDaysUrgencyColor,
+  getCountdownPrimaryText,
+  getHealthHubCountdown,
 } from '../../utils/daysDisplay';
 import { isAdministeredToday } from '../../utils/healthLogDose';
 
@@ -45,12 +41,7 @@ export default function VaccinationGroupCard({
 }: Props) {
   const latest = getLatestVaccinationRecord(group.history);
   const loggedToday = latest ? isAdministeredToday(latest.administeredDate) : false;
-  const nextDueFromLatest = getLatestNextDueDate(group.history);
-  const daysUntilNext = daysUntilIsoDate(nextDueFromLatest);
-  const isOverdue = daysUntilNext != null && daysUntilNext < 0;
-  const displayDays = daysUntilNext == null ? null : isOverdue ? 0 : daysUntilNext;
-  const statusColor =
-    daysUntilNext == null ? MUTED : isOverdue ? '#EA5455' : getDaysUrgencyColor(daysUntilNext);
+  const countdown = getHealthHubCountdown(latest?.nextDueDate ?? null, null, 'החיסון הבא');
 
   return (
     <View style={styles.card}>
@@ -61,8 +52,8 @@ export default function VaccinationGroupCard({
           <Text style={styles.summaryLine}>
             חיסון אחרון: {formatDate(group.lastAdministeredDate)}
           </Text>
-          {nextDueFromLatest ? (
-            <Text style={styles.nextDue}>חיסון הבא: {formatDate(nextDueFromLatest)}</Text>
+          {latest?.nextDueDate ? (
+            <Text style={styles.nextDue}>חיסון הבא: {formatDate(latest.nextDueDate)}</Text>
           ) : (
             <Text style={styles.nextDueMuted}>חיסון הבא: לא נקבע</Text>
           )}
@@ -98,13 +89,20 @@ export default function VaccinationGroupCard({
               </TouchableOpacity>
             </View>
             <View style={styles.statusContainer}>
-              <Text style={styles.statusLabel}>ימים עד החיסון הבא:</Text>
-              {displayDays != null ? (
+              <Text style={styles.statusLabel}>{countdown?.label ?? 'ימים עד החיסון הבא:'}</Text>
+              {countdown ? (
                 <>
-                  <Text style={[styles.statusValue, { color: statusColor }]}>{displayDays}</Text>
-                  <Text style={styles.statusSubtext}>
-                    ({isOverdue ? `באיחור ${formatDaysToText(Math.abs(daysUntilNext!))}` : formatDaysToText(displayDays)})
+                  <Text
+                    style={[
+                      countdown.displayText ? styles.statusMessage : styles.statusValue,
+                      { color: countdown.urgencyColor },
+                    ]}
+                  >
+                    {getCountdownPrimaryText(countdown)}
                   </Text>
+                  {countdown.subtext ? (
+                    <Text style={styles.statusSubtext}>{countdown.subtext}</Text>
+                  ) : null}
                 </>
               ) : (
                 <Text style={styles.statusUnset}>לא נקבע</Text>
@@ -192,6 +190,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  statusMessage: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    writingDirection: 'rtl',
   },
   statusSubtext: {
     fontSize: 11,

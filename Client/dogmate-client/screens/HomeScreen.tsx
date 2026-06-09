@@ -1,5 +1,5 @@
 // screens/HomeScreen.tsx
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   SafeAreaView,
   View,
@@ -20,7 +20,13 @@ import { dogAPI, reminderAPI, type ReminderRow } from '../services/api';
 import { cancelReminderNotification } from '../services/notifications';
 import { loadNotificationPreferences } from '../services/notificationPreferences';
 import { resyncAllNotifications } from '../services/notificationScheduler';
-import { getReminderCountdown, sortRemindersNearestFirst, filterActiveReminders } from '../utils/daysDisplay';
+import {
+  getCountdownPrimaryText,
+  getReminderCountdown,
+  sortRemindersNearestFirst,
+  filterActiveReminders,
+} from '../utils/daysDisplay';
+import { getHomeReminderCountdown, getReminderSourceEmoji } from '../utils/homeReminderCountdown';
 import {
   applyHomeCacheToState,
   buildHomeDataSignature,
@@ -33,6 +39,14 @@ import {
   shouldForceHomeRefresh,
   clearHomeDirty,
 } from '../utils/homeDataCache';
+import MedicationOverdueMarkDoneModal from '../components/health/MedicationOverdueMarkDoneModal';
+import {
+  combineMedicationPlannedDue,
+  findMedicationRowForUser,
+  formatAdministeredAtForApi,
+  isMedicationPlannedDueOverdue,
+} from '../utils/healthMarkDone';
+import { completeReminderFromHome } from '../utils/reminderCompletion';
 import { deferScreenCleanup } from '../utils/screenLifecycle';
 import {
   consumeLoginWelcomeMessage,
@@ -40,7 +54,12 @@ import {
 } from '../utils/loginWelcomeMessage';
 import { isAbortError } from '../utils/isAbortError';
 import { getOwnerSession, resolveOwnerUserId } from '../utils/ownerSession';
-import { ensureOwnerDataPrefetched } from '../utils/healthDataCache';
+import {
+  ensureOwnerDataPrefetched,
+  isHealthDataWarm,
+  toDogOptions,
+  warmHealthCountdownCache,
+} from '../utils/healthDataCache';
 import { waitForOwnerPrefetchHome } from '../utils/ownerPrefetchCoordinator';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
@@ -51,10 +70,20 @@ const BORDER_COLOR = '#E0D5C7'; // Border color
 
 /** Defer notification resync until after home HTTP completes. */
 const HOME_NOTIFICATION_SYNC_DELAY_MS = 2000;
+const REMINDERS_PAGE_SIZE = 5;
 
-function ReminderCountdownLabel({ unit }: { unit: string }) {
+function ReminderCountdownLabel({
+  unit,
+  sourceEmoji,
+}: {
+  unit: string;
+  sourceEmoji?: string;
+}) {
   return (
     <Text style={styles.reminderStatusLabel}>
+      {sourceEmoji ? (
+        <Text style={styles.reminderLabelEmoji}>{sourceEmoji} </Text>
+      ) : null}
       <Text style={styles.reminderStatusLabelUnit}>{unit}</Text>
       {' עד התזכורת:'}
     </Text>
@@ -77,6 +106,13 @@ const HomeScreen = ({ navigation, route }: any) => {
   const [loading, setLoading] = useState(initialHome.loading);
   const [selectedReminder, setSelectedReminder] = useState<any | null>(null);
   const [showReminderDetails, setShowReminderDetails] = useState(false);
+  const [visibleRemindersCount, setVisibleRemindersCount] = useState(REMINDERS_PAGE_SIZE);
+  const [markingReminderId, setMarkingReminderId] = useState<string | null>(null);
+  const [medicationOverduePrompt, setMedicationOverduePrompt] = useState<{
+    reminder: ReminderRow;
+    plannedDue: Date | null;
+  } | null>(null);
+  const [medicationOverdueBusy, setMedicationOverdueBusy] = useState(false);
 
   const loadGenerationRef = useRef(0);
   const homeFetchAbortRef = useRef<AbortController | null>(null);
@@ -122,6 +158,16 @@ const HomeScreen = ({ navigation, route }: any) => {
 
   // Get user data from route params, session, or state
   const currentUserId = resolveOwnerUserId(route?.params?.userId, userId);
+
+  const visibleReminders = useMemo(
+    () => reminders.slice(0, visibleRemindersCount),
+    [reminders, visibleRemindersCount]
+  );
+  const hasMoreReminders = reminders.length > visibleRemindersCount;
+
+  useEffect(() => {
+    setVisibleRemindersCount(REMINDERS_PAGE_SIZE);
+  }, [reminders]);
 
   // Keep userId state aligned when session survives a partial navigation reset
   React.useEffect(() => {
@@ -199,6 +245,18 @@ const HomeScreen = ({ navigation, route }: any) => {
         if (isAbortError(remindersSettled.reason)) return;
         console.warn('Error loading reminders:', remindersSettled.reason);
         nextReminders = sortRemindersNearestFirst(priorCache?.reminders ?? remindersRef.current);
+      }
+
+      if (!isHomeFetchCurrent(generation)) return;
+
+      if (!isHealthDataWarm(userIdToLoad)) {
+        try {
+          await warmHealthCountdownCache(userIdToLoad, toDogOptions(nextDogs));
+        } catch (error) {
+          if (!isAbortError(error)) {
+            console.warn('Error warming health countdown cache:', error);
+          }
+        }
       }
 
       if (!isHomeFetchCurrent(generation)) return;
@@ -607,6 +665,79 @@ const HomeScreen = ({ navigation, route }: any) => {
     }
   };
 
+  const refreshHomeAfterReminderCompletion = useCallback(async () => {
+    if (!userId) return;
+    const cached = getHomeCache(userId);
+    if (cached) {
+      applyHomeCacheToState(cached, {
+        setUserName,
+        setUserLastName,
+        setDogs,
+        setReminders,
+      });
+      return;
+    }
+    if (currentUserId) {
+      await loadUserAndDogs(currentUserId, userNameRef.current);
+    }
+  }, [userId, currentUserId]);
+
+  const handleMarkReminderDone = async (reminder: ReminderRow) => {
+    if (!userId || markingReminderId || medicationOverdueBusy) return;
+
+    setMarkingReminderId(reminder.id);
+    try {
+      if (reminder.sourceType === 'MEDICATION' && reminder.sourceId) {
+        const medication = await findMedicationRowForUser(userId, reminder.sourceId);
+        if (medication && isMedicationPlannedDueOverdue(medication)) {
+          setMedicationOverduePrompt({
+            reminder,
+            plannedDue: combineMedicationPlannedDue(medication),
+          });
+          return;
+        }
+      }
+
+      await completeReminderFromHome(userId, reminder);
+      if (selectedReminder?.id === reminder.id) {
+        setShowReminderDetails(false);
+        setSelectedReminder(null);
+      }
+      await refreshHomeAfterReminderCompletion();
+    } catch (error: any) {
+      console.error('Error completing reminder:', error);
+      Alert.alert('שגיאה', error?.message || 'נכשל סימון התזכורת כבוצעה');
+    } finally {
+      setMarkingReminderId(null);
+    }
+  };
+
+  const handleMedicationOverdueChoice = async (administeredAt: Date) => {
+    if (!userId || !medicationOverduePrompt) return;
+
+    setMedicationOverdueBusy(true);
+    try {
+      const { reminder } = medicationOverduePrompt;
+      await completeReminderFromHome(
+        userId,
+        reminder,
+        formatAdministeredAtForApi(administeredAt)
+      );
+      if (selectedReminder?.id === reminder.id) {
+        setShowReminderDetails(false);
+        setSelectedReminder(null);
+      }
+      setMedicationOverduePrompt(null);
+      await refreshHomeAfterReminderCompletion();
+    } catch (error: any) {
+      console.error('Error completing overdue medication reminder:', error);
+      Alert.alert('שגיאה', error?.message || 'נכשל סימון התרופה כבוצעה');
+    } finally {
+      setMedicationOverdueBusy(false);
+      setMarkingReminderId(null);
+    }
+  };
+
   const handleDeleteReminder = (reminder: ReminderRow) => {
     if (reminder.systemGenerated) {
       Alert.alert(
@@ -841,56 +972,120 @@ const HomeScreen = ({ navigation, route }: any) => {
 
                 {reminders && reminders.length > 0 ? (
                   <FlatList
-                    data={reminders}
+                    data={visibleReminders}
                     renderItem={({ item: reminder }) => {
-                      const countdown = getReminderCountdown(reminder.remindAt);
+                      const countdown = getHomeReminderCountdown(reminder);
                       const isPast = countdown?.isPast ?? false;
+                      const openReminderDetails = () => {
+                        setSelectedReminder(reminder);
+                        setShowReminderDetails(true);
+                      };
                       return (
-                      <TouchableOpacity 
-                        style={styles.reminderCard}
-                        onPress={() => {
-                          setSelectedReminder(reminder);
-                          setShowReminderDetails(true);
-                        }}
-                      >
-                        <View style={styles.reminderContent}>
-                          <View style={styles.reminderTitleRow}>
-                            <Text style={styles.reminderTitle}>{reminder.title}</Text>
-                            {reminder.systemGenerated ? (
-                              <Ionicons name="notifications" size={16} color={PRIMARY_COLOR} />
-                            ) : null}
+                      <View style={styles.reminderCard}>
+                        <View style={styles.reminderCardMain}>
+                          <TouchableOpacity
+                            style={styles.reminderContentPress}
+                            onPress={openReminderDetails}
+                            activeOpacity={0.85}
+                          >
+                            <View style={styles.reminderContent}>
+                              <View style={styles.reminderTitleRow}>
+                                <Text style={styles.reminderTitle}>{reminder.title}</Text>
+                              </View>
+                              {reminder.description ? (
+                                <Text style={styles.reminderDescription}>{reminder.description}</Text>
+                              ) : null}
+                              <Text style={styles.reminderDogs}>{getDogText(reminder.dogIds)}</Text>
+                              <Text style={styles.reminderDate} numberOfLines={1}>
+                                {formatReminderDateTime(reminder.remindAt)}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                          <View style={styles.reminderStatusColumn}>
+                            <TouchableOpacity onPress={openReminderDetails} activeOpacity={0.85}>
+                              {isPast ? (
+                                <View style={styles.reminderStatusContainer}>
+                                  <Text style={styles.reminderStatusLabel}>סטטוס</Text>
+                                  <Text style={[styles.reminderStatusValue, { color: PRIMARY_COLOR }]}>✓</Text>
+                                  <Text style={styles.reminderStatusSubtext}>(עבר הזמן)</Text>
+                                </View>
+                              ) : countdown ? (
+                                <View style={styles.reminderStatusContainer}>
+                                  {countdown.displayText ? (
+                                    <Text style={styles.reminderStatusLabel}>{countdown.label}</Text>
+                                  ) : (
+                                    <ReminderCountdownLabel
+                                      unit={countdown.labelUnit}
+                                      sourceEmoji={countdown.sourceEmoji}
+                                    />
+                                  )}
+                                  <Text
+                                    style={[
+                                      countdown.displayText
+                                        ? styles.reminderStatusMessage
+                                        : styles.reminderStatusValue,
+                                      { color: countdown.urgencyColor },
+                                    ]}
+                                  >
+                                    {getCountdownPrimaryText(countdown)}
+                                  </Text>
+                                  <Text style={styles.reminderStatusSubtext}>{countdown.subtext}</Text>
+                                </View>
+                              ) : (
+                                <View style={styles.reminderStatusContainer}>
+                                  <ReminderCountdownLabel
+                                    unit="ימים"
+                                    sourceEmoji={getReminderSourceEmoji(reminder.sourceType)}
+                                  />
+                                  <Text style={[styles.reminderStatusValue, { color: '#8B7355' }]}>—</Text>
+                                </View>
+                              )}
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.reminderMarkDoneBtn}
+                              onPress={() => handleMarkReminderDone(reminder as ReminderRow)}
+                              activeOpacity={0.85}
+                              disabled={markingReminderId === reminder.id}
+                              accessibilityRole="button"
+                              accessibilityLabel="סמן כבוצע"
+                            >
+                              {markingReminderId === reminder.id ? (
+                                <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+                              ) : (
+                                <>
+                                  <Ionicons
+                                    name="checkmark-circle-outline"
+                                    size={13}
+                                    color={PRIMARY_COLOR}
+                                  />
+                                  <Text style={styles.reminderMarkDoneBtnText}>סמן כבוצע</Text>
+                                </>
+                              )}
+                            </TouchableOpacity>
                           </View>
-                          {reminder.description && (
-                            <Text style={styles.reminderDescription}>{reminder.description}</Text>
-                          )}
-                          <Text style={styles.reminderDogs}>{getDogText(reminder.dogIds)}</Text>
-                          <Text style={styles.reminderDate}>{formatReminderDateTime(reminder.remindAt)}</Text>
                         </View>
-                        {isPast ? (
-                          <View style={styles.reminderStatusContainer}>
-                            <Text style={styles.reminderStatusLabel}>סטטוס</Text>
-                            <Text style={[styles.reminderStatusValue, { color: PRIMARY_COLOR }]}>✓</Text>
-                            <Text style={styles.reminderStatusSubtext}>(עבר הזמן)</Text>
-                          </View>
-                        ) : countdown ? (
-                          <View style={styles.reminderStatusContainer}>
-                            <ReminderCountdownLabel unit={countdown.labelUnit} />
-                            <Text style={[styles.reminderStatusValue, { color: countdown.urgencyColor }]}>
-                              {countdown.displayValue}
-                            </Text>
-                            <Text style={styles.reminderStatusSubtext}>{countdown.subtext}</Text>
-                          </View>
-                        ) : (
-                          <View style={styles.reminderStatusContainer}>
-                            <ReminderCountdownLabel unit="ימים" />
-                            <Text style={[styles.reminderStatusValue, { color: '#8B7355' }]}>—</Text>
-                          </View>
-                        )}
-                      </TouchableOpacity>
+                      </View>
                       );
                     }}
                     keyExtractor={(item, index) => item.id ? item.id.toString() : `reminder-${index}`}
                     scrollEnabled={false}
+                    ListFooterComponent={
+                      hasMoreReminders ? (
+                        <TouchableOpacity
+                          style={styles.loadMoreRemindersBtn}
+                          onPress={() =>
+                            setVisibleRemindersCount((count) => count + REMINDERS_PAGE_SIZE)
+                          }
+                          activeOpacity={0.85}
+                          accessibilityRole="button"
+                          accessibilityLabel="טען עוד תזכורות"
+                        >
+                          <Text style={styles.loadMoreRemindersText}>טען עוד</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.remindersListEndSpacer} />
+                      )
+                    }
                   />
                 ) : (
                   <Text style={styles.remindersPlaceholder}>
@@ -1084,6 +1279,24 @@ const HomeScreen = ({ navigation, route }: any) => {
           </SafeAreaView>
         </Modal>
 
+        <MedicationOverdueMarkDoneModal
+          visible={Boolean(medicationOverduePrompt)}
+          plannedDue={medicationOverduePrompt?.plannedDue ?? null}
+          busy={medicationOverdueBusy}
+          onSelectPlanned={() => {
+            if (medicationOverduePrompt?.plannedDue) {
+              void handleMedicationOverdueChoice(medicationOverduePrompt.plannedDue);
+            }
+          }}
+          onSelectNow={() => {
+            void handleMedicationOverdueChoice(new Date());
+          }}
+          onClose={() => {
+            if (medicationOverdueBusy) return;
+            setMedicationOverduePrompt(null);
+            setMarkingReminderId(null);
+          }}
+        />
       </View>
     </SafeAreaView>
   );
@@ -1126,7 +1339,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 20,
+    paddingBottom: 96,
   },
   header: {
     flexDirection: 'row',
@@ -1281,25 +1494,59 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
   },
+  loadMoreRemindersBtn: {
+    marginTop: 6,
+    marginBottom: 8,
+    minHeight: 48,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: CARD_BG,
+    borderWidth: 1.5,
+    borderColor: PRIMARY_COLOR,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreRemindersText: {
+    color: PRIMARY_COLOR,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  remindersListEndSpacer: {
+    height: 12,
+  },
   reminderCard: {
-    flexDirection: 'row-reverse',
     backgroundColor: '#FFFFFF',
     borderLeftWidth: 4,
     borderLeftColor: PRIMARY_COLOR,
     borderRadius: 8,
     padding: 12,
     marginBottom: 10,
-    alignItems: 'center',
     shadowColor: '#000',
     shadowOpacity: 0.08,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  reminderContent: {
+  reminderCardMain: {
+    flexDirection: 'row-reverse',
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  reminderContentPress: {
     flex: 1,
     marginRight: 12,
     alignSelf: 'stretch',
+  },
+  reminderContent: {
+    alignSelf: 'stretch',
+  },
+  reminderStatusColumn: {
+    alignItems: 'center',
+    minWidth: 88,
+    marginLeft: 4,
   },
   reminderTitle: {
     fontSize: 16,
@@ -1347,11 +1594,34 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     writingDirection: 'rtl',
     width: '100%',
+    marginTop: 2,
+  },
+  reminderMarkDoneBtn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+    paddingVertical: 3,
+    paddingHorizontal: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: PRIMARY_COLOR,
+    backgroundColor: '#F8FFF5',
+    flexShrink: 0,
+    minHeight: 24,
+    minWidth: 78,
+    marginTop: 6,
+    marginLeft: 10,
+  },
+  reminderMarkDoneBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: PRIMARY_COLOR,
+    writingDirection: 'rtl',
   },
   reminderStatusContainer: {
     alignItems: 'center',
     minWidth: 88,
-    marginLeft: 4,
   },
   reminderStatusLabel: {
     fontSize: 11,
@@ -1364,10 +1634,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#666',
   },
+  reminderLabelEmoji: {
+    fontSize: 13,
+    lineHeight: 16,
+  },
   reminderStatusValue: {
     fontSize: 32,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  reminderStatusMessage: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    writingDirection: 'rtl',
   },
   reminderStatusSubtext: {
     fontSize: 11,

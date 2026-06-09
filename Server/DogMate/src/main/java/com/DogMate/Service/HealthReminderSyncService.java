@@ -126,7 +126,7 @@ public class HealthReminderSyncService {
                 vaccination.getNextDueDate(),
                 vaccination.getRemindDaysBefore()
         );
-        if (nextTrigger == null || !nextTrigger.isAfter(LocalDateTime.now())) {
+        if (nextTrigger == null || nextTrigger.isBefore(LocalDateTime.now())) {
             reminderService.deleteSystemReminder(userId, ReminderSourceType.VACCINATION, vaccination.getId());
             return;
         }
@@ -169,7 +169,7 @@ public class HealthReminderSyncService {
         }
 
         LocalDateTime remindAt = notificationScheduleService.computeMedicationReminderTrigger(medication);
-        if (remindAt == null || !remindAt.isAfter(LocalDateTime.now())) {
+        if (remindAt == null || remindAt.isBefore(LocalDateTime.now())) {
             reminderService.deleteSystemReminder(userId, ReminderSourceType.MEDICATION, medication.getId());
             return;
         }

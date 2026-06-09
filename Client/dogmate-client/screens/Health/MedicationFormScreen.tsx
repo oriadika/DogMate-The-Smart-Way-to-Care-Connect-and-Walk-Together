@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   SafeAreaView,
   View,
@@ -87,6 +88,20 @@ function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
+function isSameLocalDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function combineDateAndTime(date: Date, time: string): Date {
+  const normalized = parseStoredNextDueTime(time);
+  const [hour, minute] = normalized.split(':').map((p) => parseInt(p, 10));
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, 0, 0);
+}
+
 type DogOption = { id: string; name: string };
 
 type MedicationFormState = {
@@ -101,14 +116,6 @@ type MedicationFormState = {
   noNextCycle: boolean;
   vetClinicName: string;
 };
-
-function timeStringToDate(time: string): Date {
-  const normalized = parseStoredNextDueTime(time);
-  const [hour, minute] = normalized.split(':').map((p) => parseInt(p, 10));
-  const d = new Date();
-  d.setHours(hour, minute, 0, 0);
-  return d;
-}
 
 function dateToTimeString(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -138,6 +145,30 @@ type DatePickerTarget = 'administered' | 'administeredTime' | 'nextDue' | 'nextD
 const isTimePickerTarget = (target: DatePickerTarget | null): boolean =>
   target === 'nextDueTime' || target === 'administeredTime';
 
+function getPickerInitialValue(target: DatePickerTarget, form: MedicationFormState): Date {
+  if (target === 'administeredTime') {
+    return combineDateAndTime(form.administeredDate, form.administeredTime);
+  }
+  if (target === 'nextDueTime') {
+    return combineDateAndTime(form.nextDueDate ?? form.administeredDate, form.nextDueTime);
+  }
+  if (target === 'nextDue') {
+    return form.nextDueDate ?? form.administeredDate;
+  }
+  return form.administeredDate;
+}
+
+function getPickerMaximumDate(
+  target: DatePickerTarget | null,
+  form: MedicationFormState
+): Date | undefined {
+  if (target === 'administered') return new Date();
+  if (target === 'administeredTime' && isSameLocalDay(form.administeredDate, new Date())) {
+    return new Date();
+  }
+  return undefined;
+}
+
 const MedicationFormScreen = ({ navigation, route }: any) => {
   const paramUserId = route?.params?.userId as string | undefined;
   const paramMedicationId = route?.params?.medicationId as string | undefined;
@@ -166,6 +197,7 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
     };
   });
   const [datePickerTarget, setDatePickerTarget] = useState<DatePickerTarget | null>(null);
+  const [pickerDraft, setPickerDraft] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState<MedicationNotificationSettings>(
@@ -178,8 +210,23 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
     nextDueDate: string | null;
     nextDueTime: string;
   } | null>(null);
+  const lockedEditingMedicationIdRef = useRef<string | null>(paramMedicationId ?? null);
 
-  const isEdit = Boolean(medicationId);
+  const editingMedicationId =
+    paramMedicationId ?? medicationId ?? lockedEditingMedicationIdRef.current;
+  const isEdit = Boolean(editingMedicationId);
+
+  useFocusEffect(
+    useCallback(() => {
+      const routeMedicationId = route?.params?.medicationId as string | undefined;
+      if (routeMedicationId) {
+        lockedEditingMedicationIdRef.current = routeMedicationId;
+        setMedicationId(routeMedicationId);
+      } else {
+        lockedEditingMedicationIdRef.current = null;
+      }
+    }, [route?.params?.medicationId])
+  );
 
   const {
     isMountedRef,
@@ -227,6 +274,8 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
   })();
 
   const applyMedicationRow = (existing: MedicationRow) => {
+    lockedEditingMedicationIdRef.current = existing.id;
+    setMedicationId(existing.id);
     const medFields = initialMedicationFields(existing.medicationName ?? '');
     setForm({
       selectedDogId: existing.dogId ?? null,
@@ -262,34 +311,26 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
     if (!isMountedRef.current) return;
     setUserId(paramUserId ?? null);
     if (paramMedicationId) {
-      const medFields = initialMedicationFields(paramMedicationName ?? '');
+      lockedEditingMedicationIdRef.current = paramMedicationId;
       setMedicationId(paramMedicationId);
-      setForm({
-        selectedDogId: paramDogId ?? null,
-        ...medFields,
-        administeredDate: parseIsoToLocalDate(paramAdministeredDate ?? ''),
-        administeredTime: dateToTimeString(new Date()),
-        nextDueDate: paramNextDueDate ? parseIsoToLocalDate(paramNextDueDate) : null,
-        nextDueTime: '09:00',
-        nextDueManuallyEdited: Boolean(paramNextDueDate),
-        noNextCycle: !paramNextDueDate,
-        vetClinicName: paramVetClinicName ?? '',
-      });
-    } else {
-      setMedicationId(null);
-      setForm({
-        selectedDogId: paramDogId ?? null,
-        medicationKey: null,
-        medicationDetailName: '',
-        administeredDate: new Date(),
-        administeredTime: dateToTimeString(new Date()),
-        nextDueDate: null,
-        nextDueTime: '09:00',
-        nextDueManuallyEdited: false,
-        noNextCycle: false,
-        vetClinicName: '',
-      });
+      return;
     }
+    lockedEditingMedicationIdRef.current = null;
+    setMedicationId(null);
+    const medFields = initialMedicationFields(paramMedicationName ?? '');
+    setForm({
+      selectedDogId: paramDogId ?? null,
+      ...medFields,
+      administeredDate: paramAdministeredDate
+        ? parseIsoToLocalDate(paramAdministeredDate)
+        : new Date(),
+      administeredTime: dateToTimeString(new Date()),
+      nextDueDate: paramNextDueDate ? parseIsoToLocalDate(paramNextDueDate) : null,
+      nextDueTime: '09:00',
+      nextDueManuallyEdited: Boolean(paramNextDueDate),
+      noNextCycle: !paramNextDueDate,
+      vetClinicName: paramVetClinicName ?? '',
+    });
   }, [
     paramUserId,
     paramMedicationId,
@@ -382,6 +423,7 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
       runDeferredBlurCleanup(() => {
         if (!isMountedRef.current) return;
         setDatePickerTarget(null);
+        setPickerDraft(null);
       });
     };
   }, [loadFormData, runDeferredBlurCleanup, isMountedRef]);
@@ -390,10 +432,14 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
     setForm((prev) => ({
       ...prev,
       medicationKey: key,
-      nextDueManuallyEdited: false,
-      noNextCycle: false,
+      ...(prev.nextDueManuallyEdited
+        ? {}
+        : {
+            nextDueDate: null,
+            nextDueManuallyEdited: false,
+            noNextCycle: true,
+          }),
     }));
-    applyAutoNextDue(key, form.administeredDate, true);
   };
 
   const onAdministeredDateChange = (selectedDate: Date) => {
@@ -424,14 +470,23 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
     }
   };
 
+  const openDatePicker = (target: DatePickerTarget) => {
+    setPickerDraft(getPickerInitialValue(target, form));
+    setDatePickerTarget(target);
+  };
+
   const onDateChange = (event: any, selectedDate?: Date) => {
     if (!datePickerTarget || isTimePickerTarget(datePickerTarget)) return;
     if (Platform.OS === 'android') {
       setDatePickerTarget(null);
+      setPickerDraft(null);
       if (event.type === 'dismissed' || !selectedDate) return;
+    } else if (selectedDate) {
+      setPickerDraft(selectedDate);
     }
+    if (!selectedDate) return;
     if (datePickerTarget === 'administered') {
-      onAdministeredDateChange(selectedDate!);
+      onAdministeredDateChange(selectedDate);
     } else {
       setForm((prev) => ({
         ...prev,
@@ -446,9 +501,13 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
     if (!isTimePickerTarget(datePickerTarget)) return;
     if (Platform.OS === 'android') {
       setDatePickerTarget(null);
+      setPickerDraft(null);
       if (event.type === 'dismissed' || !selectedDate) return;
+    } else if (selectedDate) {
+      setPickerDraft(selectedDate);
     }
-    const timeStr = dateToTimeString(selectedDate!);
+    if (!selectedDate) return;
+    const timeStr = dateToTimeString(selectedDate);
     setForm((prev) => ({
       ...prev,
       ...(datePickerTarget === 'administeredTime'
@@ -457,15 +516,15 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
     }));
   };
 
-  const closeDatePicker = () => setDatePickerTarget(null);
+  const closeDatePicker = () => {
+    setDatePickerTarget(null);
+    setPickerDraft(null);
+  };
 
-  const activePickerDate = isTimePickerTarget(datePickerTarget)
-    ? timeStringToDate(
-        datePickerTarget === 'administeredTime' ? form.administeredTime : form.nextDueTime
-      )
-    : datePickerTarget === 'nextDue'
-      ? form.nextDueDate ?? form.administeredDate
-      : form.administeredDate;
+  const activePickerDate =
+    pickerDraft ??
+    (datePickerTarget ? getPickerInitialValue(datePickerTarget, form) : new Date());
+  const pickerMaximumDate = getPickerMaximumDate(datePickerTarget, form);
 
   const validateForm = (): string | null => {
     if (!form.selectedDogId) return 'נא לבחור כלב';
@@ -475,6 +534,12 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
     if (Number.isNaN(form.administeredDate.getTime())) return 'תאריך התרופה אינו תקין';
     if (startOfDay(form.administeredDate) > startOfDay(new Date())) {
       return 'תאריך התרופה לא יכול להיות בעתיד';
+    }
+    if (isSameLocalDay(form.administeredDate, new Date())) {
+      const administeredAt = combineDateAndTime(form.administeredDate, form.administeredTime);
+      if (administeredAt > new Date()) {
+        return 'שעת המנה לא יכולה להיות בעתיד';
+      }
     }
     if (form.nextDueDate && startOfDay(form.nextDueDate) < startOfDay(form.administeredDate)) {
       return 'תאריך המנה הבאה חייב להיות ביום מתן התרופה או אחריו';
@@ -521,8 +586,10 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
     };
     try {
       setSaving(true);
-      if (isEdit && medicationId) {
-        await medicationAPI.update(userId, medicationId, payload);
+      const saveMedicationId =
+        paramMedicationId ?? medicationId ?? lockedEditingMedicationIdRef.current;
+      if (saveMedicationId) {
+        await medicationAPI.update(userId, saveMedicationId, payload);
         await resyncAllNotifications(userId);
         markHomeDataDirty(userId);
         markMedicationsDirty(userId);
@@ -632,7 +699,7 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
           <Text style={styles.label}>תאריך מתן התרופה / הטיפול</Text>
           <TouchableOpacity
             style={styles.input}
-            onPress={() => setDatePickerTarget('administered')}
+            onPress={() => openDatePicker('administered')}
             activeOpacity={0.7}
             disabled={saving}
           >
@@ -645,7 +712,7 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
           <Text style={styles.label}>שעת המנה</Text>
           <TouchableOpacity
             style={styles.input}
-            onPress={() => setDatePickerTarget('administeredTime')}
+            onPress={() => openDatePicker('administeredTime')}
             activeOpacity={0.7}
             disabled={saving}
           >
@@ -658,7 +725,7 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
           <Text style={styles.label}>תאריך המנה הבאה / חידוש</Text>
           <TouchableOpacity
             style={styles.input}
-            onPress={() => setDatePickerTarget('nextDue')}
+            onPress={() => openDatePicker('nextDue')}
             activeOpacity={0.7}
             disabled={saving}
           >
@@ -690,7 +757,7 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
           <Text style={styles.label}>שעת המנה הבאה</Text>
           <TouchableOpacity
             style={[styles.input, !form.nextDueDate && styles.saveDisabled]}
-            onPress={() => form.nextDueDate && setDatePickerTarget('nextDueTime')}
+            onPress={() => form.nextDueDate && openDatePicker('nextDueTime')}
             activeOpacity={0.7}
             disabled={saving || !form.nextDueDate}
           >
@@ -731,12 +798,14 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
                     </TouchableOpacity>
                   </View>
                   <DateTimePicker
+                    key={datePickerTarget}
                     value={activePickerDate}
                     mode={isTimePickerTarget(datePickerTarget) ? 'time' : 'date'}
                     display="spinner"
                     onChange={isTimePickerTarget(datePickerTarget) ? onTimeChange : onDateChange}
-                    maximumDate={datePickerTarget === 'administered' ? new Date() : undefined}
+                    maximumDate={pickerMaximumDate}
                     minimumDate={datePickerTarget === 'nextDue' ? form.administeredDate : undefined}
+                    is24Hour
                     textColor={TEXT_DARK}
                   />
                 </View>
@@ -745,12 +814,14 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
           )}
           {Platform.OS === 'android' && datePickerTarget && (
             <DateTimePicker
+              key={datePickerTarget}
               value={activePickerDate}
               mode={isTimePickerTarget(datePickerTarget) ? 'time' : 'date'}
               display="default"
               onChange={isTimePickerTarget(datePickerTarget) ? onTimeChange : onDateChange}
-              maximumDate={datePickerTarget === 'administered' ? new Date() : undefined}
+              maximumDate={pickerMaximumDate}
               minimumDate={datePickerTarget === 'nextDue' ? form.administeredDate : undefined}
+              is24Hour
             />
           )}
 

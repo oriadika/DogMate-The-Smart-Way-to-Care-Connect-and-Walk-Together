@@ -23,6 +23,7 @@ import { cancelReminderNotification } from '../services/notifications';
 import { resyncAllNotificationsInBackground } from '../services/notificationScheduler';
 import {
   EDITABLE_HEALTH_REMINDER_TYPES,
+  findSystemReminderForSource,
   getHomeCache,
   markHomeDataDirty,
   refreshHomeRemindersFromServer,
@@ -73,6 +74,9 @@ const AddReminderScreen = ({ navigation, route }: any) => {
   const [showDogModal, setShowDogModal] = useState(false);
   const [selectedDogs, setSelectedDogs] = useState<string[]>([]); // Array of dog IDs
   const [isSaving, setIsSaving] = useState(false); // Add loading state
+  const [resolvedReminderId, setResolvedReminderId] = useState<string | null>(
+    reminderToEdit?.id ?? null
+  );
 
   // Format date as DD/MM/YYYY
   const formatDate = (dateToFormat: Date): string => {
@@ -148,16 +152,68 @@ const AddReminderScreen = ({ navigation, route }: any) => {
     }
   }, [reminderToEdit]);
 
+  useEffect(() => {
+    setResolvedReminderId(reminderToEdit?.id ?? null);
+  }, [reminderToEdit?.id]);
+
+  const resolveEditableReminderId = useCallback(async (): Promise<string | null> => {
+    if (!isEditing || !userId) {
+      return resolvedReminderId ?? reminderToEdit?.id ?? null;
+    }
+
+    if (
+      reminderToEdit?.sourceType &&
+      reminderToEdit?.sourceId &&
+      EDITABLE_HEALTH_REMINDER_TYPES.includes(reminderToEdit.sourceType)
+    ) {
+      const freshReminders = await refreshHomeRemindersFromServer(userId);
+      const resolved = findSystemReminderForSource(
+        freshReminders,
+        reminderToEdit.sourceType,
+        reminderToEdit.sourceId
+      );
+      if (resolved?.id) {
+        setResolvedReminderId(resolved.id);
+        return resolved.id;
+      }
+      return null;
+    }
+
+    return resolvedReminderId ?? reminderToEdit?.id ?? null;
+  }, [isEditing, userId, reminderToEdit, resolvedReminderId]);
+
   // Load user and dogs data
   useFocusEffect(
     useCallback(() => {
       if (userIdFromParams) {
         loadDogsForUser(userIdFromParams);
+        if (
+          reminderToEdit?.id &&
+          reminderToEdit?.sourceType &&
+          reminderToEdit?.sourceId &&
+          EDITABLE_HEALTH_REMINDER_TYPES.includes(reminderToEdit.sourceType)
+        ) {
+          void (async () => {
+            try {
+              const freshReminders = await refreshHomeRemindersFromServer(userIdFromParams);
+              const resolved = findSystemReminderForSource(
+                freshReminders,
+                reminderToEdit.sourceType,
+                reminderToEdit.sourceId
+              );
+              if (resolved?.id) {
+                setResolvedReminderId(resolved.id);
+              }
+            } catch (error) {
+              console.warn('Failed to refresh reminder id before edit:', error);
+            }
+          })();
+        }
       } else {
         Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
         navigation.goBack();
       }
-    }, [userIdFromParams])
+    }, [userIdFromParams, reminderToEdit])
   );
 
   const loadDogsForUser = async (userIdToLoad: string) => {
@@ -269,7 +325,12 @@ const AddReminderScreen = ({ navigation, route }: any) => {
     setIsSaving(true);
     try {
       let response;
-      const reminderId = reminderToEdit?.id;
+      const reminderId = isEditing ? await resolveEditableReminderId() : null;
+
+      if (isEditing && !reminderId) {
+        Alert.alert('שגיאה', 'התזכורת כבר לא קיימת. חזור לדף הבית ורענן את הרשימה.');
+        return;
+      }
 
       if (isEditing && reminderId) {
         await cancelReminderNotification(reminderId);

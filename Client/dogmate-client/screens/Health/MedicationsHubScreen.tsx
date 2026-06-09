@@ -37,6 +37,12 @@ import MedicationSortModal, {
   type MedicationSortOption,
 } from '../../components/health/MedicationSortModal';
 import MedicationGroupCard from '../../components/health/MedicationGroupCard';
+import MedicationOverdueMarkDoneModal from '../../components/health/MedicationOverdueMarkDoneModal';
+import {
+  combineMedicationPlannedDue,
+  isMedicationPlannedDueOverdue,
+} from '../../utils/healthMarkDone';
+import { logMedicationDoseForUser } from '../../utils/healthMarkDoneActions';
 import {
   groupMedications,
   sortMedicationGroups,
@@ -76,6 +82,12 @@ const MedicationsHubScreen = ({ navigation }: any) => {
   const [sortModalVisible, setSortModalVisible] = useState(false);
   const [expandedHistoryByKey, setExpandedHistoryByKey] = useState<Record<string, boolean>>({});
   const [loggingDoseKey, setLoggingDoseKey] = useState<string | null>(null);
+  const [overdueLogPrompt, setOverdueLogPrompt] = useState<{
+    groupKey: string;
+    medicationId: string;
+    plannedDue: Date | null;
+  } | null>(null);
+  const [overdueLogBusy, setOverdueLogBusy] = useState(false);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
 
@@ -151,6 +163,7 @@ const MedicationsHubScreen = ({ navigation }: any) => {
       }
 
       setMedicationsCache(uid, { rows: nextRows, userDogs: nextDogs });
+      markHomeDataDirty(uid);
     } catch (e: any) {
       if (!isAsyncWorkCurrent(generation)) return;
       console.error('Medications hub load error:', e);
@@ -252,6 +265,7 @@ const MedicationsHubScreen = ({ navigation }: any) => {
       dogId: item.dogId,
       medicationName: item.medicationName,
       administeredDate: item.administeredDate,
+      administeredTime: item.administeredTime ?? undefined,
       nextDueDate: item.nextDueDate ?? undefined,
       vetClinicName: item.vetClinicName ?? undefined,
     });
@@ -324,16 +338,13 @@ const MedicationsHubScreen = ({ navigation }: any) => {
     setExpandedHistoryByKey((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  const handleLogDose = useCallback(
-    async (group: MedicationGroup, latest: MedicationRow) => {
+  const executeLogDose = useCallback(
+    async (groupKey: string, medicationId: string, administeredAt?: Date) => {
       if (!userId) return;
-      setLoggingDoseKey(group.key);
+      setLoggingDoseKey(groupKey);
       try {
-        await medicationAPI.logDose(userId, latest.id);
-        markHomeDataDirty(userId);
-        markMedicationsDirty(userId);
-        resyncAllNotificationsInBackground(userId);
-        setExpandedHistoryByKey((prev) => ({ ...prev, [group.key]: true }));
+        await logMedicationDoseForUser(userId, medicationId, administeredAt);
+        setExpandedHistoryByKey((prev) => ({ ...prev, [groupKey]: true }));
         await loadMedications();
       } catch (e: any) {
         Alert.alert('שגיאה', e?.message || 'רישום המנה נכשל');
@@ -342,6 +353,37 @@ const MedicationsHubScreen = ({ navigation }: any) => {
       }
     },
     [userId, loadMedications]
+  );
+
+  const handleLogDose = useCallback(
+    async (group: MedicationGroup, latest: MedicationRow) => {
+      if (!userId || overdueLogBusy) return;
+      if (isMedicationPlannedDueOverdue(latest)) {
+        setOverdueLogPrompt({
+          groupKey: group.key,
+          medicationId: latest.id,
+          plannedDue: combineMedicationPlannedDue(latest),
+        });
+        return;
+      }
+      await executeLogDose(group.key, latest.id);
+    },
+    [userId, overdueLogBusy, executeLogDose]
+  );
+
+  const handleOverdueLogChoice = useCallback(
+    async (administeredAt: Date) => {
+      if (!overdueLogPrompt) return;
+      setOverdueLogBusy(true);
+      try {
+        const { groupKey, medicationId } = overdueLogPrompt;
+        setOverdueLogPrompt(null);
+        await executeLogDose(groupKey, medicationId, administeredAt);
+      } finally {
+        setOverdueLogBusy(false);
+      }
+    },
+    [overdueLogPrompt, executeLogDose]
   );
 
   if (loading && rows.length === 0) {
@@ -479,6 +521,24 @@ const MedicationsHubScreen = ({ navigation }: any) => {
           onClose={() => setSortModalVisible(false)}
           value={medicationSort}
           onChange={setMedicationSort}
+        />
+
+        <MedicationOverdueMarkDoneModal
+          visible={Boolean(overdueLogPrompt)}
+          plannedDue={overdueLogPrompt?.plannedDue ?? null}
+          busy={overdueLogBusy}
+          onSelectPlanned={() => {
+            if (overdueLogPrompt?.plannedDue) {
+              void handleOverdueLogChoice(overdueLogPrompt.plannedDue);
+            }
+          }}
+          onSelectNow={() => {
+            void handleOverdueLogChoice(new Date());
+          }}
+          onClose={() => {
+            if (overdueLogBusy) return;
+            setOverdueLogPrompt(null);
+          }}
         />
       </View>
     </SafeAreaView>

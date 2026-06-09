@@ -1,8 +1,11 @@
+import { parseStoredNextDueTime } from './healthReminderSettings';
+
 /** Format day count as Hebrew text (ימים / שבועות / חודשים / שנים) */
 export function formatDaysToText(days: number): string {
   const n = Math.abs(days);
   if (n < 7) {
-    return `${n} ${n === 1 ? 'יום' : 'ימים'}`;
+    if (n === 1) return 'יום אחד';
+    return `${n} ימים`;
   }
 
   if (n < 30) {
@@ -70,8 +73,12 @@ const MS_MINUTE = 1000 * 60;
 const MS_HOUR = MS_MINUTE * 60;
 const MS_DAY = MS_HOUR * 24;
 
+export const DUE_NOW_MESSAGE = 'הגיע הזמן';
+
 export type ReminderCountdown = {
   displayValue: number;
+  /** When set, UI shows this text instead of the numeric displayValue. */
+  displayText?: string;
   unit: 'days' | 'hours' | 'minutes';
   /** Full label, e.g. "שעות עד התזכורת:" */
   label: string;
@@ -80,10 +87,48 @@ export type ReminderCountdown = {
   subtext: string;
   urgencyColor: string;
   isPast: boolean;
+  /** Shown beside the countdown for system health reminders */
+  sourceEmoji?: string;
 };
 
-function countdownLabel(unitWord: string): { label: string; labelUnit: string } {
-  return { labelUnit: unitWord, label: `${unitWord} עד התזכורת:` };
+function parseIsoLocalDate(iso: string): Date {
+  const head = iso.split('T')[0];
+  const parts = head.split('-');
+  if (parts.length === 3) {
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  }
+  const t = new Date(iso);
+  return Number.isNaN(t.getTime()) ? new Date() : t;
+}
+
+export function combineIsoDateAndTime(
+  dateIso: string | null | undefined,
+  time?: string | null
+): Date | null {
+  if (!dateIso) return null;
+  const due = parseIsoLocalDate(dateIso);
+  if (Number.isNaN(due.getTime())) return null;
+  const normalized = parseStoredNextDueTime(time ?? undefined);
+  const [hour, minute] = normalized.split(':').map((p) => parseInt(p, 10));
+  due.setHours(hour, minute, 0, 0);
+  return due;
+}
+
+function countdownLabel(unitWord: string, eventName: string): { label: string; labelUnit: string } {
+  return { labelUnit: unitWord, label: `${unitWord} עד ${eventName}:` };
+}
+
+function dueNowStatus(eventName: string): ReminderCountdown {
+  return {
+    displayValue: 0,
+    displayText: DUE_NOW_MESSAGE,
+    unit: 'minutes',
+    labelUnit: 'סטטוס',
+    label: 'סטטוס:',
+    subtext: `(${DUE_NOW_MESSAGE})`,
+    urgencyColor: '#EA5455',
+    isPast: false,
+  };
 }
 
 function daysUntilTarget(target: Date): number {
@@ -94,10 +139,10 @@ function daysUntilTarget(target: Date): number {
   return Math.round((t.getTime() - today.getTime()) / MS_DAY);
 }
 
-/** Days (or hours if under 24h) until a reminder datetime. */
-export function getReminderCountdown(iso: string | null | undefined): ReminderCountdown | null {
-  if (!iso) return null;
-  const target = new Date(iso);
+function buildCountdownFromTarget(
+  target: Date,
+  eventName: string
+): ReminderCountdown | null {
   if (Number.isNaN(target.getTime())) return null;
 
   const diffMs = target.getTime() - Date.now();
@@ -105,61 +150,117 @@ export function getReminderCountdown(iso: string | null | undefined): ReminderCo
   const urgencyColor = getDaysUrgencyColor(calendarDays <= 0 ? 0 : calendarDays);
 
   if (diffMs <= 0) {
-    return {
-      displayValue: 0,
-      unit: 'hours',
-      ...countdownLabel('שעות'),
-      subtext: '(עבר הזמן)',
-      urgencyColor: '#EA5455',
-      isPast: true,
-    };
+    return dueNowStatus(eventName);
   }
 
   if (diffMs >= MS_DAY) {
-    const days = Math.max(1, Math.ceil(diffMs / MS_DAY));
+    const days = Math.max(1, calendarDays);
     return {
       displayValue: days,
       unit: 'days',
-      ...countdownLabel('ימים'),
+      ...countdownLabel('ימים', eventName),
       subtext: `(${formatDaysToText(days)})`,
       urgencyColor,
       isPast: false,
     };
   }
 
-  if (diffMs >= MS_HOUR) {
+  const minutesUntil = Math.ceil(diffMs / MS_MINUTE);
+  if (diffMs >= MS_HOUR || minutesUntil >= 60) {
     const hours = Math.max(1, Math.ceil(diffMs / MS_HOUR));
     if (hours >= 24) {
       return {
         displayValue: 1,
         unit: 'days',
-        ...countdownLabel('ימים'),
+        ...countdownLabel('ימים', eventName),
         subtext: `(${formatDaysToText(1)})`,
         urgencyColor,
         isPast: false,
       };
     }
-    const hoursText = hours === 1 ? 'שעה' : `${hours} שעות`;
+    const hoursText = hours === 1 ? 'שעה אחת' : `${hours} שעות`;
     return {
       displayValue: hours,
       unit: 'hours',
-      ...countdownLabel('שעות'),
+      ...countdownLabel('שעות', eventName),
       subtext: `(${hoursText})`,
       urgencyColor,
       isPast: false,
     };
   }
 
-  const minutes = Math.max(1, Math.ceil(diffMs / MS_MINUTE));
-  const minutesText = minutes === 1 ? 'דקה' : `${minutes} דקות`;
+  const minutes = Math.max(1, minutesUntil);
+  const minutesText = minutes === 1 ? 'דקה אחת' : `${minutes} דקות`;
   return {
     displayValue: minutes,
     unit: 'minutes',
-    ...countdownLabel('דקות'),
+    ...countdownLabel('דקות', eventName),
     subtext: `(${minutesText})`,
     urgencyColor: '#EA5455',
     isPast: false,
   };
+}
+
+/** Countdown until a dated health event (medication dose, vaccination, etc.). */
+export function getDueEventCountdown(
+  dueAt: Date | string | null | undefined,
+  eventName = 'התזכורת'
+): ReminderCountdown | null {
+  if (dueAt == null) return null;
+  const target = typeof dueAt === 'string' ? new Date(dueAt) : dueAt;
+  return buildCountdownFromTarget(target, eventName);
+}
+
+export function getHealthHubCountdown(
+  dueDateIso: string | null | undefined,
+  dueTime: string | null | undefined,
+  eventName: string
+): ReminderCountdown | null {
+  const dueAt = combineIsoDateAndTime(dueDateIso, dueTime);
+  if (!dueAt) return null;
+  return getDueEventCountdown(dueAt, eventName);
+}
+
+/** Day-based stock countdown (food inventory). */
+export function getCalendarDaysCountdown(
+  days: number | null | undefined,
+  eventName: string
+): ReminderCountdown | null {
+  if (days == null) return null;
+
+  if (days < 0) {
+    return {
+      displayValue: 0,
+      unit: 'days',
+      ...countdownLabel('ימים', eventName),
+      subtext: `(באיחור ${formatDaysToText(Math.abs(days))})`,
+      urgencyColor: '#EA5455',
+      isPast: false,
+    };
+  }
+
+  if (days === 0) {
+    return dueNowStatus(eventName);
+  }
+
+  return {
+    displayValue: days,
+    unit: 'days',
+    ...countdownLabel('ימים', eventName),
+    subtext: `(${formatDaysToText(days)})`,
+    urgencyColor: getDaysUrgencyColor(days),
+    isPast: false,
+  };
+}
+
+/** Days (or hours/minutes if under 24h) until a reminder datetime. */
+export function getReminderCountdown(iso: string | null | undefined): ReminderCountdown | null {
+  if (!iso) return null;
+  return getDueEventCountdown(iso, 'התזכורת');
+}
+
+export function getCountdownPrimaryText(countdown: ReminderCountdown): string {
+  return countdown.displayText ?? String(countdown.displayValue);
 }
 
 function reminderTimestamp(iso: unknown): number | null {

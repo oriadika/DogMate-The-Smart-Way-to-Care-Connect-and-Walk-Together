@@ -14,6 +14,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.DogMate.Domain.DogMedication;
+import com.DogMate.Domain.DogVaccination;
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -199,10 +203,99 @@ public class ReminderService {
         processExpiredRemindersInternal(userId);
     }
 
+    /**
+     * Marks a reminder as completed from home: logs health actions for system reminders
+     * (medication dose, vaccination, food acknowledgment) or deletes manual reminders.
+     */
+    @Transactional
+    @CacheEvict(cacheNames = "remindersByUser", key = "#userId")
+    public void completeReminder(UUID userId, UUID reminderId) {
+        completeReminder(userId, reminderId, null);
+    }
+
+    /**
+     * Marks a reminder as completed. Vaccinations always log the planned due date.
+     * Medications log now when on time; overdue doses require {@code administeredAtChoice}.
+     */
+    @Transactional
+    @CacheEvict(cacheNames = "remindersByUser", key = "#userId")
+    public void completeReminder(UUID userId, UUID reminderId, LocalDateTime administeredAtChoice) {
+        Reminder reminder = reminderRepo.findById(reminderId)
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצאה תזכורת"));
+
+        if (!reminder.getUser().getId().equals(userId)) {
+            throw new IllegalArgumentException("אין הרשאה לתזכורת זו");
+        }
+
+        if (reminder.isSystemGenerated()
+                && reminder.getSourceType() != null
+                && reminder.getSourceId() != null) {
+            String sourceType = reminder.getSourceType();
+            UUID sourceId = reminder.getSourceId();
+
+            if (ReminderSourceType.MEDICATION.equals(sourceType)) {
+                completeMedicationReminderFromReminder(userId, sourceId, administeredAtChoice);
+            } else if (ReminderSourceType.VACCINATION.equals(sourceType)) {
+                completeVaccinationReminderFromReminder(userId, sourceId);
+            } else if (ReminderSourceType.FOOD.equals(sourceType)) {
+                dogService.disableFoodStockReminderAfterFired(sourceId);
+            } else {
+                deleteSystemReminder(userId, sourceType, sourceId);
+            }
+            return;
+        }
+
+        reminderRepo.deleteById(reminderId);
+    }
+
+    private void completeMedicationReminderFromReminder(
+            UUID userId,
+            UUID medicationId,
+            LocalDateTime administeredAtChoice
+    ) {
+        DogMedication template = medicationService.findOwnedMedication(userId, medicationId);
+        LocalDateTime plannedDue = notificationScheduleService.resolveMedicationPlannedDueAt(template);
+        LocalDateTime now = LocalDateTime.now();
+
+        LocalDateTime administeredAt;
+        if (administeredAtChoice != null) {
+            administeredAt = administeredAtChoice;
+        } else if (plannedDue == null || !plannedDue.isBefore(now)) {
+            administeredAt = now;
+        } else {
+            throw new IllegalArgumentException("יש לבחור מתי ניתנה התרופה");
+        }
+
+        completeMedicationReminder(userId, medicationId, administeredAt);
+    }
+
+    private void completeVaccinationReminderFromReminder(UUID userId, UUID vaccinationId) {
+        DogVaccination template = vaccinationService.findOwnedVaccination(userId, vaccinationId);
+        LocalDateTime plannedDue = notificationScheduleService.resolveVaccinationPlannedDueAt(template);
+        LocalDate administeredDate = plannedDue != null ? plannedDue.toLocalDate() : LocalDate.now();
+        completeVaccinationReminder(userId, vaccinationId, administeredDate.atStartOfDay());
+    }
+
+    private void completeMedicationReminder(UUID userId, UUID medicationId, LocalDateTime administeredAt) {
+        medicationService.logDoseAt(
+                userId,
+                medicationId,
+                administeredAt.toLocalDate(),
+                administeredAt.toLocalTime()
+        );
+        deleteSystemReminder(userId, ReminderSourceType.MEDICATION, medicationId);
+    }
+
+    private void completeVaccinationReminder(UUID userId, UUID vaccinationId, LocalDateTime administeredAt) {
+        vaccinationService.logDoseAt(userId, vaccinationId, administeredAt.toLocalDate(), false);
+        deleteSystemReminder(userId, ReminderSourceType.VACCINATION, vaccinationId);
+    }
+
     @Transactional
     @CacheEvict(cacheNames = "remindersByUser", key = "#userId")
     public List<Reminder> getRemindersForUser(UUID userId) {
         processExpiredRemindersInternal(userId);
+        medicationService.reconcileAllMedicationRemindersForUser(userId);
 
         var userAcc = userRepo.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId));
@@ -329,8 +422,18 @@ public class ReminderService {
         return reminderRepo.save(reminder);
     }
 
-    @Transactional
-    @CacheEvict(cacheNames = "remindersByUser", key = "#userId")
+    @Transactional(readOnly = true)
+    public boolean hasActiveSystemReminder(UUID userId, String sourceType, UUID sourceId) {
+        if (userId == null || sourceType == null || sourceId == null) {
+            return false;
+        }
+        return reminderRepo.findBySourceTypeAndSourceIdWithDogs(sourceType, sourceId)
+                .filter(reminder -> reminder.getUser().getId().equals(userId))
+                .map(Reminder::getRemindAt)
+                .filter(remindAt -> remindAt.isAfter(LocalDateTime.now()))
+                .isPresent();
+    }
+
     public void deleteSystemReminder(UUID userId, String sourceType, UUID sourceId) {
         reminderRepo.findBySourceTypeAndSourceId(sourceType, sourceId)
                 .filter(r -> r.getUser().getId().equals(userId))

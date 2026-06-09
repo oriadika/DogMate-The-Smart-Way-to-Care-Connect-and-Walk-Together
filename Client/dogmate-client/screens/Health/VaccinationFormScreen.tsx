@@ -226,7 +226,7 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
         administeredDate: new Date(),
         nextDueDate: null,
         nextDueManuallyEdited: false,
-        noNextCycle: false,
+        noNextCycle: true,
         vetClinicName: '',
       });
     }
@@ -329,10 +329,14 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
       ...prev,
       vaccineKey: key,
       customVaccineName: key === ISRAEL_VACCINE_CUSTOM ? prev.customVaccineName : '',
-      nextDueManuallyEdited: false,
-      noNextCycle: false,
+      ...(prev.nextDueManuallyEdited
+        ? {}
+        : {
+            nextDueDate: null,
+            nextDueManuallyEdited: false,
+            noNextCycle: true,
+          }),
     }));
-    applyAutoNextDue(key, form.administeredDate, true);
   };
 
   const onAdministeredDateChange = (selectedDate: Date) => {

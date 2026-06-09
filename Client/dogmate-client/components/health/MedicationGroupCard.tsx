@@ -3,16 +3,12 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import type { MedicationRow } from '../../services/api';
 import type { MedicationGroup } from '../../utils/medicationGroups';
+import { getLatestMedicationRecord } from '../../utils/medicationGroups';
 import {
-  getLatestNextDueDate,
-  getLatestMedicationRecord,
-} from '../../utils/medicationGroups';
-import {
-  daysUntilIsoDate,
-  formatDaysToText,
-  getDaysUrgencyColor,
+  getCountdownPrimaryText,
+  getHealthHubCountdown,
 } from '../../utils/daysDisplay';
-import { isAdministeredToday } from '../../utils/healthLogDose';
+import { formatTimeHe } from '../../utils/healthReminderSettings';
 
 const PRIMARY_COLOR = '#7FB069';
 const TEXT_DARK = '#5C4033';
@@ -44,13 +40,11 @@ export default function MedicationGroupCard({
   formatDate,
 }: Props) {
   const latest = getLatestMedicationRecord(group.history);
-  const loggedToday = latest ? isAdministeredToday(latest.administeredDate) : false;
-  const nextDueFromLatest = getLatestNextDueDate(group.history);
-  const daysUntilNext = daysUntilIsoDate(nextDueFromLatest);
-  const isOverdue = daysUntilNext != null && daysUntilNext < 0;
-  const displayDays = daysUntilNext == null ? null : isOverdue ? 0 : daysUntilNext;
-  const statusColor =
-    daysUntilNext == null ? MUTED : isOverdue ? '#EA5455' : getDaysUrgencyColor(daysUntilNext);
+  const countdown = getHealthHubCountdown(
+    latest?.nextDueDate ?? null,
+    latest?.nextDueTime,
+    'המנה הבאה'
+  );
 
   return (
     <View style={styles.card}>
@@ -60,28 +54,24 @@ export default function MedicationGroupCard({
           <Text style={styles.medication}>{group.medicationName}</Text>
           <Text style={styles.summaryLine}>
             מתן אחרון: {formatDate(group.lastAdministeredDate)}
+            {latest?.administeredTime ? ` · ${formatTimeHe(latest.administeredTime)}` : ''}
           </Text>
-          {nextDueFromLatest ? (
-            <Text style={styles.nextDue}>מנה הבאה: {formatDate(nextDueFromLatest)}</Text>
+          {latest?.nextDueDate ? (
+            <Text style={styles.nextDue}>מנה הבאה: {formatDate(latest.nextDueDate)}</Text>
           ) : (
             <Text style={styles.nextDueMuted}>מנה הבאה: לא נקבע</Text>
           )}
           {latest && onLogDose ? (
             <TouchableOpacity
-              style={[
-                styles.logDoseBtn,
-                (loggingDose || loggedToday) && styles.logDoseBtnDisabled,
-              ]}
-              onPress={() => !loggingDose && !loggedToday && onLogDose(group, latest)}
-              disabled={loggingDose || loggedToday}
+              style={[styles.logDoseBtn, loggingDose && styles.logDoseBtnDisabled]}
+              onPress={() => !loggingDose && onLogDose(group, latest)}
+              disabled={loggingDose}
               activeOpacity={0.85}
             >
               {loggingDose ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={styles.logDoseBtnText}>
-                  {loggedToday ? 'נרשם היום ✓' : 'ניתנה התרופה'}
-                </Text>
+                <Text style={styles.logDoseBtnText}>ניתנה התרופה</Text>
               )}
             </TouchableOpacity>
           ) : null}
@@ -98,13 +88,20 @@ export default function MedicationGroupCard({
               </TouchableOpacity>
             </View>
             <View style={styles.statusContainer}>
-              <Text style={styles.statusLabel}>ימים עד המנה הבאה:</Text>
-              {displayDays != null ? (
+              <Text style={styles.statusLabel}>{countdown?.label ?? 'ימים עד המנה הבאה:'}</Text>
+              {countdown ? (
                 <>
-                  <Text style={[styles.statusValue, { color: statusColor }]}>{displayDays}</Text>
-                  <Text style={styles.statusSubtext}>
-                    ({isOverdue ? `באיחור ${formatDaysToText(Math.abs(daysUntilNext!))}` : formatDaysToText(displayDays)})
+                  <Text
+                    style={[
+                      countdown.displayText ? styles.statusMessage : styles.statusValue,
+                      { color: countdown.urgencyColor },
+                    ]}
+                  >
+                    {getCountdownPrimaryText(countdown)}
                   </Text>
+                  {countdown.subtext ? (
+                    <Text style={styles.statusSubtext}>{countdown.subtext}</Text>
+                  ) : null}
                 </>
               ) : (
                 <Text style={styles.statusUnset}>לא נקבע</Text>
@@ -136,7 +133,12 @@ export default function MedicationGroupCard({
                     </TouchableOpacity>
                   </View>
                   <View style={styles.historyItemText}>
-                    <Text style={styles.historyDate}>{formatDate(entry.administeredDate)}</Text>
+                    <Text style={styles.historyDate}>
+                      {formatDate(entry.administeredDate)}
+                      {entry.administeredTime
+                        ? ` · ${formatTimeHe(entry.administeredTime)}`
+                        : ''}
+                    </Text>
                     {index === 0 ? <Text style={styles.latestBadge}>אחרון</Text> : null}
                   </View>
                 </View>
@@ -192,6 +194,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  statusMessage: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    writingDirection: 'rtl',
   },
   statusSubtext: {
     fontSize: 11,

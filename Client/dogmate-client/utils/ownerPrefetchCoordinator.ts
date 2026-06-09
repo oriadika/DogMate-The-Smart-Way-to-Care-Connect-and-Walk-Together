@@ -1,22 +1,11 @@
-import { dogAPI, reminderAPI, vaccinationAPI, medicationAPI, foodStockAPI } from '../services/api';
-import type { MedicationRow, VaccinationRow } from '../services/api';
+import { dogAPI, reminderAPI } from '../services/api';
 import {
   buildHomeDataSignature,
   clearHomeDirty,
   getHomeCache,
   setHomeCache,
 } from './homeDataCache';
-import {
-  clearFoodInventoryDirty,
-  clearMedicationsDirty,
-  clearVaccinationsDirty,
-  isHealthDataWarm,
-  setFoodInventoryCache,
-  setMedicationsCache,
-  setVaccinationsCache,
-  toDogOptions,
-  transformFoodStocks,
-} from './healthDataCache';
+import { isHealthDataWarm, toDogOptions, warmHealthCountdownCache } from './healthDataCache';
 import { prefetchWalkersData, isWalkersDataWarm } from './walkersDataCache';
 import { sortRemindersNearestFirst, filterActiveReminders } from './daysDisplay';
 import { isAbortError } from './isAbortError';
@@ -63,32 +52,6 @@ async function prefetchHomeSequential(
   clearHomeDirty(userId);
 }
 
-async function prefetchHealthSequential(userId: string): Promise<void> {
-  const cachedDogs = getHomeCache(userId)?.dogs;
-  const dogOptions =
-    cachedDogs && cachedDogs.length > 0 ? toDogOptions(cachedDogs) : toDogOptions([]);
-
-  const vaccinationsResponse = await withApiRetry(() => vaccinationAPI.list(userId));
-  const vaccinationRows = Array.isArray(vaccinationsResponse.vaccinations)
-    ? (vaccinationsResponse.vaccinations as VaccinationRow[])
-    : [];
-  setVaccinationsCache(userId, { rows: vaccinationRows, userDogs: dogOptions });
-  clearVaccinationsDirty(userId);
-
-  const medicationsResponse = await withApiRetry(() => medicationAPI.list(userId));
-  const medicationRows = Array.isArray(medicationsResponse.medications)
-    ? (medicationsResponse.medications as MedicationRow[])
-    : [];
-  setMedicationsCache(userId, { rows: medicationRows, userDogs: dogOptions });
-  clearMedicationsDirty(userId);
-
-  const foodResponse = await withApiRetry(() => foodStockAPI.getFoodStocksForUser(userId));
-  const raw =
-    foodResponse.success && foodResponse.foodStocks ? foodResponse.foodStocks : [];
-  setFoodInventoryCache(userId, { items: transformFoodStocks(raw) });
-  clearFoodInventoryDirty(userId);
-}
-
 async function executeOwnerPrefetch(
   userId: string,
   userName?: string,
@@ -96,25 +59,26 @@ async function executeOwnerPrefetch(
   homeGate?: { resolve: () => void }
 ): Promise<void> {
   try {
-    if (!getHomeCache(userId)) {
+    const homeNeeded = !getHomeCache(userId);
+    const healthNeeded = !isHealthDataWarm(userId);
+
+    if (homeNeeded && healthNeeded) {
+      await Promise.all([
+        prefetchHomeSequential(userId, userName, userLastName),
+        warmHealthCountdownCache(userId, []),
+      ]);
+    } else if (homeNeeded) {
       await prefetchHomeSequential(userId, userName, userLastName);
+    } else if (healthNeeded) {
+      const dogOptions = toDogOptions(getHomeCache(userId)?.dogs ?? []);
+      await warmHealthCountdownCache(userId, dogOptions);
     }
   } catch (error) {
     if (!isAbortError(error)) {
-      console.warn('Owner prefetch: home phase failed:', error);
+      console.warn('Owner prefetch: home/health phase failed:', error);
     }
   } finally {
     homeGate?.resolve();
-  }
-
-  try {
-    if (!isHealthDataWarm(userId)) {
-      await prefetchHealthSequential(userId);
-    }
-  } catch (error) {
-    if (!isAbortError(error)) {
-      console.warn('Owner prefetch: health phase failed:', error);
-    }
   }
 
   try {

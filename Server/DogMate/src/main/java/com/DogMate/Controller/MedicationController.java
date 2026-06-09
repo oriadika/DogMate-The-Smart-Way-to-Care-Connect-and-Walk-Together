@@ -108,11 +108,22 @@ public class MedicationController {
     }
 
     @PostMapping("/{medicationId}/log-dose")
-    public ResponseEntity<?> logDose(@PathVariable String medicationId, @RequestParam String userId) {
+    public ResponseEntity<?> logDose(
+            @PathVariable String medicationId,
+            @RequestParam String userId,
+            @RequestBody(required = false) LogDoseRequest body
+    ) {
         try {
             UUID uid = UUID.fromString(userId);
             UUID mid = UUID.fromString(medicationId);
-            MedicationDTO saved = medicationService.logDose(uid, mid);
+            MedicationDTO saved;
+            if (body != null && body.getAdministeredDate() != null && !body.getAdministeredDate().isBlank()) {
+                LocalDate date = parseDate(body.getAdministeredDate());
+                LocalTime time = parseOptionalTime(body.getAdministeredTime());
+                saved = medicationService.logDoseAt(uid, mid, date, time);
+            } else {
+                saved = medicationService.logDose(uid, mid);
+            }
             Map<String, Object> ok = new HashMap<>();
             ok.put("success", true);
             ok.put("medication", saved);
@@ -184,6 +195,28 @@ public class MedicationController {
             return body.getRemindBeforeValue();
         }
         return body.getRemindDaysBefore();
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class LogDoseRequest {
+        private String administeredDate;
+        private String administeredTime;
+
+        public String getAdministeredDate() {
+            return administeredDate;
+        }
+
+        public void setAdministeredDate(String administeredDate) {
+            this.administeredDate = administeredDate;
+        }
+
+        public String getAdministeredTime() {
+            return administeredTime;
+        }
+
+        public void setAdministeredTime(String administeredTime) {
+            this.administeredTime = administeredTime;
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

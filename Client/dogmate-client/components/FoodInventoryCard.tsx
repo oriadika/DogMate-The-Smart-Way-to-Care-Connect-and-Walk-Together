@@ -1,6 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import {
+  getCalendarDaysCountdown,
+  getCountdownPrimaryText,
+} from '../utils/daysDisplay';
 
 type DogInfo = {
   id: string;
@@ -36,43 +40,11 @@ const FoodInventoryCard = ({
 
   const showReminderCountdown =
     notificationEnabled && daysUntilReminder != null;
+  const stockCountdown = getCalendarDaysCountdown(daysRemaining, 'סיום השק');
 
   // Create header text
   const getHeaderText = () => {
     return 'האוכל של:';
-  };
-
-  // Format days to readable format (ימים / שבועות / חודשים)
-  const formatDaysToText = (days: number): string => {
-    if (days < 7) {
-      return `${days} ${days === 1 ? 'יום' : 'ימים'}`;
-    }
-    
-    if (days < 30) {
-      const weeks = Math.floor(days / 7);
-      const remainingDays = days % 7;
-      
-      if (remainingDays === 0) {
-        if (weeks === 1) return 'שבוע';
-        if (weeks === 2) return 'שבועיים';
-        return `${weeks} שבועות`;
-      }
-      
-      const weeksText = weeks === 1 ? 'שבוע' : weeks === 2 ? 'שבועיים' : `${weeks} שבועות`;
-      const daysText = remainingDays === 1 ? 'יום' : `${remainingDays} ימים`;
-      return `${weeksText} ו-${daysText}`;
-    }
-    
-    const months = Math.floor(days / 30);
-    const remainingDays = days % 30;
-    
-    if (remainingDays === 0) {
-      return months === 1 ? 'חודש' : `${months} חודשים`;
-    }
-    
-    const monthsText = months === 1 ? 'חודש' : `${months} חודשים`;
-    const daysText = remainingDays === 1 ? 'יום' : `${remainingDays} ימים`;
-    return `${monthsText} ו-${daysText}`;
   };
 
   return (
@@ -98,13 +70,20 @@ const FoodInventoryCard = ({
         </View>
 
         <View style={styles.statusContainer}>
-          <Text style={styles.statusLabel}>ימים עד לסיום שק המזון:</Text>
-          <Text style={[styles.statusValue, { color: getStatusColor(daysRemaining) }]}>
-            {daysRemaining}
+          <Text style={styles.statusLabel}>
+            {stockCountdown?.label ?? 'ימים עד לסיום שק המזון:'}
           </Text>
-          <Text style={styles.statusSubtext}>
-            ({formatDaysToText(daysRemaining)})
+          <Text
+            style={[
+              stockCountdown?.displayText ? styles.statusMessage : styles.statusValue,
+              { color: stockCountdown?.urgencyColor ?? getStatusColor(daysRemaining) },
+            ]}
+          >
+            {stockCountdown ? getCountdownPrimaryText(stockCountdown) : daysRemaining}
           </Text>
+          {stockCountdown?.subtext ? (
+            <Text style={styles.statusSubtext}>{stockCountdown.subtext}</Text>
+          ) : null}
           {showReminderCountdown ? (
             <Text style={styles.reminderDaysHint}>
               {daysUntilReminder} {daysUntilReminder === 1 ? 'יום' : 'ימים'} עד לתזכורת
@@ -206,6 +185,12 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  statusMessage: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    writingDirection: 'rtl',
   },
   statusSubtext: {
     fontSize: 14,

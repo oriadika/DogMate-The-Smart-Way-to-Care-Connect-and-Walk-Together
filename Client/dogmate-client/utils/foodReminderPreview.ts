@@ -1,4 +1,4 @@
-import { getReminderCountdown } from './daysDisplay';
+import { DUE_NOW_MESSAGE, getReminderCountdown } from './daysDisplay';
 
 export const FOOD_REMINDER_HOUR = 9;
 
@@ -69,8 +69,8 @@ const MS_MINUTE = 60_000;
 
 export function foodReminderCountdownSubtext(triggerAt: Date): string {
   const diffMs = triggerAt.getTime() - Date.now();
-  if (diffMs <= MS_MINUTE) {
-    return '(בקרוב)';
+  if (diffMs <= 0) {
+    return `(${DUE_NOW_MESSAGE})`;
   }
   const countdown = getReminderCountdown(triggerAt.toISOString());
   return countdown?.subtext ?? '(בקרוב)';

@@ -1029,6 +1029,25 @@ export const reminderAPI = {
     }
   },
 
+  /** Mark reminder as done from home (logs health actions for system reminders). */
+  completeReminder: async (
+    userId: string,
+    reminderId: string,
+    options?: { administeredAt?: string }
+  ) => {
+    try {
+      const response = await apiClient.post(
+        `/users/${userId}/reminders/${reminderId}/complete`,
+        options?.administeredAt ? { administeredAt: options.administeredAt } : undefined
+      );
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל סימון התזכורת כבוצעה';
+      console.error('Failed to complete reminder:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
   /** Remove expired reminders from home and disable food-stock alerts that already fired. */
   processExpiredReminders: async (userId: string) => {
     try {
@@ -1227,11 +1246,17 @@ export const medicationAPI = {
     }
   },
 
-  logDose: async (userId: string, medicationId: string) => {
+  logDose: async (
+    userId: string,
+    medicationId: string,
+    options?: { administeredDate: string; administeredTime?: string }
+  ) => {
     try {
-      const response = await apiClient.post(`/medications/${medicationId}/log-dose`, null, {
-        params: { userId },
-      });
+      const response = await apiClient.post(
+        `/medications/${medicationId}/log-dose`,
+        options ?? null,
+        { params: { userId } }
+      );
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'נכשל רישום המנה';

@@ -163,6 +163,25 @@ public class NotificationScheduleService {
         return List.of(trigger);
     }
 
+    /** Scheduled dose datetime (next due date + time), not the reminder lead-time trigger. */
+    public LocalDateTime resolveMedicationPlannedDueAt(DogMedication medication) {
+        if (medication == null || medication.getNextDueDate() == null) {
+            return null;
+        }
+        LocalTime dueTime = medication.getNextDueTime() != null
+                ? medication.getNextDueTime()
+                : DEFAULT_NOTIFICATION_TIME;
+        return medication.getNextDueDate().atTime(dueTime);
+    }
+
+    /** Scheduled vaccination datetime (next due date at default notification time). */
+    public LocalDateTime resolveVaccinationPlannedDueAt(DogVaccination vaccination) {
+        if (vaccination == null || vaccination.getNextDueDate() == null) {
+            return null;
+        }
+        return vaccination.getNextDueDate().atTime(DEFAULT_NOTIFICATION_TIME);
+    }
+
     /** Single home/push trigger: lead time before next medication dose date + time. */
     public LocalDateTime computeMedicationReminderTrigger(DogMedication medication) {
         if (medication == null || medication.getNextDueDate() == null) {

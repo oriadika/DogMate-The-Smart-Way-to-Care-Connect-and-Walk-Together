@@ -1,5 +1,6 @@
 package com.DogMate.Controller;
 
+import com.DogMate.DTO.CompleteReminderRequest;
 import com.DogMate.DTO.CreateReminderRequest;
 import com.DogMate.DTO.ReminderResponse;
 import com.DogMate.Domain.Dog;
@@ -8,6 +9,9 @@ import com.DogMate.Service.ReminderService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 
 @RestController
@@ -108,6 +112,39 @@ public class ReminderController {
                     : ResponseEntity.notFound().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        }
+    }
+
+    // POST /api/users/{userId}/reminders/{reminderId}/complete
+    @PostMapping("/{reminderId}/complete")
+    public ResponseEntity<?> completeReminder(
+            @PathVariable UUID userId,
+            @PathVariable UUID reminderId,
+            @RequestBody(required = false) CompleteReminderRequest body
+    ) {
+        try {
+            LocalDateTime administeredAt = parseOptionalAdministeredAt(body);
+            reminderService.completeReminder(userId, reminderId, administeredAt);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(500)
+                    .body(createErrorResponse("נכשל סימון התזכורת כבוצעה: " + e.getMessage()));
+        }
+    }
+
+    private static LocalDateTime parseOptionalAdministeredAt(CompleteReminderRequest body) {
+        if (body == null || body.administeredAt() == null || body.administeredAt().isBlank()) {
+            return null;
+        }
+        String raw = body.administeredAt().trim();
+        try {
+            return LocalDateTime.parse(raw, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+        } catch (DateTimeParseException ignored) {
+            return LocalDateTime.parse(raw);
         }
     }
 

@@ -1,4 +1,25 @@
-import { getDaysUrgencyColor, getReminderCountdown, filterActiveReminders } from './daysDisplay';
+import {
+  DUE_NOW_MESSAGE,
+  formatDaysToText,
+  getCalendarDaysCountdown,
+  getCountdownPrimaryText,
+  getDaysUrgencyColor,
+  getReminderCountdown,
+  filterActiveReminders,
+} from './daysDisplay';
+
+describe('daysDisplay singular countdown text', () => {
+  it('formats exactly one day, hour, or minute in Hebrew singular form', () => {
+    expect(formatDaysToText(1)).toBe('יום אחד');
+    expect(formatDaysToText(2)).toBe('2 ימים');
+
+    const inOneHour = new Date(Date.now() + 60 * 60 * 1000);
+    expect(getReminderCountdown(inOneHour.toISOString())?.subtext).toBe('(שעה אחת)');
+
+    const inOneMinute = new Date(Date.now() + 60 * 1000);
+    expect(getReminderCountdown(inOneMinute.toISOString())?.subtext).toBe('(דקה אחת)');
+  });
+});
 
 describe('daysDisplay urgency colors', () => {
   it('colors days by urgency thresholds', () => {
@@ -76,6 +97,40 @@ describe('daysDisplay urgency colors', () => {
     expect(countdown?.unit).toBe('days');
     expect(countdown?.displayValue).toBe(14);
     expect(countdown?.urgencyColor).toBe('#FF9F43');
+  });
+
+  it('shows hours instead of 0 days when under 24 hours remain', () => {
+    const inFiveHours = new Date(Date.now() + 5 * 60 * 60 * 1000);
+
+    const countdown = getReminderCountdown(inFiveHours.toISOString());
+    expect(countdown?.unit).toBe('hours');
+    expect(countdown?.displayValue).toBe(5);
+    expect(getCountdownPrimaryText(countdown!)).toBe('5');
+  });
+
+  it('shows one minute until the exact reminder minute (not due-now early)', () => {
+    const inThirtySeconds = new Date(Date.now() + 30 * 1000);
+
+    const countdown = getReminderCountdown(inThirtySeconds.toISOString());
+    expect(countdown?.unit).toBe('minutes');
+    expect(countdown?.displayValue).toBe(1);
+    expect(countdown?.displayText).toBeUndefined();
+    expect(countdown?.subtext).toBe('(דקה אחת)');
+  });
+
+  it('shows due-now only when reminder time has arrived', () => {
+    const now = new Date(Date.now());
+
+    const countdown = getReminderCountdown(now.toISOString());
+    expect(countdown?.displayText).toBe(DUE_NOW_MESSAGE);
+    expect(getCountdownPrimaryText(countdown!)).toBe(DUE_NOW_MESSAGE);
+    expect(countdown?.label).toBe('סטטוס:');
+  });
+
+  it('shows due-now for zero calendar days on food stock countdown', () => {
+    const countdown = getCalendarDaysCountdown(0, 'סיום השק');
+    expect(countdown?.displayText).toBe(DUE_NOW_MESSAGE);
+    expect(getCountdownPrimaryText(countdown!)).toBe(DUE_NOW_MESSAGE);
   });
 
   it('filters out past reminders', () => {

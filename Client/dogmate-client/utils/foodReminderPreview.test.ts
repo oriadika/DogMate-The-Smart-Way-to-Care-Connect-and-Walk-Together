@@ -1,3 +1,4 @@
+import { DUE_NOW_MESSAGE } from './daysDisplay';
 import {
   buildFoodReminderDescription,
   buildFoodReminderTitle,
@@ -28,12 +29,22 @@ describe('foodReminderPreview', () => {
 
   it('shows one day (not 24 hours) when exactly 24 hours remain', () => {
     const inOneDay = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    expect(foodReminderCountdownSubtext(inOneDay)).toBe('(1 יום)');
+    expect(foodReminderCountdownSubtext(inOneDay)).toBe('(יום אחד)');
   });
 
   it('shows one hour (not minutes) when exactly 60 minutes remain', () => {
     const inOneHour = new Date(Date.now() + 60 * 60 * 1000);
-    expect(foodReminderCountdownSubtext(inOneHour)).toBe('(שעה)');
+    expect(foodReminderCountdownSubtext(inOneHour)).toBe('(שעה אחת)');
+  });
+
+  it('shows one minute subtext when under one minute remains but time not reached', () => {
+    const inThirtySeconds = new Date(Date.now() + 30 * 1000);
+    expect(foodReminderCountdownSubtext(inThirtySeconds)).toBe('(דקה אחת)');
+  });
+
+  it('shows due-now message when reminder time has arrived', () => {
+    const now = new Date(Date.now());
+    expect(foodReminderCountdownSubtext(now)).toBe(`(${DUE_NOW_MESSAGE})`);
   });
 
   it('shows days in countdown subtext when at least one full day remains', () => {

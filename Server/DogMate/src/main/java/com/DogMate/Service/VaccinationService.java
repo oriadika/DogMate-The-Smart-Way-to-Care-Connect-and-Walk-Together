@@ -33,6 +33,11 @@ public class VaccinationService {
                 .anyMatch(d -> d.getID().equals(dogId));
     }
 
+    @Transactional(readOnly = true)
+    public DogVaccination findOwnedVaccination(UUID userId, UUID vaccinationId) {
+        return loadOwnedOrThrow(userId, vaccinationId);
+    }
+
     private DogVaccination loadOwnedOrThrow(UUID userId, UUID vaccinationId) {
         DogVaccination v = vaccinationRepository.findById(vaccinationId)
                 .orElseThrow(() -> new IllegalArgumentException("לא נמצא חיסון עם המזהה: " + vaccinationId));
@@ -108,9 +113,16 @@ public class VaccinationService {
      */
     @Transactional
     public VaccinationDTO logDose(UUID userId, UUID vaccinationId) {
+        return logDoseAt(userId, vaccinationId, LocalDate.now(), true);
+    }
+
+    @Transactional
+    public VaccinationDTO logDoseAt(UUID userId, UUID vaccinationId, LocalDate administeredDate, boolean blockDuplicateDay) {
         DogVaccination template = loadOwnedOrThrow(userId, vaccinationId);
-        LocalDate today = LocalDate.now();
-        if (template.getAdministeredDate() != null && template.getAdministeredDate().equals(today)) {
+        LocalDate doseDate = administeredDate != null ? administeredDate : LocalDate.now();
+        if (blockDuplicateDay
+                && template.getAdministeredDate() != null
+                && template.getAdministeredDate().equals(doseDate)) {
             throw new IllegalArgumentException("החיסון כבר נרשם היום");
         }
 
@@ -118,13 +130,13 @@ public class VaccinationService {
                 null,
                 template.getDog(),
                 template.getVaccineName(),
-                today
+                doseDate
         );
         entity.setVetClinicName(template.getVetClinicName());
         entity.setNextDueDate(HealthCycleScheduleHelper.computeNextDueAfterAdministration(
                 template.getAdministeredDate(),
                 template.getNextDueDate(),
-                today
+                doseDate
         ));
         NotificationSettingsHelper.applyVaccinationSettings(
                 entity,
