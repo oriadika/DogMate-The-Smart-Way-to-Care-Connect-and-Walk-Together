@@ -16,14 +16,15 @@ public class CacheConfig {
         CaffeineCacheManager cacheManager = new CaffeineCacheManager(
                 "loggedUsers",
                 "dogsByUser",
-                "remindersByUser"
+                "remindersByUser",
+                "foodStocksByUser"
         );
 
         // Short TTL keeps data fresh while reducing repeated DB roundtrips.
         cacheManager.setCaffeine(
                 Caffeine.newBuilder()
                         .maximumSize(1000)
-                        .expireAfterWrite(5, TimeUnit.SECONDS)
+                        .expireAfterWrite(30, TimeUnit.SECONDS)
         );
 
         return cacheManager;

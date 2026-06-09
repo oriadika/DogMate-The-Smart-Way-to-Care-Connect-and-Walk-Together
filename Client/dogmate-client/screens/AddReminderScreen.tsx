@@ -19,7 +19,27 @@ import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { dogAPI, reminderAPI } from '../services/api';
-import { scheduleReminderNotification } from '../services/notifications';
+import { cancelReminderNotification } from '../services/notifications';
+import { resyncAllNotificationsInBackground } from '../services/notificationScheduler';
+import {
+  EDITABLE_HEALTH_REMINDER_TYPES,
+  findSystemReminderForSource,
+  getHomeCache,
+  markHomeDataDirty,
+  refreshHomeRemindersFromServer,
+} from '../utils/homeDataCache';
+import {
+  markFoodInventoryDirty,
+  markMedicationsDirty,
+  markVaccinationsDirty,
+  refreshFoodInventoryFromServer,
+  refreshMedicationsFromServer,
+  refreshVaccinationsFromServer,
+} from '../utils/healthDataCache';
+import {
+  clampReminderDescription,
+  REMINDER_DESCRIPTION_MAX_LENGTH,
+} from '../utils/reminderConstants';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
@@ -37,6 +57,8 @@ interface Dog {
 const AddReminderScreen = ({ navigation, route }: any) => {
   // Get userId from route params (passed from HomeScreen)
   const userIdFromParams = route?.params?.userId;
+  const reminderToEdit = route?.params?.reminder;
+  const isEditing = !!reminderToEdit?.id;
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -52,6 +74,9 @@ const AddReminderScreen = ({ navigation, route }: any) => {
   const [showDogModal, setShowDogModal] = useState(false);
   const [selectedDogs, setSelectedDogs] = useState<string[]>([]); // Array of dog IDs
   const [isSaving, setIsSaving] = useState(false); // Add loading state
+  const [resolvedReminderId, setResolvedReminderId] = useState<string | null>(
+    reminderToEdit?.id ?? null
+  );
 
   // Format date as DD/MM/YYYY
   const formatDate = (dateToFormat: Date): string => {
@@ -98,31 +123,129 @@ const AddReminderScreen = ({ navigation, route }: any) => {
     }
   };
 
+  // Populate form when editing an existing reminder
+  useEffect(() => {
+    if (!reminderToEdit) return;
+
+    if (
+      reminderToEdit.systemGenerated &&
+      !EDITABLE_HEALTH_REMINDER_TYPES.includes(reminderToEdit.sourceType)
+    ) {
+      Alert.alert(
+        'תזכורת אוטומטית',
+        'לא ניתן לערוך תזכורת שנוצרה אוטומטית. עדכן את הגדרות ההתראות בפריט המקור.',
+        [{ text: 'אישור', onPress: () => navigation.goBack() }]
+      );
+      return;
+    }
+
+    setTitle(reminderToEdit.title || '');
+    setDescription(clampReminderDescription(reminderToEdit.description || ''));
+    setSelectedDogs(reminderToEdit.dogIds || []);
+
+    if (reminderToEdit.remindAt) {
+      const reminderDate = new Date(reminderToEdit.remindAt);
+      if (!isNaN(reminderDate.getTime())) {
+        setDate(reminderDate);
+        setTime(reminderDate);
+      }
+    }
+  }, [reminderToEdit]);
+
+  useEffect(() => {
+    setResolvedReminderId(reminderToEdit?.id ?? null);
+  }, [reminderToEdit?.id]);
+
+  const resolveEditableReminderId = useCallback(async (): Promise<string | null> => {
+    if (!isEditing || !userId) {
+      return resolvedReminderId ?? reminderToEdit?.id ?? null;
+    }
+
+    if (
+      reminderToEdit?.sourceType &&
+      reminderToEdit?.sourceId &&
+      EDITABLE_HEALTH_REMINDER_TYPES.includes(reminderToEdit.sourceType)
+    ) {
+      const freshReminders = await refreshHomeRemindersFromServer(userId);
+      const resolved = findSystemReminderForSource(
+        freshReminders,
+        reminderToEdit.sourceType,
+        reminderToEdit.sourceId
+      );
+      if (resolved?.id) {
+        setResolvedReminderId(resolved.id);
+        return resolved.id;
+      }
+      return null;
+    }
+
+    return resolvedReminderId ?? reminderToEdit?.id ?? null;
+  }, [isEditing, userId, reminderToEdit, resolvedReminderId]);
+
   // Load user and dogs data
   useFocusEffect(
     useCallback(() => {
       if (userIdFromParams) {
         loadDogsForUser(userIdFromParams);
+        if (
+          reminderToEdit?.id &&
+          reminderToEdit?.sourceType &&
+          reminderToEdit?.sourceId &&
+          EDITABLE_HEALTH_REMINDER_TYPES.includes(reminderToEdit.sourceType)
+        ) {
+          void (async () => {
+            try {
+              const freshReminders = await refreshHomeRemindersFromServer(userIdFromParams);
+              const resolved = findSystemReminderForSource(
+                freshReminders,
+                reminderToEdit.sourceType,
+                reminderToEdit.sourceId
+              );
+              if (resolved?.id) {
+                setResolvedReminderId(resolved.id);
+              }
+            } catch (error) {
+              console.warn('Failed to refresh reminder id before edit:', error);
+            }
+          })();
+        }
       } else {
         Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
         navigation.goBack();
       }
-    }, [userIdFromParams])
+    }, [userIdFromParams, reminderToEdit])
   );
 
   const loadDogsForUser = async (userIdToLoad: string) => {
+    const cachedDogs = getHomeCache(userIdToLoad)?.dogs;
+    const hasCachedDogs = Boolean(cachedDogs && cachedDogs.length > 0);
+
     try {
-      setLoadingDogs(true);
       setUserId(userIdToLoad);
 
-      // Fetch dogs for this user
+      if (hasCachedDogs) {
+        setDogs(
+          cachedDogs!.map((d: any) => ({
+            id: String(d.id),
+            name: String(d.name || 'כלב'),
+            breed: String(d.breed || ''),
+            profileImageUrl: d.profileImageUrl || d.profileImageURL,
+          }))
+        );
+        setLoadingDogs(false);
+      } else {
+        setLoadingDogs(true);
+      }
+
       const dogsResponse = await dogAPI.getDogsForUser(userIdToLoad);
       if (dogsResponse.success && dogsResponse.dogs) {
         setDogs(dogsResponse.dogs);
       }
     } catch (error: any) {
       console.error('Error loading dogs:', error);
-      Alert.alert('שגיאה', 'שגיאה בטעינת הנתונים');
+      if (!hasCachedDogs) {
+        Alert.alert('שגיאה', 'שגיאה בטעינת הנתונים');
+      }
     } finally {
       setLoadingDogs(false);
     }
@@ -201,27 +324,57 @@ const AddReminderScreen = ({ navigation, route }: any) => {
 
     setIsSaving(true);
     try {
-      // Call API to create reminder
-      const response = await reminderAPI.createReminder(
-        userId,
-        title,
-        description,
-        reminderDateTime,
-        selectedDogs
-      );
+      let response;
+      const reminderId = isEditing ? await resolveEditableReminderId() : null;
 
-      // Schedule local notification for the reminder
-      if (response.success && response.reminder) {
-        await scheduleReminderNotification(
-          response.reminder.id,
+      if (isEditing && !reminderId) {
+        Alert.alert('שגיאה', 'התזכורת כבר לא קיימת. חזור לדף הבית ורענן את הרשימה.');
+        return;
+      }
+
+      if (isEditing && reminderId) {
+        await cancelReminderNotification(reminderId);
+        response = await reminderAPI.updateReminder(
+          userId,
+          reminderId,
           title,
-          description || 'זמן לתזכורת!',
-          reminderDateTime
+          description,
+          reminderDateTime,
+          selectedDogs
+        );
+      } else {
+        response = await reminderAPI.createReminder(
+          userId,
+          title,
+          description,
+          reminderDateTime,
+          selectedDogs
         );
       }
 
+      await resyncAllNotificationsInBackground(userId);
+      if (isEditing && EDITABLE_HEALTH_REMINDER_TYPES.includes(reminderToEdit?.sourceType)) {
+        markHomeDataDirty(userId);
+        const refreshTasks: Promise<unknown>[] = [refreshHomeRemindersFromServer(userId)];
+        if (reminderToEdit?.sourceType === 'FOOD') {
+          markFoodInventoryDirty(userId);
+          refreshTasks.push(refreshFoodInventoryFromServer(userId));
+        } else if (reminderToEdit?.sourceType === 'VACCINATION') {
+          markVaccinationsDirty(userId);
+          refreshTasks.push(refreshVaccinationsFromServer(userId));
+        } else if (reminderToEdit?.sourceType === 'MEDICATION') {
+          markMedicationsDirty(userId);
+          refreshTasks.push(refreshMedicationsFromServer(userId));
+        }
+        try {
+          await Promise.all(refreshTasks);
+        } catch (refreshError) {
+          console.warn('Failed to refresh health/home data after reminder edit:', refreshError);
+        }
+      }
+
       Alert.alert(
-        'תזכורת נשמרה בהצלחה',
+        isEditing ? 'תזכורת עודכנה בהצלחה' : 'תזכורת נשמרה בהצלחה',
         `שם: ${title}\nתיאור: ${description || '(ללא תיאור)'}\nכלבים: ${selectedDogsNames.join(', ')}\nתאריך: ${formatDate(date)}\nשעה: ${formatTime(time)}`,
         [
           {
@@ -249,7 +402,9 @@ const AddReminderScreen = ({ navigation, route }: any) => {
           >
             <Ionicons name="arrow-forward" size={28} color={TEXT_DARK} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>הוספת תזכורת חדשה</Text>
+          <Text style={styles.headerTitle}>
+            {isEditing ? 'עריכת תזכורת' : 'הוספת תזכורת חדשה'}
+          </Text>
           <View style={{ width: 28 }} />
         </View>
 
@@ -286,9 +441,13 @@ const AddReminderScreen = ({ navigation, route }: any) => {
                   textAlign="right"
                   multiline
                   numberOfLines={4}
+                  maxLength={REMINDER_DESCRIPTION_MAX_LENGTH}
                   value={description}
-                  onChangeText={setDescription}
+                  onChangeText={(text) => setDescription(clampReminderDescription(text))}
                 />
+                <Text style={styles.charCount}>
+                  {description.length}/{REMINDER_DESCRIPTION_MAX_LENGTH}
+                </Text>
               </View>
 
               {/* Dog Selection Field */}
@@ -372,7 +531,9 @@ const AddReminderScreen = ({ navigation, route }: any) => {
               {isSaving ? (
                 <ActivityIndicator size="small" color="white" />
               ) : (
-                <Text style={styles.submitButtonText}>שמור תזכורת</Text>
+                <Text style={styles.submitButtonText}>
+                  {isEditing ? 'עדכן תזכורת' : 'שמור תזכורת'}
+                </Text>
               )}
             </TouchableOpacity>
           </ScrollView>
@@ -631,6 +792,12 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: 'top',
     paddingTop: 14,
+  },
+  charCount: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#8B7355',
+    textAlign: 'left',
   },
   dateTimeSection: {
     marginBottom: 24,

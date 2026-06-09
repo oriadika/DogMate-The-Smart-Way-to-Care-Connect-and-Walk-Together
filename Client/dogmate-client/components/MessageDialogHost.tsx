@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { Alert, Modal, View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
 
 const PRIMARY_COLOR = '#7FB069';
@@ -13,7 +13,7 @@ type DialogState = {
   title: string;
   message: string;
   buttons: AppAlertButton[];
-  options?: { cancelable?: boolean };
+  options?: { cancelable?: boolean; autoDismissMs?: number };
 };
 
 const DEFAULT_OK: AppAlertButton = { text: 'בסדר' };
@@ -33,16 +33,16 @@ function normalizeArgs(
     messageStr = String(message);
   }
 
-  let opts: { cancelable?: boolean } | undefined =
+  let opts: { cancelable?: boolean; autoDismissMs?: number } | undefined =
     options && typeof options === 'object' && !Array.isArray(options)
-      ? (options as { cancelable?: boolean })
+      ? (options as { cancelable?: boolean; autoDismissMs?: number })
       : undefined;
 
   let btns: unknown = buttons;
 
   // Alert.alert(title, message?, { cancelable: true }) — third argument is options, not buttons
   if (btns && typeof btns === 'object' && !Array.isArray(btns)) {
-    opts = { ...(btns as { cancelable?: boolean }), ...opts };
+    opts = { ...(btns as { cancelable?: boolean; autoDismissMs?: number }), ...opts };
     btns = undefined;
   }
 
@@ -105,6 +105,17 @@ export default function MessageDialogHost() {
       Alert.alert = original;
     };
   }, []);
+
+  useEffect(() => {
+    const autoDismissMs = dialog?.options?.autoDismissMs;
+    if (!dialog || !autoDismissMs || autoDismissMs <= 0) return;
+
+    const timer = setTimeout(() => {
+      setDialog(null);
+    }, autoDismissMs);
+
+    return () => clearTimeout(timer);
+  }, [dialog]);
 
   const onOverlayPress = () => {
     if (!dialog) return;

@@ -82,6 +82,19 @@ public class EmailVerificationService {
     }
 
     /**
+     * Sends the 6-digit password-reset code (same SMTP configuration as signup verification).
+     * @return true if SMTP accepted the message; false if SMTP is not configured or send failed.
+     */
+    public boolean sendPasswordResetOtpEmail(String email, String code) {
+        return sendPasswordResetMail(email, code);
+    }
+
+    @Async
+    public void sendPasswordResetOtpEmailAsync(String email, String code) {
+        sendPasswordResetMail(email, code);
+    }
+
+    /**
      * Persists the OTP in its own committed transaction before attempting SMTP.
      * Otherwise a failed {@code mailSender.send()} rolls back the whole transaction and no code is stored,
      * while the user row may already be committed — verification then always fails with "code not found".
@@ -137,6 +150,50 @@ public class EmailVerificationService {
         user.setEmailVerified(true);
         userRepository.save(user);
         verificationCodeRepository.deleteByEmail(canonicalEmail);
+    }
+
+    private boolean sendPasswordResetMail(String email, String code) {
+        if (!isSmtpConfigured()) {
+            log.warn(
+                "Password reset mail not sent: set SPRING_MAIL_PASSWORD (and optionally SPRING_MAIL_USERNAME). "
+                    + "Intended recipient: {} — reset OTP (dev only): {}",
+                email,
+                code
+            );
+            return false;
+        }
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(appFromEmail);
+            message.setTo(email);
+            message.setSubject("DogMate – קוד לאיפוס סיסמה");
+            message.setText(
+                RTL_EMBED_START
+                    + "שלום\n\n"
+                    + "DogMate זה קוד לאיפוס הסיסמה שלך באפליקציית\n\n"
+                    + code
+                    + "\n\n"
+                    + ".הקוד תקף ל־5 דקות\n\n"
+                    + ".אם לא ביקשת לאפס את הסיסמה, אפשר להתעלם ממייל זה\n\n"
+                    + ",בברכה\n"
+                    + "DogMate צוות"
+                    + RTL_EMBED_END
+            );
+            mailSender.send(message);
+            log.info("Password reset email sent successfully to {}", email);
+            return true;
+        } catch (Exception e) {
+            log.error(
+                "Failed to send password reset email to {}. OTP was: {}",
+                email,
+                code,
+                e
+            );
+            if (logOtpOnSendFailure) {
+                log.warn("dogmate.mail.log-otp-on-send-failure=true: password reset OTP for {} = {}", email, code);
+            }
+            return false;
+        }
     }
 
     private boolean sendVerificationMail(String email, String code) {

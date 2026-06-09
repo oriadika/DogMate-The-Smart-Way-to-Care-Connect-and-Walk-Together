@@ -50,8 +50,17 @@ function startExpo() {
   log(`Metro: ${metroTunnelUrl}`);
   log('Starting Expo (LAN + Cloudflare proxy, no ngrok)...\n');
 
-  const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  expo = spawn(npx, ['expo', 'start', '--lan', '--clear'], {
+  let expoCmd;
+  let expoArgs;
+  if (process.platform === 'win32') {
+    expoCmd = 'cmd.exe';
+    expoArgs = ['/c', 'npx', 'expo', 'start', '--lan', '--clear'];
+  } else {
+    expoCmd = 'npx';
+    expoArgs = ['expo', 'start', '--lan', '--clear'];
+  }
+
+  expo = spawn(expoCmd, expoArgs, {
     cwd: process.cwd(),
     env: {
       ...process.env,

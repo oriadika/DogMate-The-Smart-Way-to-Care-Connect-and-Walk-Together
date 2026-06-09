@@ -9,9 +9,9 @@ import java.util.UUID;
 import com.DogMate.Domain.Dog;
 import com.DogMate.Domain.FoodStock;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.OneToMany;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class FoodStockDTO {
 
     private UUID id;
@@ -28,8 +28,15 @@ public class FoodStockDTO {
 
     private double dailyConsumptionInGram;
 
+    private boolean notificationEnabled;
+
+    private Integer lowStockThresholdDays;
+
     private List<Map<String,Object>> dogs = new ArrayList<>();
 
+    /** Required for Jackson request deserialization (PUT /food-stock/{id}). */
+    public FoodStockDTO() {
+    }
 
     public FoodStockDTO(FoodStock stock) {
         this.id = stock.getId();
@@ -37,15 +44,29 @@ public class FoodStockDTO {
         this.bagSizeInKg = stock.getBagSizeInKg();
         this.currentLevelInKg = stock.getCurrentLevelInKg();
         this.dailyConsumptionInGram = stock.getDailyConsumptionInGram();
-        List<Dog> dogs = stock.getDogs();
-        for (Dog dog : dogs) {
+        this.notificationEnabled = stock.isNotificationEnabled();
+        this.lowStockThresholdDays = stock.getLowStockThresholdDays();
+        List<Dog> stockDogs = stock.getDogs();
+        if (stockDogs == null) {
+            return;
+        }
+        for (Dog dog : stockDogs) {
+            if (dog == null) {
+                continue;
+            }
             Map<String, Object> dogData = new HashMap<>();
-                 dogData.put("id", dog.getID().toString());
-                dogData.put("name", dog.getName());
+            if (dog.getID() != null) {
+                dogData.put("id", dog.getID().toString());
+            }
+            dogData.put("name", dog.getName());
+            if (dog.getBreed() != null) {
                 dogData.put("breed", dog.getBreed());
+            }
+            if (dog.getBirthdate() != null) {
                 dogData.put("birthdate", dog.getBirthdate().toString());
-                dogData.put("gender", dog.getGender());
-                dogData.put("profileImageUrl", dog.getProfileImageURL());  
+            }
+            dogData.put("gender", dog.getGender());
+            dogData.put("profileImageUrl", dog.getProfileImageURL());
             this.dogs.add(dogData);
         }
     }
@@ -87,6 +108,22 @@ public class FoodStockDTO {
     }
     public void setDogs(List<Map<String, Object>> dogs) {
         this.dogs = dogs;
+    }
+
+    public boolean isNotificationEnabled() {
+        return notificationEnabled;
+    }
+
+    public void setNotificationEnabled(boolean notificationEnabled) {
+        this.notificationEnabled = notificationEnabled;
+    }
+
+    public Integer getLowStockThresholdDays() {
+        return lowStockThresholdDays;
+    }
+
+    public void setLowStockThresholdDays(Integer lowStockThresholdDays) {
+        this.lowStockThresholdDays = lowStockThresholdDays;
     }
 
 }

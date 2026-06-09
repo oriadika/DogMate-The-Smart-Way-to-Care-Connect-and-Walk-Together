@@ -1,6 +1,5 @@
 package com.DogMate.Service;
 
-import com.DogMate.Domain.Dog;
 import com.DogMate.Domain.Reminder;
 import com.DogMate.Domain.RegularUser;
 
@@ -20,4 +19,12 @@ public interface IReminderRepository {
     List<Reminder> findAll();
 
     List<Reminder> findByRegularUser(RegularUser regularUser);
+
+    List<Reminder> findByRegularUserIdWithDogs(UUID userId);
+
+    Optional<Reminder> findBySourceTypeAndSourceId(String sourceType, UUID sourceId);
+
+    Optional<Reminder> findBySourceTypeAndSourceIdWithDogs(String sourceType, UUID sourceId);
+
+    List<Reminder> findAllByDogIdWithDogs(UUID dogId);
 }

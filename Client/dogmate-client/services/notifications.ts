@@ -1,7 +1,8 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import type { NotificationSourceType } from '../types/notifications';
+import { shouldScheduleNotification } from './notificationSchedulerLogic';
+import { handleReminderNotificationDelivered } from '../utils/reminderCompletion';
 
-// Configure notification handler
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -12,7 +13,16 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// Request permissions for notifications
+export interface ScheduleHealthNotificationParams {
+  sourceType: NotificationSourceType;
+  sourceId: string;
+  title: string;
+  body: string;
+  triggerAt: Date;
+  globalEnabled: boolean;
+  itemEnabled: boolean;
+}
+
 export const requestNotificationPermissions = async (): Promise<boolean> => {
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -35,34 +45,43 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
   }
 };
 
-// Schedule a local notification for a reminder
-export const scheduleReminderNotification = async (
-  reminderId: string,
-  title: string,
-  description: string,
-  triggerDate: Date
-): Promise<string | null> => {
-  try {
-    // Cancel any existing notification for this reminder
-    await cancelReminderNotification(reminderId);
+const buildIdentifier = (sourceType: NotificationSourceType, sourceId: string, triggerAt: Date): string => {
+  const stamp = triggerAt.toISOString().slice(0, 19);
+  return `${sourceType.toLowerCase()}-${sourceId}-${stamp}`;
+};
 
-    // Schedule the new notification
+export const scheduleHealthNotification = async (
+  params: ScheduleHealthNotificationParams
+): Promise<string | null> => {
+  if (!shouldScheduleNotification(params.globalEnabled, params.itemEnabled)) {
+    return null;
+  }
+  if (params.triggerAt <= new Date()) {
+    return null;
+  }
+
+  const identifier = buildIdentifier(params.sourceType, params.sourceId, params.triggerAt);
+
+  try {
+    await Notifications.cancelScheduledNotificationAsync(identifier);
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: title,
-        body: description || 'זמן לתזכורת!',
+        title: params.title,
+        body: params.body || 'זמן לתזכורת!',
         sound: 'default',
         priority: Notifications.AndroidNotificationPriority.HIGH,
         color: '#7FB069',
+        data: {
+          sourceType: params.sourceType,
+          sourceId: params.sourceId,
+        },
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: triggerDate,
+        date: params.triggerAt,
       },
-      identifier: `reminder-${reminderId}`,
+      identifier,
     });
-
-    console.log(`Scheduled notification for reminder ${reminderId} at ${triggerDate}`);
     return notificationId;
   } catch (error) {
     console.error('Error scheduling notification:', error);
@@ -70,59 +89,72 @@ export const scheduleReminderNotification = async (
   }
 };
 
-// Cancel a specific reminder notification
-export const cancelReminderNotification = async (reminderId: string): Promise<void> => {
+export const scheduleReminderNotification = async (
+  reminderId: string,
+  title: string,
+  description: string,
+  triggerDate: Date,
+  options?: { globalEnabled?: boolean; itemEnabled?: boolean }
+): Promise<string | null> => {
+  return scheduleHealthNotification({
+    sourceType: 'REMINDER',
+    sourceId: reminderId,
+    title,
+    body: description || 'זמן לתזכורת!',
+    triggerAt: triggerDate,
+    globalEnabled: options?.globalEnabled ?? true,
+    itemEnabled: options?.itemEnabled ?? true,
+  });
+};
+
+export const cancelNotificationByIdentifier = async (identifierPrefix: string): Promise<void> => {
   try {
-    await Notifications.cancelScheduledNotificationAsync(`reminder-${reminderId}`);
-    console.log(`Cancelled notification for reminder ${reminderId}`);
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const matches = scheduled.filter((n) => n.identifier.startsWith(identifierPrefix));
+    await Promise.all(matches.map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)));
   } catch (error) {
-    console.error('Error cancelling notification:', error);
+    console.error('Error cancelling notifications by prefix:', error);
   }
 };
 
-// Cancel all scheduled notifications
+export const cancelReminderNotification = async (reminderId: string): Promise<void> => {
+  await cancelNotificationByIdentifier(`reminder-${reminderId}`);
+};
+
 export const cancelAllNotifications = async (): Promise<void> => {
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
-    console.log('Cancelled all scheduled notifications');
   } catch (error) {
     console.error('Error cancelling all notifications:', error);
   }
 };
 
-// Get all scheduled notifications
 export const getScheduledNotifications = async () => {
   try {
-    const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
-    return scheduledNotifications;
+    return await Notifications.getAllScheduledNotificationsAsync();
   } catch (error) {
     console.error('Error getting scheduled notifications:', error);
     return [];
   }
 };
 
-// Handle notification response (when user taps on notification)
 export const handleNotificationResponse = (response: Notifications.NotificationResponse) => {
   const notificationId = response.notification.request.identifier;
   console.log('Notification tapped:', notificationId);
-
-  // You can add navigation logic here if needed
-  // For example, navigate to a specific screen when notification is tapped
 };
 
-// Set up notification listeners
 export const setupNotificationListeners = () => {
-  // Handle notification when received while app is foregrounded
-  const notificationListener = Notifications.addNotificationReceivedListener(notification => {
-    console.log('Notification received while app is foregrounded:', notification);
+  const notificationListener = Notifications.addNotificationReceivedListener((notification) => {
+    const data = notification.request.content.data as { sourceType?: NotificationSourceType };
+    void handleReminderNotificationDelivered(data?.sourceType);
   });
 
-  // Handle notification response (tap)
-  const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
+  const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
     handleNotificationResponse(response);
+    const data = response.notification.request.content.data as { sourceType?: NotificationSourceType };
+    void handleReminderNotificationDelivered(data?.sourceType);
   });
 
-  // Return cleanup function
   return () => {
     notificationListener.remove();
     responseListener.remove();

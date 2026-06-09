@@ -16,15 +16,26 @@ public class VaccinationService {
 
     private final DogVaccinationRepository vaccinationRepository;
     private final IDogRepository dogRepository;
+    private final HealthReminderSyncService healthReminderSyncService;
 
-    public VaccinationService(DogVaccinationRepository vaccinationRepository, IDogRepository dogRepository) {
+    public VaccinationService(
+            DogVaccinationRepository vaccinationRepository,
+            IDogRepository dogRepository,
+            HealthReminderSyncService healthReminderSyncService
+    ) {
         this.vaccinationRepository = vaccinationRepository;
         this.dogRepository = dogRepository;
+        this.healthReminderSyncService = healthReminderSyncService;
     }
 
     private boolean dogBelongsToUser(UUID userId, UUID dogId) {
         return dogRepository.findAllForRegularUser(userId).stream()
                 .anyMatch(d -> d.getID().equals(dogId));
+    }
+
+    @Transactional(readOnly = true)
+    public DogVaccination findOwnedVaccination(UUID userId, UUID vaccinationId) {
+        return loadOwnedOrThrow(userId, vaccinationId);
     }
 
     private DogVaccination loadOwnedOrThrow(UUID userId, UUID vaccinationId) {
@@ -46,7 +57,8 @@ public class VaccinationService {
 
     @Transactional
     public VaccinationDTO create(UUID userId, UUID dogId, String vaccineName, LocalDate administeredDate,
-                                 LocalDate nextDueDate, String vetClinicName) {
+                                 LocalDate nextDueDate, String vetClinicName,
+                                 Boolean notificationEnabled, String remindDaysBefore) {
         if (vaccineName == null || vaccineName.isBlank()) {
             throw new IllegalArgumentException("חובה להזין שם חיסון");
         }
@@ -61,12 +73,16 @@ public class VaccinationService {
         DogVaccination entity = new DogVaccination(null, dog, vaccineName, administeredDate);
         entity.setNextDueDate(nextDueDate);
         entity.setVetClinicName(vetClinicName);
-        return VaccinationDTO.fromEntity(vaccinationRepository.save(entity));
+        NotificationSettingsHelper.applyVaccinationSettings(entity, notificationEnabled, remindDaysBefore);
+        DogVaccination saved = vaccinationRepository.save(entity);
+        healthReminderSyncService.syncVaccinationReminder(saved, userId);
+        return VaccinationDTO.fromEntity(saved);
     }
 
     @Transactional
     public VaccinationDTO update(UUID userId, UUID vaccinationId, UUID dogId, String vaccineName,
-                                 LocalDate administeredDate, LocalDate nextDueDate, String vetClinicName) {
+                                 LocalDate administeredDate, LocalDate nextDueDate, String vetClinicName,
+                                 Boolean notificationEnabled, String remindDaysBefore) {
         DogVaccination v = loadOwnedOrThrow(userId, vaccinationId);
         if (vaccineName == null || vaccineName.isBlank()) {
             throw new IllegalArgumentException("חובה להזין שם חיסון");
@@ -86,12 +102,77 @@ public class VaccinationService {
         v.setAdministeredDate(administeredDate);
         v.setNextDueDate(nextDueDate);
         v.setVetClinicName(vetClinicName);
-        return VaccinationDTO.fromEntity(vaccinationRepository.save(v));
+        NotificationSettingsHelper.applyVaccinationSettings(v, notificationEnabled, remindDaysBefore);
+        DogVaccination saved = vaccinationRepository.save(v);
+        healthReminderSyncService.syncVaccinationReminder(saved, userId);
+        return VaccinationDTO.fromEntity(saved);
+    }
+
+    /**
+     * Logs today's vaccination as a new history record and schedules the next cycle from the template interval.
+     */
+    @Transactional
+    public VaccinationDTO logDose(UUID userId, UUID vaccinationId) {
+        return logDoseAt(userId, vaccinationId, LocalDate.now(), true);
+    }
+
+    @Transactional
+    public VaccinationDTO logDoseAt(UUID userId, UUID vaccinationId, LocalDate administeredDate, boolean blockDuplicateDay) {
+        DogVaccination template = loadOwnedOrThrow(userId, vaccinationId);
+        LocalDate doseDate = administeredDate != null ? administeredDate : LocalDate.now();
+        if (blockDuplicateDay
+                && template.getAdministeredDate() != null
+                && template.getAdministeredDate().equals(doseDate)) {
+            throw new IllegalArgumentException("החיסון כבר נרשם היום");
+        }
+
+        DogVaccination entity = new DogVaccination(
+                null,
+                template.getDog(),
+                template.getVaccineName(),
+                doseDate
+        );
+        entity.setVetClinicName(template.getVetClinicName());
+        entity.setNextDueDate(HealthCycleScheduleHelper.computeNextDueAfterAdministration(
+                template.getAdministeredDate(),
+                template.getNextDueDate(),
+                doseDate
+        ));
+        NotificationSettingsHelper.applyVaccinationSettings(
+                entity,
+                template.isNotificationEnabled(),
+                template.getRemindDaysBefore()
+        );
+        DogVaccination saved = vaccinationRepository.save(entity);
+        healthReminderSyncService.syncVaccinationReminder(saved, userId);
+        return VaccinationDTO.fromEntity(saved);
     }
 
     @Transactional
     public void delete(UUID userId, UUID vaccinationId) {
         DogVaccination v = loadOwnedOrThrow(userId, vaccinationId);
+        healthReminderSyncService.deleteVaccinationReminder(vaccinationId, userId);
         vaccinationRepository.delete(v);
+    }
+
+    /**
+     * Re-enables vaccination alerts when a VACCINATION system reminder is edited from home.
+     * Lead-day settings stay as configured in the vaccination form.
+     */
+    @Transactional
+    public void syncVaccinationFromReminderEdit(UUID vaccinationId, UUID userId) {
+        DogVaccination v = loadOwnedOrThrow(userId, vaccinationId);
+        v.setNotificationEnabled(true);
+        vaccinationRepository.save(v);
+    }
+
+    /** After a lead-time reminder fires, schedule the next future vaccination reminder on home. */
+    @Transactional
+    public void resyncVaccinationReminderAfterFired(UUID vaccinationId, UUID userId) {
+        DogVaccination v = loadOwnedOrThrow(userId, vaccinationId);
+        healthReminderSyncService.deleteVaccinationReminder(vaccinationId, userId);
+        if (v.isNotificationEnabled()) {
+            healthReminderSyncService.syncVaccinationReminder(v, userId);
+        }
     }
 }

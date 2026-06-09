@@ -1,6 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import {
+  getCalendarDaysCountdown,
+  getCountdownPrimaryText,
+} from '../utils/daysDisplay';
 
 type DogInfo = {
   id: string;
@@ -11,55 +15,36 @@ type DogInfo = {
 type FoodInventoryCardProps = {
   dogs: DogInfo[]; // Array of dogs
   daysRemaining: number;
+  daysUntilReminder?: number | null;
+  notificationEnabled?: boolean;
   onEditPress: () => void;
   onDeletePress: () => void;
   onBuyNewBag: () => void;
 };
 
-const FoodInventoryCard = ({ dogs, daysRemaining, onEditPress, onDeletePress, onBuyNewBag }: FoodInventoryCardProps) => {
+const FoodInventoryCard = ({
+  dogs,
+  daysRemaining,
+  daysUntilReminder = null,
+  notificationEnabled = false,
+  onEditPress,
+  onDeletePress,
+  onBuyNewBag,
+}: FoodInventoryCardProps) => {
   
-  const getStatusColor = () => {
-    if (daysRemaining > 30) return '#28C76F'; // Green - more than 30 days
-    if (daysRemaining > 10) return '#FF9F43'; // Orange - 10-30 days
+  const getStatusColor = (days: number) => {
+    if (days > 30) return '#28C76F'; // Green - more than 30 days
+    if (days > 10) return '#FF9F43'; // Orange - 10-30 days
     return '#EA5455'; // Red - less than 10 days
   };
+
+  const showReminderCountdown =
+    notificationEnabled && daysUntilReminder != null;
+  const stockCountdown = getCalendarDaysCountdown(daysRemaining, 'סיום השק');
 
   // Create header text
   const getHeaderText = () => {
     return 'האוכל של:';
-  };
-
-  // Format days to readable format (ימים / שבועות / חודשים)
-  const formatDaysToText = (days: number): string => {
-    if (days < 7) {
-      return `${days} ${days === 1 ? 'יום' : 'ימים'}`;
-    }
-    
-    if (days < 30) {
-      const weeks = Math.floor(days / 7);
-      const remainingDays = days % 7;
-      
-      if (remainingDays === 0) {
-        if (weeks === 1) return 'שבוע';
-        if (weeks === 2) return 'שבועיים';
-        return `${weeks} שבועות`;
-      }
-      
-      const weeksText = weeks === 1 ? 'שבוע' : weeks === 2 ? 'שבועיים' : `${weeks} שבועות`;
-      const daysText = remainingDays === 1 ? 'יום' : `${remainingDays} ימים`;
-      return `${weeksText} ו-${daysText}`;
-    }
-    
-    const months = Math.floor(days / 30);
-    const remainingDays = days % 30;
-    
-    if (remainingDays === 0) {
-      return months === 1 ? 'חודש' : `${months} חודשים`;
-    }
-    
-    const monthsText = months === 1 ? 'חודש' : `${months} חודשים`;
-    const daysText = remainingDays === 1 ? 'יום' : `${remainingDays} ימים`;
-    return `${monthsText} ו-${daysText}`;
   };
 
   return (
@@ -85,13 +70,25 @@ const FoodInventoryCard = ({ dogs, daysRemaining, onEditPress, onDeletePress, on
         </View>
 
         <View style={styles.statusContainer}>
-          <Text style={styles.statusLabel}>ימים עד לסיום שק המזון:</Text>
-          <Text style={[styles.statusValue, { color: getStatusColor() }]}>
-            {daysRemaining}
+          <Text style={styles.statusLabel}>
+            {stockCountdown?.label ?? 'ימים עד לסיום שק המזון:'}
           </Text>
-          <Text style={styles.statusSubtext}>
-            ({formatDaysToText(daysRemaining)})
+          <Text
+            style={[
+              stockCountdown?.displayText ? styles.statusMessage : styles.statusValue,
+              { color: stockCountdown?.urgencyColor ?? getStatusColor(daysRemaining) },
+            ]}
+          >
+            {stockCountdown ? getCountdownPrimaryText(stockCountdown) : daysRemaining}
           </Text>
+          {stockCountdown?.subtext ? (
+            <Text style={styles.statusSubtext}>{stockCountdown.subtext}</Text>
+          ) : null}
+          {showReminderCountdown ? (
+            <Text style={styles.reminderDaysHint}>
+              {daysUntilReminder} {daysUntilReminder === 1 ? 'יום' : 'ימים'} עד לתזכורת
+            </Text>
+          ) : null}
         </View>
       </View>
 
@@ -189,11 +186,23 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
   },
+  statusMessage: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
   statusSubtext: {
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
     marginTop: 3,
+  },
+  reminderDaysHint: {
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 6,
   },
   actionsRow: {
     flexDirection: 'row-reverse',
