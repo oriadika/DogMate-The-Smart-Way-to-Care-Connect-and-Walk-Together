@@ -17,7 +17,7 @@ import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 import HebrewAsciiParensText from '../components/HebrewAsciiParensText';
 import WalkerLocationPicker from '../components/WalkerLocationPicker';
-import { CityOffering, dogWalkerAPI } from '../services/api';
+import { CityOffering, dogWalkerAPI } from '../services/dogmateApi';
 import {
   formatLocationLine,
   parseLocationFromCityField,

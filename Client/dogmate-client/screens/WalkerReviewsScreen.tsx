@@ -14,7 +14,7 @@ import {
   dogWalkerAPI,
   type ProfessionalProfileResponse,
   type WalkerReview,
-} from '../services/api';
+} from '../services/dogmateApi';
 
 const PRIMARY_COLOR = '#7FB069';
 const BG_COLOR = '#f5e6d3';

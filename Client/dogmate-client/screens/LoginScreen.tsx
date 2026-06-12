@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { userAPI } from '../services/api';
+import { userAPI } from '../services/dogmateApi';
 
 const LoginScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');

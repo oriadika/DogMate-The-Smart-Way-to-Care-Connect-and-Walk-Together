@@ -13,7 +13,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import FoodInventoryCard from '../../components/FoodInventoryCard';
-import { userAPI, foodStockAPI } from '../../services/api';
+import { userAPI, foodStockAPI } from '../../services/dogmateApi';
 import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green

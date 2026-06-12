@@ -21,14 +21,14 @@ import {
 } from 'react-native';
 import * as Linking from 'expo-linking';
 import { FontAwesome, FontAwesome5, Ionicons } from '@expo/vector-icons';
-import { userAPI, dogWalkerAPI, type ProfessionalProfileResponse } from '../services/api';
+import { userAPI, dogWalkerAPI, type ProfessionalProfileResponse } from '../services/dogmateApi';
 import HebrewAsciiParensText from '../components/HebrewAsciiParensText';
 import { formatLocationLineForStoredCity } from '../utils/locationFieldCodec';
 import {
   displayAvailabilityFromStored,
   getPricingDisplayLinesFromStored,
 } from '../utils/walkerOfferingDisplay';
-import locationService, { LocationService } from '../services/location';
+import locationService, { LocationService } from '../services/dogmateLocation';
 import WalkerListToolbar from '../components/walkerList/WalkerListToolbar';
 import WalkerFiltersModal from '../components/walkerList/WalkerFiltersModal';
 import WalkerSortModal from '../components/walkerList/WalkerSortModal';

@@ -1,4 +1,4 @@
-import type { MedicationRow } from '../services/api';
+import type { MedicationRow } from '../services/dogmateApi';
 
 /** Unique medication names previously recorded for a specific dog, sorted in Hebrew locale. */
 export function getUniqueMedicationNamesForDog(

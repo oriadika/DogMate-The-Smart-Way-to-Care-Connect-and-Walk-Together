@@ -7,7 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { userAPI } from '../../../services/api';
+import { userAPI } from '../../../services/dogmateApi';
 import { useUsers } from '../../../contexts/UsersContext';
 
 const PRIMARY_COLOR = '#7FB069'; // matches HomeScreen (regular user)

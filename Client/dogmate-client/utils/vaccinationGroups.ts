@@ -1,4 +1,4 @@
-import type { VaccinationRow } from '../services/api';
+import type { VaccinationRow } from '../services/dogmateApi';
 import type { VaccinationSortOption } from '../components/health/VaccinationSortModal';
 
 export type VaccinationGroup = {

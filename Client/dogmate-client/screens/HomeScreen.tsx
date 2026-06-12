@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, reminderAPI, userAPI } from '../services/api';
+import { dogAPI, reminderAPI, userAPI } from '../services/dogmateApi';
 import { scheduleReminderNotification, cancelReminderNotification } from '../services/notifications';
 import { flattenRouteParams } from '../utils/navigationParams';
 

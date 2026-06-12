@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { dogAPI, vaccinationAPI } from '../../services/api';
+import { dogAPI, vaccinationAPI } from '../../services/dogmateApi';
 import VaccineNamePicker from '../../components/health/VaccineNamePicker';
 import {
   ISRAEL_VACCINE_CUSTOM,

@@ -53,8 +53,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "c90b3a31-93e7-4537-b369-0d96e5af42dd"
+        "projectId": "73281c0b-8541-4cd5-8faf-f62f6b00e25d"
       }
-    }
+    },
+    "owner": "dogmate"
   }
 }

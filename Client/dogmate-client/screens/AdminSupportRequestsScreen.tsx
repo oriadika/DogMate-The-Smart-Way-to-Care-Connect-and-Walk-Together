@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SupportRequestItem, userAPI } from '../services/api';
+import { SupportRequestItem, userAPI } from '../services/dogmateApi';
 
 const CATEGORY_LABELS: Record<string, string> = {
   bug: 'תקלה',
