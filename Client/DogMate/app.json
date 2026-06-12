@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "dogmate-client",
-    "slug": "dogmate-client",
+    "name": "DogMate",
+    "slug": "DogMate",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/LoadingPage.jpg",
