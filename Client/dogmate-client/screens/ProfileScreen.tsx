@@ -23,6 +23,7 @@ import websocketService, { type PingNotification } from '../services/websocket';
 import locationService, { LocationService } from '../services/location';
 import { dogMateMapStyle } from '../src/constants/MapStyles';
 import { OWNER_MAIN_TAB } from '../navigation/ownerTabRoutes';
+import { flattenRouteParams } from '../utils/navigationParams';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const USERS_REFRESH_INTERVAL_MS = 5000;
@@ -228,12 +229,19 @@ function MapMarkerAvatar({
 
 const ProfileScreen = ({ navigation, route }: any) => {
   const insets = useSafeAreaInsets();
+  const routeParams = useMemo(
+    () => flattenRouteParams(route?.params as Record<string, unknown> | undefined),
+    [route?.params]
+  );
+  const [resolvedUserId, setResolvedUserId] = useState<string | null>(
+    String(routeParams.userId || '').trim() || null
+  );
   const [loggedUsers, setLoggedUsers] = useState<any[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [currentUserDisplayName, setCurrentUserDisplayName] = useState<string>(
-    `${route?.params?.userFirstName || ''} ${route?.params?.userLastName || ''}`.trim()
+    `${routeParams.userFirstName || ''} ${routeParams.userLastName || ''}`.trim()
   );
-  const [currentUserRoleLabel, setCurrentUserRoleLabel] = useState<string>(route?.params?.role || '');
+  const [currentUserRoleLabel, setCurrentUserRoleLabel] = useState<string>(String(routeParams.role || ''));
   const [serverAccountType, setServerAccountType] = useState<string | null>(null);
   const [currentUserDogImageUrl, setCurrentUserDogImageUrl] = useState<string | null>(null);
   const [myPingDog, setMyPingDog] = useState<{
@@ -247,7 +255,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
   const [locationTracking, setLocationTracking] = useState(false);
   /** ברירת מחדל: מיקום גלוי לבעל כלב בטיולים; דוגווקר מהניווט מתחיל מוסתר */
   const [isLocationSharingEnabled, setIsLocationSharingEnabled] = useState(
-    () => route?.params?.userRole !== 'walker'
+    () => String(routeParams.userRole || '') !== 'walker'
   );
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [radiusKm, setRadiusKm] = useState<number>(0.25);
@@ -264,12 +272,12 @@ const ProfileScreen = ({ navigation, route }: any) => {
   const useAppleMapsFallback = Platform.OS === 'ios' && !useGoogleMapsOnIos;
 
   const isWalkerProfile = useMemo(
-    () => route?.params?.userRole === 'walker' || serverAccountType === 'DogWalkerUser',
-    [route?.params?.userRole, serverAccountType]
+    () => String(routeParams.userRole || '') === 'walker' || serverAccountType === 'DogWalkerUser',
+    [routeParams.userRole, serverAccountType]
   );
 
   const fetchPendingMeetInvites = useCallback(async () => {
-    const userId = route?.params?.userId;
+    const userId = resolvedUserId;
     if (!userId || incomingMeetInvite) {
       return;
     }
@@ -295,13 +303,20 @@ const ProfileScreen = ({ navigation, route }: any) => {
     } catch {
       // WebSocket is primary; polling keeps delivery reliable if connection drops.
     }
-  }, [incomingMeetInvite, route?.params?.userId]);
+  }, [incomingMeetInvite, resolvedUserId]);
 
   useEffect(() => {
-    if (route?.params?.userRole === 'walker') {
+    const nextUserId = String(routeParams.userId || '').trim();
+    if (nextUserId) {
+      setResolvedUserId(nextUserId);
+    }
+  }, [routeParams.userId]);
+
+  useEffect(() => {
+    if (String(routeParams.userRole || '') === 'walker') {
       setCurrentUserRoleLabel('דוגווקר');
     }
-  }, [route?.params?.userRole]);
+  }, [routeParams.userRole]);
 
   const usersInRadius = loggedUsers.filter((user: any) => {
     if (user.latitude == null || user.longitude == null) return false;
@@ -332,7 +347,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
   }, [isLocationSharingEnabled, userLocation, usersWithLocation]);
 
   useEffect(() => {
-    const currentUserId = route?.params?.userId;
+    const currentUserId = resolvedUserId;
     const cached = currentUserId ? profileDataCache.get(currentUserId) : null;
     const shouldFetch = !cached || (currentUserId ? profileDirtyUsers.has(currentUserId) : true);
 
@@ -353,7 +368,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
     }, PENDING_PINGS_REFRESH_INTERVAL_MS);
 
     const initializeLocation = async () => {
-      const userId = route?.params?.userId;
+      const userId = resolvedUserId;
       const permissionsGranted = await locationService.requestPermissions();
 
       if (permissionsGranted) {
@@ -379,11 +394,11 @@ const ProfileScreen = ({ navigation, route }: any) => {
       }
     };
 
-    if (route?.params?.userRole !== 'walker') {
+    if (String(routeParams.userRole || '') !== 'walker') {
       initializeLocation();
     }
 
-    const userId = route?.params?.userId;
+    const userId = resolvedUserId;
     if (userId) {
       const timer = setTimeout(() => {
         connectWebSocket(userId);
@@ -404,7 +419,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
       locationService.stopWatchingLocation();
       websocketService.disconnect();
     };
-  }, [route?.params?.userId, route?.params?.userRole, fetchPendingMeetInvites]);
+  }, [resolvedUserId, routeParams.userRole, fetchPendingMeetInvites]);
 
   useEffect(() => {
     if (serverAccountType !== 'DogWalkerUser') {
@@ -421,7 +436,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
   }, [userLocation]);
 
   useEffect(() => {
-    const userId = route?.params?.userId;
+    const userId = resolvedUserId;
     let locationInterval: ReturnType<typeof setInterval> | null = null;
 
     if (isWalkerProfile) {
@@ -449,7 +464,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
         clearInterval(locationInterval);
       }
     };
-  }, [isLocationSharingEnabled, route?.params?.userId, isWalkerProfile]);
+  }, [isLocationSharingEnabled, resolvedUserId, isWalkerProfile]);
 
   useEffect(() => {
     if (!isLocationSharingEnabled) {
@@ -484,7 +499,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
     const newState = !isLocationSharingEnabled;
     setIsLocationSharingEnabled(newState);
 
-    const userId = route?.params?.userId;
+    const userId = resolvedUserId;
     if (!newState && userId) {
       try {
         await userAPI.clearLocation(userId);
@@ -534,15 +549,24 @@ const ProfileScreen = ({ navigation, route }: any) => {
         setIsLoadingUsers(true);
       }
       const data = await userAPI.getLoggedUsers();
-      const currentUserId = route?.params?.userId;
+      const currentUserId = resolvedUserId || String(routeParams.userId || '').trim() || null;
 
       if (data.success && data.users) {
-        const currentUser = data.users.find((user: any) => user.id === currentUserId);
+        let effectiveUserId = currentUserId;
+        if (!effectiveUserId) {
+          const fallbackUser = data.users.find((user: any) => user && user.id);
+          effectiveUserId = fallbackUser?.id ? String(fallbackUser.id) : null;
+        }
+
+        const currentUser = data.users.find((user: any) => String(user.id) === String(effectiveUserId));
+        if (effectiveUserId) {
+          setResolvedUserId(effectiveUserId);
+        }
         if (currentUser) {
           setServerAccountType(currentUser.type ?? null);
           const resolvedName = `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim();
           setCurrentUserDisplayName(
-            resolvedName || currentUser.email?.split('@')[0] || route?.params?.userFirstName || 'משתמש'
+            resolvedName || currentUser.email?.split('@')[0] || routeParams.userFirstName || 'משתמש'
           );
           setCurrentUserRoleLabel(
             currentUser.type === 'RegularUser'
@@ -568,7 +592,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
         }
 
         const formattedUsers = data.users
-          .filter((user: any) => user.id !== currentUserId)
+          .filter((user: any) => String(user.id) !== String(effectiveUserId))
           .map((user: any) => {
             const userObj: any = {
               id: user.id,
@@ -640,15 +664,15 @@ const ProfileScreen = ({ navigation, route }: any) => {
           : formattedUsers;
 
         const nextSignature = buildUsersSignature(updatedUsersWithDistance);
-        const cached = currentUserId ? profileDataCache.get(currentUserId) : null;
+        const cached = effectiveUserId ? profileDataCache.get(effectiveUserId) : null;
         const hasChanged = !cached || cached.signature !== nextSignature;
 
         if (hasChanged) {
           setLoggedUsers(updatedUsersWithDistance);
         }
 
-        if (currentUserId) {
-          profileDataCache.set(currentUserId, {
+        if (effectiveUserId) {
+          profileDataCache.set(effectiveUserId, {
             loggedUsers: updatedUsersWithDistance,
             signature: nextSignature,
           });
@@ -686,10 +710,10 @@ const ProfileScreen = ({ navigation, route }: any) => {
 
   const handlePing = async (toUserId: string, toUserName: string) => {
     try {
-      const fromUserId = route?.params?.userId;
+      const fromUserId = resolvedUserId;
       const fromUserName = currentUserDisplayName?.trim()
         ? currentUserDisplayName
-        : `${route?.params?.userFirstName || ''} ${route?.params?.userLastName || ''}`.trim();
+        : `${routeParams.userFirstName || ''} ${routeParams.userLastName || ''}`.trim();
 
       if (!fromUserId) {
         Alert.alert('שגיאה', 'מזהה משתמש לא נמצא');
@@ -714,7 +738,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
 
   const respondToMeetInvite = async (accepted: boolean) => {
     if (!incomingMeetInvite) return;
-    const myId = route?.params?.userId as string | undefined;
+    const myId = resolvedUserId || undefined;
     if (!myId) {
       Alert.alert('שגיאה', 'מזהה משתמש לא נמצא');
       return;
@@ -768,12 +792,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
         <View style={styles.headerRow}>
           <TouchableOpacity
             onPress={() => {
-              const parent = navigation.getParent();
-              if (parent && (parent as any).getState?.()?.type === 'tab') {
-                navigation.navigate(OWNER_MAIN_TAB.Dashboard);
-                return;
-              }
-              navigation.goBack();
+              navigation.navigate(OWNER_MAIN_TAB.Dashboard);
             }}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >

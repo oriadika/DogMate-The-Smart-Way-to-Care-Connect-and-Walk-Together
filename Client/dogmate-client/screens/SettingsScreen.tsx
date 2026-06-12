@@ -69,8 +69,20 @@ const SettingsScreen = ({ navigation, route }: any) => {
     setShowLogoutConfirm(false);
     setIsLoggingOut(true);
     try {
-      console.log('Logging out user:', { userId, email });
-      await userAPI.logout(userId || '', email || '');
+      let resolvedUserId = String(userId || '').trim();
+      let resolvedEmail = String(email || '').trim();
+
+      if (!resolvedUserId && !resolvedEmail) {
+        const loggedUsersResponse = await userAPI.getLoggedUsers();
+        const currentUser = loggedUsersResponse?.users?.find((entry: any) => entry?.id);
+        if (currentUser) {
+          resolvedUserId = String(currentUser.id || '');
+          resolvedEmail = String(currentUser.email || '');
+        }
+      }
+
+      console.log('Logging out user:', { resolvedUserId, resolvedEmail });
+      await userAPI.logout(resolvedUserId || '', resolvedEmail || '');
       console.log('User logged out successfully');
       navigation.reset({
         index: 0,

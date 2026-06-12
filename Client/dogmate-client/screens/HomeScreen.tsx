@@ -1,5 +1,5 @@
 // screens/HomeScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   SafeAreaView,
   View,
@@ -17,6 +17,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { dogAPI, reminderAPI, userAPI } from '../services/api';
 import { scheduleReminderNotification, cancelReminderNotification } from '../services/notifications';
+import { flattenRouteParams } from '../utils/navigationParams';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
@@ -65,66 +66,102 @@ const buildDataSignature = (dogsData: any[], remindersData: any[]): string => {
 };
 
 const HomeScreen = ({ navigation, route }: any) => {
-  const [userName, setUserName] = useState<string>(route?.params?.userFirstName || '');
-  const [userLastName, setUserLastName] = useState<string>(route?.params?.userLastName || '');
-  const [userId, setUserId] = useState<string | null>(route?.params?.userId || null);
+  const routeParams = useMemo(
+    () => flattenRouteParams(route?.params as Record<string, unknown> | undefined),
+    [route?.params]
+  );
+  const [userName, setUserName] = useState<string>(String(routeParams.userFirstName || '') || '');
+  const [userLastName, setUserLastName] = useState<string>(String(routeParams.userLastName || '') || '');
+  const [userId, setUserId] = useState<string | null>(String(routeParams.userId || '') || null);
   const [dogs, setDogs] = useState<any[]>([]);
   const [reminders, setReminders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedReminder, setSelectedReminder] = useState<any | null>(null);
   const [showReminderDetails, setShowReminderDetails] = useState(false);
 
-  // Get user data from route params (passed from LoginScreen) - use state as fallback
-  const currentUserId = route?.params?.userId || userId;
-  const currentUserName = route?.params?.userFirstName || userName;
-  const currentUserLastName = route?.params?.userLastName || userLastName;
+  // Get user data from nested route params (including tab navigation) - use state as fallback
+  const currentUserId = String(routeParams.userId || userId || '').trim() || null;
+  const currentUserEmail = String(routeParams.email || '').trim() || '';
+  const currentUserName = String(routeParams.userFirstName || userName || '').trim() || 'חברים';
+  const currentUserLastName = String(routeParams.userLastName || userLastName || '').trim();
 
   // Update state when route params change (e.g., on first login)
   React.useEffect(() => {
-    if (route?.params?.userId && route.params.userId !== userId) {
-      setUserId(route.params.userId);
+    const nextUserId = String(routeParams.userId || '').trim();
+    if (nextUserId && nextUserId !== userId) {
+      setUserId(nextUserId);
     }
-    if (route?.params?.userFirstName && route.params.userFirstName !== userName) {
-      setUserName(route.params.userFirstName);
+
+    const nextFirstName = String(routeParams.userFirstName || '').trim();
+    if (nextFirstName && nextFirstName !== userName) {
+      setUserName(nextFirstName);
     }
-    if (route?.params?.userLastName && route.params.userLastName !== userLastName) {
-      setUserLastName(route.params.userLastName);
+
+    const nextLastName = String(routeParams.userLastName || '').trim();
+    if (nextLastName && nextLastName !== userLastName) {
+      setUserLastName(nextLastName);
     }
-  }, [route?.params?.userId, route?.params?.userFirstName, route?.params?.userLastName]);
+  }, [routeParams.userId, routeParams.userFirstName, routeParams.userLastName, userId, userName, userLastName]);
 
   // Load data when screen is focused (including when returning from AddDog screen)
   useFocusEffect(
     React.useCallback(() => {
-      if (!currentUserId) return;
+      let intervalId: ReturnType<typeof setInterval> | undefined;
 
-      if (route?.params?.refresh === true) {
-        homeDataCache.delete(currentUserId);
-        navigation.setParams({ refresh: false });
-      }
+      const loadFocusData = async () => {
+        let focusUserId = currentUserId;
 
-      const cached = homeDataCache.get(currentUserId);
-      if (cached) {
-        setUserName(cached.userName || 'חברים');
-        setUserLastName(cached.userLastName || '');
-        setDogs(cached.dogs || []);
-        setReminders(cached.reminders || []);
-        setLoading(false);
-      } else {
-        setLoading(true);
-      }
+        if (!focusUserId) {
+          try {
+            const loggedUsersResponse = await userAPI.getLoggedUsers();
+            const loggedUser = loggedUsersResponse?.users?.find((entry: any) => entry?.id);
+            if (loggedUser) {
+              focusUserId = String(loggedUser.id);
+              setUserId(focusUserId);
+              setUserName(String(loggedUser.firstName || 'חברים'));
+              setUserLastName(String(loggedUser.lastName || ''));
+            }
+          } catch (error) {
+            console.warn('Could not resolve fallback user on Home focus:', error);
+          }
+        }
 
-      // Always fetch fresh data when screen gets focus
-      loadUserAndDogs(currentUserId, currentUserName, { showLoader: !cached });
+        if (!focusUserId) {
+          setLoading(false);
+          return;
+        }
 
-      // Keep screen fresh while user stays on it
-      const intervalId = setInterval(() => {
-        loadUserAndDogs(currentUserId, currentUserName, { showLoader: false });
-      }, 5000);
+        if (routeParams.refresh === true) {
+          homeDataCache.delete(focusUserId);
+          navigation.setParams({ refresh: false });
+        }
+
+        const cached = homeDataCache.get(focusUserId);
+        if (cached) {
+          setUserName(cached.userName || 'חברים');
+          setUserLastName(cached.userLastName || '');
+          setDogs(cached.dogs || []);
+          setReminders(cached.reminders || []);
+          setLoading(false);
+        } else {
+          setLoading(true);
+        }
+
+        // Always fetch fresh data when screen gets focus
+        await loadUserAndDogs(focusUserId, currentUserName, { showLoader: !cached });
+
+        // Keep screen fresh while user stays on it
+        intervalId = setInterval(() => {
+          loadUserAndDogs(focusUserId, currentUserName, { showLoader: false });
+        }, 5000);
+      };
+
+      loadFocusData();
 
       return () => {
-        clearInterval(intervalId);
+        if (intervalId) clearInterval(intervalId);
       };
-    }, [currentUserId, currentUserName, route?.params?.refresh, navigation])
+    }, [currentUserId, currentUserName, routeParams.refresh, navigation])
   );
 
   const loadUserAndDogs = async (
@@ -555,7 +592,7 @@ const HomeScreen = ({ navigation, route }: any) => {
               style={styles.settingsButton}
               onPress={() => navigation.navigate('Settings', {
                 userId: currentUserId,
-                email: route?.params?.email,
+                email: currentUserEmail || route?.params?.email || '',
                 userFirstName: currentUserName,
                 userLastName: currentUserLastName,
               })}

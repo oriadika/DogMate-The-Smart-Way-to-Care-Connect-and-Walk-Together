@@ -505,12 +505,7 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
       <View style={styles.headerRow}>
         <TouchableOpacity
           onPress={() => {
-            const parent = navigation.getParent();
-            if (parent && (parent as any).getState?.()?.type === 'tab') {
-              navigation.navigate(OWNER_MAIN_TAB.Dashboard);
-              return;
-            }
-            navigation.goBack();
+            navigation.navigate(OWNER_MAIN_TAB.Dashboard);
           }}
         >
           <Ionicons name="arrow-forward" size={28} color="#5C4033" />

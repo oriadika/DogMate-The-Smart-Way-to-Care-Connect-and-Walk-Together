@@ -4,11 +4,11 @@
     "slug": "dogmate-client",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/LoadingPage.jpg",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/LoadingPage.jpg",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "cover",
       "backgroundColor": "#FAEFDD"
     },
@@ -47,7 +47,9 @@
           "color": "#7FB069",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font"
     ],
     "extra": {
       "eas": {
