@@ -1,5 +1,5 @@
 // screens/Health/FoodInventoryHubScreen.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   SafeAreaView,
   View,
@@ -13,93 +13,118 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import FoodInventoryCard from '../../components/FoodInventoryCard';
-import { userAPI, foodStockAPI } from '../../services/dogmateApi';
-import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
+import { foodStockAPI } from '../../services/api';
+import { resyncAllNotificationsInBackground } from '../../services/notificationScheduler';
+import { markHomeDataDirty, shouldForceHomeRefresh } from '../../utils/homeDataCache';
+import {
+  markFoodInventoryDirty,
+  removeFoodInventoryItem,
+  transformFoodStockRow,
+  upsertFoodInventoryItem,
+} from '../../utils/healthDataCache';
+import { useScreenLifecycleGuard } from '../../utils/screenLifecycle';
+import {
+  navigateBackToOwnerHealth,
+  navigateToOwnerDashboard,
+} from '../../navigation/ownerNavigation';
+import { resolveOwnerUserId, getOwnerSession } from '../../utils/ownerSession';
+import {
+  clearFoodInventoryDirty,
+  getFoodInventoryCache,
+  getInitialFoodInventoryState,
+  setFoodInventoryCache,
+  shouldForceFoodInventoryRefresh,
+  transformFoodStocks,
+  type FoodInventoryItem,
+} from '../../utils/healthDataCache';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
 const TEXT_DARK = '#5C4033'; // Dark brown for text
 const BORDER_COLOR = '#E0D5C7'; // Border color
 
-type DogInfo = {
-  id: string;
-  name: string;
-  imageUrl?: string;
-};
-
-type InventoryItem = {
-  id: string;
-  dogs: DogInfo[];
-  daysRemaining: number;
-  dailyConsumption: string; // in grams
-  bagSize: string; // in kg
-  currentAmount: string; // in kg
-  brandName?: string;
-};
+type DogInfo = FoodInventoryItem['dogs'][number];
 
 const FoodInventoryHubScreen = ({ navigation, route }: any) => {
-  const [inventoryList, setInventoryList] = useState<InventoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const initialUserId = resolveOwnerUserId(undefined, getOwnerSession().userId ?? null);
+  const initial = getInitialFoodInventoryState(initialUserId);
+
+  const [inventoryList, setInventoryList] = useState<FoodInventoryItem[]>(initial.items);
+  const [loading, setLoading] = useState(initial.loading);
+  const [userId, setUserId] = useState<string | null>(initial.userId);
+  const inventoryRef = useRef(inventoryList);
+  inventoryRef.current = inventoryList;
+
+  const {
+    markMounted,
+    beginAsyncWork,
+    isAsyncWorkCurrent,
+    runDeferredBlurCleanup,
+  } = useScreenLifecycleGuard();
 
   // Load food stocks from database
   const loadFoodStocks = useCallback(async () => {
+    const generation = beginAsyncWork();
     try {
-      setLoading(true);
-      
-      // Get current user
-      const userResponse = await userAPI.getLoggedUsers();
-      if (!userResponse.success || !userResponse.users || userResponse.users.length === 0) {
+      if (!isAsyncWorkCurrent(generation)) return;
+
+      const uid = resolveOwnerUserId(undefined, userId);
+      if (!uid) {
         Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
-        setLoading(false);
         return;
       }
-      
-      const currentUser = userResponse.users[0];
-      setUserId(currentUser.id);
+      setUserId(uid);
 
-      // Fetch food stocks for this user
-      const response = await foodStockAPI.getFoodStocksForUser(currentUser.id);
-      
-      if (response.success && response.foodStocks) {
-        // Transform API response to our format
-        const transformedList: InventoryItem[] = response.foodStocks.map((stock: any) => {
-          // Calculate days remaining - currentLevelInKg is in kg, dailyConsumptionInGram is in grams
-          const currentGrams = stock.currentLevelInKg * 1000;
-          const daysRemaining = stock.dailyConsumptionInGram > 0 
-            ? Math.floor(currentGrams / stock.dailyConsumptionInGram) 
-            : 0;
+      const forceRefresh =
+        shouldForceFoodInventoryRefresh(uid) || shouldForceHomeRefresh(uid);
+      const cached = getFoodInventoryCache(uid);
 
-          return {
-            id: stock.id,
-            dogs: stock.dogs?.map((dog: any) => ({
-              id: dog.id,
-              name: dog.name,
-              imageUrl: dog.profileImageUrl,
-            })) || [],
-            daysRemaining,
-            dailyConsumption: stock.dailyConsumptionInGram.toString(),
-            bagSize: stock.bagSizeInKg.toString(),
-            currentAmount: stock.currentLevelInKg.toString(),
-            brandName: stock.brandName,
-          };
-        });
-        
-        setInventoryList(transformedList);
+      if (cached) {
+        setInventoryList(cached.items);
+        setLoading(false);
+      } else if (inventoryRef.current.length === 0) {
+        setLoading(true);
       }
-    } catch (error: any) {
-      console.error('Error loading food stocks:', error);
-      Alert.alert('שגיאה', 'שגיאה בטעינת מלאי המזון');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
-  // Load data when screen is focused
+      if (forceRefresh) {
+        clearFoodInventoryDirty(uid);
+      }
+
+      if (!forceRefresh && cached) {
+        return;
+      }
+
+      const response = await foodStockAPI.getFoodStocksForUser(uid);
+      if (!isAsyncWorkCurrent(generation)) return;
+
+      const transformedList =
+        response.success && response.foodStocks
+          ? transformFoodStocks(response.foodStocks)
+          : cached?.items ?? [];
+
+      setInventoryList(transformedList);
+      setFoodInventoryCache(uid, { items: transformedList });
+    } catch (error: any) {
+      if (!isAsyncWorkCurrent(generation)) return;
+      console.error('Error loading food stocks:', error);
+      if (inventoryRef.current.length === 0) {
+        Alert.alert('שגיאה', 'שגיאה בטעינת מלאי המזון');
+      }
+    } finally {
+      if (isAsyncWorkCurrent(generation)) {
+        setLoading(false);
+      }
+    }
+  }, [beginAsyncWork, isAsyncWorkCurrent, userId]);
+
   useFocusEffect(
     useCallback(() => {
-      loadFoodStocks();
-    }, [loadFoodStocks])
+      markMounted();
+      void loadFoodStocks();
+      return () => {
+        runDeferredBlurCleanup();
+      };
+    }, [loadFoodStocks, markMounted, runDeferredBlurCleanup])
   );
 
   // ניווט להוספה (ללא ID)
@@ -127,9 +152,15 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
           onPress: async () => {
             try {
               await foodStockAPI.deleteFoodStock(id);
-              // Reload the list
-              loadFoodStocks();
+              if (userId) {
+                const nextList = removeFoodInventoryItem(userId, id);
+                setInventoryList(nextList);
+                markHomeDataDirty(userId);
+                markFoodInventoryDirty(userId);
+                resyncAllNotificationsInBackground(userId);
+              }
               Alert.alert('הצלחה', 'המלאי נמחק בהצלחה');
+              void loadFoodStocks();
             } catch (error: any) {
               console.error('Error deleting food stock:', error);
               Alert.alert('שגיאה', error.message || 'שגיאה במחיקת המלאי');
@@ -142,17 +173,24 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
 
   const handleBuyNewBag = async (id: string) => {
     try {
-      await foodStockAPI.renewFoodStock(id);
-      // Reload the list to get updated values
-      loadFoodStocks();
+      const renewed = await foodStockAPI.renewFoodStock(id);
+      if (userId && renewed) {
+        const updated = transformFoodStockRow(renewed);
+        const nextList = upsertFoodInventoryItem(userId, updated);
+        setInventoryList(nextList);
+        markHomeDataDirty(userId);
+        markFoodInventoryDirty(userId);
+        resyncAllNotificationsInBackground(userId);
+      }
       Alert.alert('הצלחה', 'השק החדש נוסף למלאי בהצלחה!');
+      void loadFoodStocks();
     } catch (error: any) {
       console.error('Error renewing food stock:', error);
       Alert.alert('שגיאה', error.message || 'שגיאה בחידוש המלאי');
     }
   };
 
-  if (loading) {
+  if (loading && inventoryList.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
@@ -170,23 +208,14 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.homeButton}
-            onPress={() => {
-              if (userId) {
-                navigation.navigate('Home', {
-                  screen: 'Dashboard',
-                  params: { userId },
-                });
-              } else {
-                navigation.goBack();
-              }
-            }}
+            onPress={() => navigateToOwnerDashboard(navigation)}
           >
             <Ionicons name="home-outline" size={24} color={TEXT_DARK} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>ניהול מלאי מזון</Text>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => navigation.navigate('Home', { screen: OWNER_MAIN_TAB.Health })}
+            onPress={() => navigateBackToOwnerHealth(navigation)}
           >
             <Ionicons name="arrow-forward" size={28} color={TEXT_DARK} />
           </TouchableOpacity>
@@ -209,6 +238,8 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
             <FoodInventoryCard
               dogs={item.dogs}
               daysRemaining={item.daysRemaining}
+              daysUntilReminder={item.daysUntilReminder}
+              notificationEnabled={item.notificationEnabled}
               onEditPress={() => handleEditPress(item.id)}
               onDeletePress={() => handleDeletePress(item.id, item.dogs)}
               onBuyNewBag={() => handleBuyNewBag(item.id)}

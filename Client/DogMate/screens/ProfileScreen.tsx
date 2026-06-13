@@ -312,6 +312,33 @@ const ProfileScreen = ({ navigation, route }: any) => {
     }
   }, [routeParams.userId]);
 
+  const handlePingReceived = useCallback((ping: PingNotification) => {
+    if (ping.kind === 'MEET_RESPONSE') {
+      Alert.alert(
+        ping.accepted ? 'הזמנה אושרה' : 'הזמנה נדחתה',
+        `${ping.fromUserName || 'משתמש'} ${ping.accepted ? 'אישר/ה את הצעת המפגש' : 'דחה/תה את הצעת המפגש'}.`
+      );
+      return;
+    }
+    if (ping.pingId) {
+      userAPI.markPingAsRead(ping.pingId).catch(() => {});
+    }
+    setIncomingMeetInvite(ping);
+  }, []);
+
+  useEffect(() => {
+    const userId = route?.params?.userId;
+    if (!userId) {
+      return;
+    }
+    return websocketService.addListener(`profile-${userId}`, {
+      onPingReceived: handlePingReceived,
+      onError: (error) => {
+        console.error('WebSocket error:', error);
+      },
+    });
+  }, [route?.params?.userId, handlePingReceived]);
+
   useEffect(() => {
     if (String(routeParams.userRole || '') === 'walker') {
       setCurrentUserRoleLabel('דוגווקר');
@@ -398,7 +425,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
       initializeLocation();
     }
 
-    const userId = resolvedUserId;
+    const userId = route?.params?.userId;
     if (userId) {
       const timer = setTimeout(() => {
         connectWebSocket(userId);
@@ -417,7 +444,6 @@ const ProfileScreen = ({ navigation, route }: any) => {
       clearInterval(refreshInterval);
       clearInterval(pendingPingsInterval);
       locationService.stopWatchingLocation();
-      websocketService.disconnect();
     };
   }, [resolvedUserId, routeParams.userRole, fetchPendingMeetInvites]);
 
@@ -499,7 +525,7 @@ const ProfileScreen = ({ navigation, route }: any) => {
     const newState = !isLocationSharingEnabled;
     setIsLocationSharingEnabled(newState);
 
-    const userId = resolvedUserId;
+    const userId = route?.params?.userId;
     if (!newState && userId) {
       try {
         await userAPI.clearLocation(userId);
@@ -689,6 +715,28 @@ const ProfileScreen = ({ navigation, route }: any) => {
       if (shouldShowLoader) {
         setIsLoadingUsers(false);
       }
+    }
+  };
+
+  const toggleLocationSharing = async () => {
+    if (isWalkerProfile) {
+      return;
+    }
+    const newState = !isLocationSharingEnabled;
+    setIsLocationSharingEnabled(newState);
+
+    const userId = route?.params?.userId;
+    if (!newState && userId) {
+      try {
+        await userAPI.clearLocation(userId);
+      } catch (error) {
+        console.error('Failed to clear location:', error);
+      }
+    }
+
+    if (userId) {
+      profileDirtyUsers.add(userId);
+      fetchLoggedUsers({ showLoader: false });
     }
   };
 

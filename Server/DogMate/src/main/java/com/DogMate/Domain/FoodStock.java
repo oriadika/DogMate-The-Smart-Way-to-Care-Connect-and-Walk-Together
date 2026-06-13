@@ -24,6 +24,12 @@ public class FoodStock {
     
     @Column(name = "daily_consumption_in_gram")
     private double dailyConsumptionInGram;
+
+    @Column(name = "notification_enabled", nullable = false)
+    private boolean notificationEnabled = false;
+
+    @Column(name = "low_stock_threshold_days")
+    private Integer lowStockThresholdDays;
     
     @OneToMany(mappedBy = "foodStock")
     private List<Dog> dogs = new ArrayList<>();
@@ -118,5 +124,30 @@ public class FoodStock {
 
     public void setDogList(List<Dog> dogs){
         this.dogs = dogs;
+    }
+
+    public boolean isNotificationEnabled() {
+        return notificationEnabled;
+    }
+
+    public void setNotificationEnabled(boolean notificationEnabled) {
+        this.notificationEnabled = notificationEnabled;
+    }
+
+    public Integer getLowStockThresholdDays() {
+        return lowStockThresholdDays;
+    }
+
+    public void setLowStockThresholdDays(Integer lowStockThresholdDays) {
+        this.lowStockThresholdDays = lowStockThresholdDays;
+    }
+
+    /** Whole days until the bag runs out at current consumption. */
+    public long computeDaysRemaining() {
+        if (dailyConsumptionInGram <= 0) {
+            return 0;
+        }
+        double currentGrams = currentLevelInKg * 1000.0;
+        return (long) Math.floor(currentGrams / dailyConsumptionInGram);
     }
 }

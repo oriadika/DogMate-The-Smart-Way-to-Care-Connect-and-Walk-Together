@@ -12,7 +12,10 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { userAPI } from '../services/dogmateApi';
+import { userAPI } from '../services/api';
+import { setOwnerSession } from '../utils/ownerSession';
+import { prefetchOwnerData } from '../utils/prefetchOwnerData';
+import { scheduleLoginWelcomeMessage } from '../utils/loginWelcomeMessage';
 
 const CODE_LENGTH = 6;
 
@@ -62,19 +65,32 @@ export default function VerifyEmailScreen({ navigation, route }: any) {
       if (password) {
         const loginResponse = await userAPI.login({ email, password });
         const role = loginResponse?.userRole === 'walker' ? 'walker' : userRole;
+        const ownerParams = {
+          userId: loginResponse?.userId || userId,
+          email,
+          userFirstName: loginResponse?.firstName || firstName || email,
+          userLastName: loginResponse?.lastName || lastName,
+          userRole: role,
+          phoneNumber: loginResponse?.phoneNumber || phoneNumber,
+        };
+        setOwnerSession(ownerParams);
+        if (role !== 'walker' && ownerParams.userId) {
+          await prefetchOwnerData(
+            ownerParams.userId,
+            ownerParams.userFirstName,
+            ownerParams.userLastName,
+            { waitForHome: true }
+          );
+        }
+        if (role !== 'walker') {
+          scheduleLoginWelcomeMessage();
+        }
         navigation.reset({
           index: 0,
           routes: [
             {
               name: role === 'walker' ? 'WalkerHome' : 'Home',
-              params: {
-                userId: loginResponse?.userId || userId,
-                email,
-                userFirstName: loginResponse?.firstName || firstName || email,
-                userLastName: loginResponse?.lastName || lastName,
-                userRole: role,
-                phoneNumber: loginResponse?.phoneNumber || phoneNumber,
-              },
+              params: ownerParams,
             },
           ],
         });

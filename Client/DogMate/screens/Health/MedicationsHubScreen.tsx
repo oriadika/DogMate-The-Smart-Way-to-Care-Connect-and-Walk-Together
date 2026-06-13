@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   SafeAreaView,
   View,
@@ -14,12 +14,35 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { userAPI, medicationAPI, dogAPI, type MedicationRow } from '../../services/dogmateApi';
-import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
+import { medicationAPI, type MedicationRow } from '../../services/api';
+import { deferScreenCleanup, useScreenLifecycleGuard } from '../../utils/screenLifecycle';
+import {
+  navigateBackToOwnerHealth,
+  navigateToOwnerDashboard,
+} from '../../navigation/ownerNavigation';
+import { resolveOwnerUserId, getOwnerSession } from '../../utils/ownerSession';
+import { markHomeDataDirty, shouldForceHomeRefresh } from '../../utils/homeDataCache';
+import { resyncAllNotificationsInBackground } from '../../services/notificationScheduler';
+import {
+  clearMedicationsDirty,
+  fetchDogOptionsForUser,
+  getInitialMedicationsState,
+  getMedicationsCache,
+  markMedicationsDirty,
+  setMedicationsCache,
+  shouldForceMedicationsRefresh,
+  type DogOption,
+} from '../../utils/healthDataCache';
 import MedicationSortModal, {
   type MedicationSortOption,
 } from '../../components/health/MedicationSortModal';
 import MedicationGroupCard from '../../components/health/MedicationGroupCard';
+import MedicationOverdueMarkDoneModal from '../../components/health/MedicationOverdueMarkDoneModal';
+import {
+  combineMedicationPlannedDue,
+  isMedicationPlannedDueOverdue,
+} from '../../utils/healthMarkDone';
+import { logMedicationDoseForUser } from '../../utils/healthMarkDoneActions';
 import {
   groupMedications,
   sortMedicationGroups,
@@ -45,71 +68,126 @@ const ALL_DOGS_FILTER = '__all_dogs__';
 
 const DEFAULT_MEDICATION_SORT: MedicationSortOption = 'date_desc';
 
-type DogOption = { id: string; name: string };
-
 const MedicationsHubScreen = ({ navigation }: any) => {
-  const [rows, setRows] = useState<MedicationRow[]>([]);
-  const [userDogs, setUserDogs] = useState<DogOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
+  const initialUserId = resolveOwnerUserId(undefined, getOwnerSession().userId ?? null);
+  const initial = getInitialMedicationsState(initialUserId);
+
+  const [rows, setRows] = useState<MedicationRow[]>(initial.rows);
+  const [userDogs, setUserDogs] = useState<DogOption[]>(initial.userDogs);
+  const [loading, setLoading] = useState(initial.loading);
+  const [userId, setUserId] = useState<string | null>(initial.userId);
   const [selectedDogId, setSelectedDogId] = useState<string>(ALL_DOGS_FILTER);
   const [dogFilterModalVisible, setDogFilterModalVisible] = useState(false);
   const [medicationSort, setMedicationSort] = useState<MedicationSortOption>(DEFAULT_MEDICATION_SORT);
   const [sortModalVisible, setSortModalVisible] = useState(false);
   const [expandedHistoryByKey, setExpandedHistoryByKey] = useState<Record<string, boolean>>({});
+  const [loggingDoseKey, setLoggingDoseKey] = useState<string | null>(null);
+  const [overdueLogPrompt, setOverdueLogPrompt] = useState<{
+    groupKey: string;
+    medicationId: string;
+    plannedDue: Date | null;
+  } | null>(null);
+  const [overdueLogBusy, setOverdueLogBusy] = useState(false);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
 
-  const closeDogFilterModal = useCallback(() => setDogFilterModalVisible(false), []);
+  const {
+    isMountedRef,
+    markMounted,
+    markUnmounted,
+    cancelInflightAsyncWork,
+    beginAsyncWork,
+    isAsyncWorkCurrent,
+  } = useScreenLifecycleGuard();
+
+  const closeDogFilterModal = useCallback(() => {
+    if (!isMountedRef.current) return;
+    setDogFilterModalVisible(false);
+  }, [isMountedRef]);
 
   const loadMedications = useCallback(async () => {
+    const generation = beginAsyncWork();
     try {
-      setLoading(true);
-      const userResponse = await userAPI.getLoggedUsers();
-      if (!userResponse.success || !userResponse.users?.length) {
+      if (!isAsyncWorkCurrent(generation)) return;
+
+      const uid = resolveOwnerUserId(undefined, userId);
+      if (!uid) {
         Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
         setRows([]);
         setUserDogs([]);
         return;
       }
-      const uid = userResponse.users[0].id as string;
       setUserId(uid);
 
-      try {
-        const res = await medicationAPI.list(uid);
-        const list = Array.isArray(res.medications) ? res.medications : [];
-        setRows(list as MedicationRow[]);
-      } catch (ve: any) {
-        console.error('Medications load error:', ve);
-        Alert.alert('שגיאה', ve?.message || 'שגיאה בטעינת התרופות');
+      const forceRefresh =
+        shouldForceMedicationsRefresh(uid) || shouldForceHomeRefresh(uid);
+      const cached = !forceRefresh ? getMedicationsCache(uid) : undefined;
+
+      if (cached) {
+        setRows(cached.rows);
+        setUserDogs(cached.userDogs);
+        setLoading(false);
+      } else if (rowsRef.current.length === 0) {
+        setLoading(true);
+      }
+
+      if (forceRefresh) {
+        clearMedicationsDirty(uid);
+      }
+
+      const [medSettled, dogsSettled] = await Promise.allSettled([
+        medicationAPI.list(uid),
+        fetchDogOptionsForUser(uid),
+      ]);
+      if (!isAsyncWorkCurrent(generation)) return;
+
+      let nextRows = cached?.rows ?? rowsRef.current;
+      if (medSettled.status === 'fulfilled') {
+        nextRows = Array.isArray(medSettled.value.medications)
+          ? (medSettled.value.medications as MedicationRow[])
+          : [];
+        setRows(nextRows);
+      } else if (!cached) {
+        console.error('Medications load error:', medSettled.reason);
+        Alert.alert('שגיאה', (medSettled.reason as Error)?.message || 'שגיאה בטעינת התרופות');
         setRows([]);
       }
 
-      try {
-        const dogsRes = await dogAPI.getDogsForUser(uid);
-        const dogList = dogsRes.success && Array.isArray(dogsRes.dogs) ? dogsRes.dogs : [];
-        setUserDogs(
-          dogList.map((d: { id?: string; name?: string }) => ({
-            id: String(d.id),
-            name: String(d.name || 'כלב').trim() || 'כלב',
-          }))
-        );
-      } catch (de: any) {
-        console.warn('Dogs list for filter failed:', de);
+      let nextDogs = cached?.userDogs ?? [];
+      if (dogsSettled.status === 'fulfilled') {
+        nextDogs = dogsSettled.value;
+        setUserDogs(nextDogs);
+      } else if (!cached) {
+        console.warn('Dogs list for filter failed:', dogsSettled.reason);
         setUserDogs([]);
       }
+
+      setMedicationsCache(uid, { rows: nextRows, userDogs: nextDogs });
+      markHomeDataDirty(uid);
     } catch (e: any) {
+      if (!isAsyncWorkCurrent(generation)) return;
       console.error('Medications hub load error:', e);
-      Alert.alert('שגיאה', e?.message || 'שגיאה בטעינת הנתונים');
-      setRows([]);
-      setUserDogs([]);
+      if (rowsRef.current.length === 0) {
+        Alert.alert('שגיאה', e?.message || 'שגיאה בטעינת הנתונים');
+      }
     } finally {
-      setLoading(false);
+      if (isAsyncWorkCurrent(generation)) {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [beginAsyncWork, isAsyncWorkCurrent, userId]);
 
   useFocusEffect(
     useCallback(() => {
-      loadMedications();
-    }, [loadMedications])
+      markMounted();
+      void loadMedications();
+      return () => {
+        cancelInflightAsyncWork();
+        deferScreenCleanup(() => {
+          markUnmounted();
+        });
+      };
+    }, [loadMedications, markMounted, markUnmounted, cancelInflightAsyncWork])
   );
 
   const dogsInData = useMemo(() => {
@@ -130,9 +208,11 @@ const MedicationsHubScreen = ({ navigation }: any) => {
   useEffect(() => {
     if (selectedDogId === ALL_DOGS_FILTER) return;
     if (!dogsInData.some((d) => d.id === selectedDogId)) {
-      setSelectedDogId(ALL_DOGS_FILTER);
+      if (isMountedRef.current) {
+        setSelectedDogId(ALL_DOGS_FILTER);
+      }
     }
-  }, [dogsInData, selectedDogId]);
+  }, [dogsInData, selectedDogId, isMountedRef]);
 
   const filteredRows = useMemo(() => {
     if (selectedDogId === ALL_DOGS_FILTER) return rows;
@@ -185,6 +265,7 @@ const MedicationsHubScreen = ({ navigation }: any) => {
       dogId: item.dogId,
       medicationName: item.medicationName,
       administeredDate: item.administeredDate,
+      administeredTime: item.administeredTime ?? undefined,
       nextDueDate: item.nextDueDate ?? undefined,
       vetClinicName: item.vetClinicName ?? undefined,
     });
@@ -203,6 +284,9 @@ const MedicationsHubScreen = ({ navigation }: any) => {
         onPress: async () => {
           try {
             await medicationAPI.delete(userId, item.id);
+            markHomeDataDirty(userId);
+            markMedicationsDirty(userId);
+            resyncAllNotificationsInBackground(userId);
             await loadMedications();
             Alert.alert('הצלחה', 'הרישום נמחק');
           } catch (e: any) {
@@ -230,6 +314,9 @@ const MedicationsHubScreen = ({ navigation }: any) => {
               await Promise.all(
                 group.history.map((entry) => medicationAPI.delete(userId, entry.id))
               );
+              markHomeDataDirty(userId);
+              markMedicationsDirty(userId);
+              resyncAllNotificationsInBackground(userId);
               setExpandedHistoryByKey((prev) => {
                 const next = { ...prev };
                 delete next[group.key];
@@ -251,7 +338,55 @@ const MedicationsHubScreen = ({ navigation }: any) => {
     setExpandedHistoryByKey((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  if (loading) {
+  const executeLogDose = useCallback(
+    async (groupKey: string, medicationId: string, administeredAt?: Date) => {
+      if (!userId) return;
+      setLoggingDoseKey(groupKey);
+      try {
+        await logMedicationDoseForUser(userId, medicationId, administeredAt);
+        setExpandedHistoryByKey((prev) => ({ ...prev, [groupKey]: true }));
+        await loadMedications();
+      } catch (e: any) {
+        Alert.alert('שגיאה', e?.message || 'רישום המנה נכשל');
+      } finally {
+        setLoggingDoseKey(null);
+      }
+    },
+    [userId, loadMedications]
+  );
+
+  const handleLogDose = useCallback(
+    async (group: MedicationGroup, latest: MedicationRow) => {
+      if (!userId || overdueLogBusy) return;
+      if (isMedicationPlannedDueOverdue(latest)) {
+        setOverdueLogPrompt({
+          groupKey: group.key,
+          medicationId: latest.id,
+          plannedDue: combineMedicationPlannedDue(latest),
+        });
+        return;
+      }
+      await executeLogDose(group.key, latest.id);
+    },
+    [userId, overdueLogBusy, executeLogDose]
+  );
+
+  const handleOverdueLogChoice = useCallback(
+    async (administeredAt: Date) => {
+      if (!overdueLogPrompt) return;
+      setOverdueLogBusy(true);
+      try {
+        const { groupKey, medicationId } = overdueLogPrompt;
+        setOverdueLogPrompt(null);
+        await executeLogDose(groupKey, medicationId, administeredAt);
+      } finally {
+        setOverdueLogBusy(false);
+      }
+    },
+    [overdueLogPrompt, executeLogDose]
+  );
+
+  if (loading && rows.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingWrap}>
@@ -268,20 +403,14 @@ const MedicationsHubScreen = ({ navigation }: any) => {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.homeBtn}
-            onPress={() => {
-              if (userId) {
-                navigation.navigate('Home', { screen: 'Dashboard', params: { userId } });
-              } else {
-                navigation.goBack();
-              }
-            }}
+            onPress={() => navigateToOwnerDashboard(navigation)}
           >
             <Ionicons name="home-outline" size={24} color={TEXT_DARK} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>התרופות שלי</Text>
           <TouchableOpacity
             style={styles.backBtn}
-            onPress={() => navigation.navigate('Home', { screen: OWNER_MAIN_TAB.Health })}
+            onPress={() => navigateBackToOwnerHealth(navigation)}
           >
             <Ionicons name="arrow-forward" size={28} color={TEXT_DARK} />
           </TouchableOpacity>
@@ -369,6 +498,8 @@ const MedicationsHubScreen = ({ navigation }: any) => {
               onEdit={handleEdit}
               onDelete={handleDelete}
               onDeleteGroup={handleDeleteGroup}
+              onLogDose={handleLogDose}
+              loggingDose={loggingDoseKey === item.key}
               formatDate={formatDateDisplay}
             />
           )}
@@ -390,6 +521,24 @@ const MedicationsHubScreen = ({ navigation }: any) => {
           onClose={() => setSortModalVisible(false)}
           value={medicationSort}
           onChange={setMedicationSort}
+        />
+
+        <MedicationOverdueMarkDoneModal
+          visible={Boolean(overdueLogPrompt)}
+          plannedDue={overdueLogPrompt?.plannedDue ?? null}
+          busy={overdueLogBusy}
+          onSelectPlanned={() => {
+            if (overdueLogPrompt?.plannedDue) {
+              void handleOverdueLogChoice(overdueLogPrompt.plannedDue);
+            }
+          }}
+          onSelectNow={() => {
+            void handleOverdueLogChoice(new Date());
+          }}
+          onClose={() => {
+            if (overdueLogBusy) return;
+            setOverdueLogPrompt(null);
+          }}
         />
       </View>
     </SafeAreaView>

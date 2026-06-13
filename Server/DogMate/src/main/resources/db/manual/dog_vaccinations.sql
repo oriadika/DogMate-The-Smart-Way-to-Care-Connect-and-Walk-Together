@@ -6,7 +6,9 @@ CREATE TABLE IF NOT EXISTS dog_vaccinations (
     administered_date DATE NOT NULL,
     next_due_date DATE,
     vet_clinic_name TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notification_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    remind_days_before TEXT DEFAULT '7,1'
 );
 
 CREATE INDEX IF NOT EXISTS idx_dog_vaccinations_dog_id ON dog_vaccinations (dog_id);

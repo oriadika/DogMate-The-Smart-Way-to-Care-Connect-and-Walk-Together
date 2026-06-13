@@ -30,20 +30,39 @@ public class FoodStockController {
 
     @GetMapping("/user/{userId}")
     public ResponseEntity<?> getMyDogsFoodStocks(@PathVariable String userId) {
-        List<FoodStockDTO> stocks = dogService.getUserFoodStocks(UUID.fromString(userId));
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("foodStocks", stocks);
-        
-        return ResponseEntity.ok(response);
+        try {
+            List<FoodStockDTO> stocks = dogService.getUserFoodStocks(UUID.fromString(userId));
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("foodStocks", stocks);
+
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "נכשלה טעינת מלאי המזון: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
     }
 
 
     @PutMapping("/{id}/renew")
-    public ResponseEntity<FoodStockDTO> renewFoodStock(@PathVariable UUID id) {
-        FoodStockDTO updatedStock = dogService.renewFoodStock(id);
-        return ResponseEntity.ok(updatedStock);
+    public ResponseEntity<?> renewFoodStock(@PathVariable UUID id) {
+        try {
+            FoodStockDTO updatedStock = dogService.renewFoodStock(id);
+            return ResponseEntity.ok(updatedStock);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(errorBody(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(errorBody("נכשל חידוש המלאי: " + e.getMessage()));
+        }
     }
 
   
@@ -59,8 +78,22 @@ public class FoodStockController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<FoodStockDTO> updateFoodStock(@PathVariable UUID id,@RequestBody FoodStockDTO foodStockDTO) {
-        FoodStockDTO updatedStock = dogService.updateFoodStock(id, foodStockDTO);
-        return ResponseEntity.ok(updatedStock);
+    public ResponseEntity<?> updateFoodStock(@PathVariable UUID id, @RequestBody FoodStockDTO foodStockDTO) {
+        try {
+            FoodStockDTO updatedStock = dogService.updateFoodStock(id, foodStockDTO);
+            return ResponseEntity.ok(updatedStock);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(errorBody(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(errorBody("נכשל עדכון המלאי: " + e.getMessage()));
+        }
+    }
+
+    private Map<String, Object> errorBody(String message) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("error", message);
+        return response;
     }
 }

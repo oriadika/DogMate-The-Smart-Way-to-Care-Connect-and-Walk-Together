@@ -2,6 +2,7 @@ package com.DogMate.Domain;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -37,6 +38,19 @@ public class Reminder {
 
     @Column(name = "remindAt")
     private LocalDateTime remindAt;
+
+    @Column(name = "notification_enabled", nullable = false)
+    private boolean notificationEnabled = true;
+
+    @Column(name = "source_type")
+    private String sourceType;
+
+    @Column(name = "source_id")
+    private UUID sourceId;
+
+    @Column(name = "system_generated", nullable = false)
+    @ColumnDefault("false")
+    private boolean systemGenerated = false;
 
     // Default constructor for Hibernate
     public Reminder() {
@@ -107,6 +121,38 @@ public class Reminder {
 
     public void removeDog(Dog dog){
         this.dogs.remove(dog);
+    }
+
+    public boolean isNotificationEnabled() {
+        return notificationEnabled;
+    }
+
+    public void setNotificationEnabled(boolean notificationEnabled) {
+        this.notificationEnabled = notificationEnabled;
+    }
+
+    public String getSourceType() {
+        return sourceType;
+    }
+
+    public void setSourceType(String sourceType) {
+        this.sourceType = sourceType;
+    }
+
+    public UUID getSourceId() {
+        return sourceId;
+    }
+
+    public void setSourceId(UUID sourceId) {
+        this.sourceId = sourceId;
+    }
+
+    public boolean isSystemGenerated() {
+        return systemGenerated;
+    }
+
+    public void setSystemGenerated(boolean systemGenerated) {
+        this.systemGenerated = systemGenerated;
     }
 }
 

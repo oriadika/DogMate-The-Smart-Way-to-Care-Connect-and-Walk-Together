@@ -1,17 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { VaccinationRow } from '../../services/dogmateApi';
 import type { VaccinationGroup } from '../../utils/vaccinationGroups';
+import { getLatestVaccinationRecord } from '../../utils/vaccinationGroups';
 import {
-  getLatestNextDueDate,
-  getLatestVaccinationRecord,
-} from '../../utils/vaccinationGroups';
-import {
-  daysUntilIsoDate,
-  formatDaysToText,
-  getDaysUrgencyColor,
+  getCountdownPrimaryText,
+  getHealthHubCountdown,
 } from '../../utils/daysDisplay';
+import { isAdministeredToday } from '../../utils/healthLogDose';
 
 const PRIMARY_COLOR = '#7FB069';
 const TEXT_DARK = '#5C4033';
@@ -26,6 +23,8 @@ type Props = {
   onEdit: (item: VaccinationRow) => void;
   onDelete: (item: VaccinationRow) => void;
   onDeleteGroup: (group: VaccinationGroup) => void;
+  onLogDose?: (group: VaccinationGroup, latest: VaccinationRow) => void;
+  loggingDose?: boolean;
   formatDate: (iso: string) => string;
 };
 
@@ -36,15 +35,13 @@ export default function VaccinationGroupCard({
   onEdit,
   onDelete,
   onDeleteGroup,
+  onLogDose,
+  loggingDose = false,
   formatDate,
 }: Props) {
   const latest = getLatestVaccinationRecord(group.history);
-  const nextDueFromLatest = getLatestNextDueDate(group.history);
-  const daysUntilNext = daysUntilIsoDate(nextDueFromLatest);
-  const isOverdue = daysUntilNext != null && daysUntilNext < 0;
-  const displayDays = daysUntilNext == null ? null : isOverdue ? 0 : daysUntilNext;
-  const statusColor =
-    daysUntilNext == null ? MUTED : isOverdue ? '#EA5455' : getDaysUrgencyColor(daysUntilNext);
+  const loggedToday = latest ? isAdministeredToday(latest.administeredDate) : false;
+  const countdown = getHealthHubCountdown(latest?.nextDueDate ?? null, null, 'החיסון הבא');
 
   return (
     <View style={styles.card}>
@@ -55,11 +52,30 @@ export default function VaccinationGroupCard({
           <Text style={styles.summaryLine}>
             חיסון אחרון: {formatDate(group.lastAdministeredDate)}
           </Text>
-          {nextDueFromLatest ? (
-            <Text style={styles.nextDue}>חיסון הבא: {formatDate(nextDueFromLatest)}</Text>
+          {latest?.nextDueDate ? (
+            <Text style={styles.nextDue}>חיסון הבא: {formatDate(latest.nextDueDate)}</Text>
           ) : (
             <Text style={styles.nextDueMuted}>חיסון הבא: לא נקבע</Text>
           )}
+          {latest && onLogDose ? (
+            <TouchableOpacity
+              style={[
+                styles.logDoseBtn,
+                (loggingDose || loggedToday) && styles.logDoseBtnDisabled,
+              ]}
+              onPress={() => !loggingDose && !loggedToday && onLogDose(group, latest)}
+              disabled={loggingDose || loggedToday}
+              activeOpacity={0.85}
+            >
+              {loggingDose ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.logDoseBtnText}>
+                  {loggedToday ? 'נרשם היום ✓' : 'בוצע החיסון'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {latest ? (
@@ -73,13 +89,20 @@ export default function VaccinationGroupCard({
               </TouchableOpacity>
             </View>
             <View style={styles.statusContainer}>
-              <Text style={styles.statusLabel}>ימים עד החיסון הבא:</Text>
-              {displayDays != null ? (
+              <Text style={styles.statusLabel}>{countdown?.label ?? 'ימים עד החיסון הבא:'}</Text>
+              {countdown ? (
                 <>
-                  <Text style={[styles.statusValue, { color: statusColor }]}>{displayDays}</Text>
-                  <Text style={styles.statusSubtext}>
-                    ({isOverdue ? `באיחור ${formatDaysToText(Math.abs(daysUntilNext!))}` : formatDaysToText(displayDays)})
+                  <Text
+                    style={[
+                      countdown.displayText ? styles.statusMessage : styles.statusValue,
+                      { color: countdown.urgencyColor },
+                    ]}
+                  >
+                    {getCountdownPrimaryText(countdown)}
                   </Text>
+                  {countdown.subtext ? (
+                    <Text style={styles.statusSubtext}>{countdown.subtext}</Text>
+                  ) : null}
                 </>
               ) : (
                 <Text style={styles.statusUnset}>לא נקבע</Text>
@@ -168,6 +191,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
+  statusMessage: {
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
   statusSubtext: {
     fontSize: 11,
     color: MUTED,
@@ -198,6 +227,28 @@ const styles = StyleSheet.create({
     color: MUTED,
     marginTop: 4,
     textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  logDoseBtn: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+    maxWidth: '78%',
+    backgroundColor: PRIMARY_COLOR,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 30,
+  },
+  logDoseBtnDisabled: {
+    backgroundColor: '#B4D6A5',
+  },
+  logDoseBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
     writingDirection: 'rtl',
   },
   historySection: {

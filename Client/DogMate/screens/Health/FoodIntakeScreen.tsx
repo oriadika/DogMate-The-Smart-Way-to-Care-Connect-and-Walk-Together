@@ -15,7 +15,29 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, userAPI, foodStockAPI } from '../../services/dogmateApi';
+import { dogAPI, foodStockAPI, reminderAPI, type FoodStockRow } from '../../services/api';
+import ReminderSettingsSection from '../../components/health/ReminderSettingsSection';
+import { DEFAULT_FOOD_NOTIFICATION, type FoodNotificationSettings } from '../../types/notifications';
+import { resyncAllNotificationsInBackground } from '../../services/notificationScheduler';
+import {
+  findFoodReminderForStock,
+  markHomeDataDirty,
+  getHomeCache,
+  refreshHomeRemindersFromServer,
+  shouldForceHomeRefresh,
+  type HomeReminderRow,
+} from '../../utils/homeDataCache';
+import {
+  getFoodInventoryCache,
+  markFoodInventoryDirty,
+  refreshFoodInventoryFromServer,
+  transformFoodStockRow,
+  upsertFoodInventoryItem,
+  shouldForceFoodInventoryRefresh,
+  clearFoodInventoryDirty,
+} from '../../utils/healthDataCache';
+import { useScreenLifecycleGuard } from '../../utils/screenLifecycle';
+import { resolveOwnerUserId, getOwnerSession } from '../../utils/ownerSession';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 
@@ -27,42 +49,200 @@ interface Dog {
 }
 
 const FoodIntakeScreen = ({ navigation, route }: any) => {
+  const inventoryId = route?.params?.inventoryId as string | undefined;
+  const isEditMode = Boolean(inventoryId);
+
   const [userId, setUserId] = useState<string | null>(null);
   const [dogs, setDogs] = useState<Dog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [showDogModal, setShowDogModal] = useState(false);
-  const [selectedDogs, setSelectedDogs] = useState<string[]>([]); // Array of dog IDs
+  const [selectedDogs, setSelectedDogs] = useState<string[]>([]);
   const [dailyConsumption, setDailyConsumption] = useState('');
   const [bagSize, setBagSize] = useState('');
-  const [currentAmount, setCurrentAmount] = useState(''); // כמות נוכחית במלאי (ק״ג)
-
-  // Load user and dogs data - same logic as HomeScreen
-  useFocusEffect(
-    useCallback(() => {
-      loadUserAndDogs();
-    }, [])
+  const [currentAmount, setCurrentAmount] = useState('');
+  const [foodStockId, setFoodStockId] = useState<string | null>(inventoryId ?? null);
+  const [initialSelectedDogs, setInitialSelectedDogs] = useState<string[]>([]);
+  const [notificationSettings, setNotificationSettings] = useState<FoodNotificationSettings>(
+    DEFAULT_FOOD_NOTIFICATION
   );
+  const [linkedFoodReminder, setLinkedFoodReminder] = useState<HomeReminderRow | null>(null);
+  const [loadedSyncSnapshot, setLoadedSyncSnapshot] = useState<{
+    threshold: number | null;
+    currentAmount: string;
+    dailyConsumption: string;
+  } | null>(null);
 
-  const loadUserAndDogs = async () => {
+  const {
+    isMountedRef,
+    markMounted,
+    beginAsyncWork,
+    isAsyncWorkCurrent,
+    runDeferredBlurCleanup,
+  } = useScreenLifecycleGuard();
+
+  const loadInitialData = useCallback(async (editStockId?: string) => {
+    const generation = beginAsyncWork();
     try {
-      setLoading(true);
-      // Fetch current logged-in user - same as HomeScreen
-      const userResponse = await userAPI.getLoggedUsers();
-      if (userResponse.success && userResponse.users && userResponse.users.length > 0) {
-        const currentUser = userResponse.users[0];
-        setUserId(currentUser.id);
+      if (!isAsyncWorkCurrent(generation)) return;
 
-        // Fetch dogs for this user - same as HomeScreen
-        const dogsResponse = await dogAPI.getDogsForUser(currentUser.id);
+      const uid = resolveOwnerUserId(undefined, getOwnerSession().userId ?? null);
+      if (!uid) {
+        Alert.alert('שגיאה', 'לא נמצא משתמש מחובר');
+        return;
+      }
+      setUserId(uid);
+
+      const homeDogs = getHomeCache(uid)?.dogs;
+      const hasCachedDogs = Boolean(homeDogs && homeDogs.length > 0);
+      if (hasCachedDogs) {
+        setDogs(
+          homeDogs!.map((d: any) => ({
+            id: String(d.id),
+            name: String(d.name || 'כלב'),
+            breed: String(d.breed || ''),
+            profileImageUrl: d.profileImageUrl || d.profileImageURL,
+          }))
+        );
+      }
+
+      const cachedItem = editStockId
+        ? getFoodInventoryCache(uid)?.items.find((item) => item.id === editStockId)
+        : undefined;
+
+      if (!editStockId && hasCachedDogs) {
+        if (isAsyncWorkCurrent(generation)) setLoading(false);
+      } else if (!cachedItem) {
+        setLoading(true);
+      }
+
+      if (!hasCachedDogs) {
+        const dogsResponse = await dogAPI.getDogsForUser(uid);
+        if (!isAsyncWorkCurrent(generation)) return;
         if (dogsResponse.success && dogsResponse.dogs) {
           setDogs(dogsResponse.dogs);
         }
       }
+
+      if (editStockId) {
+        setFoodStockId(editStockId);
+
+        const forceRefresh =
+          shouldForceFoodInventoryRefresh(uid) || shouldForceHomeRefresh(uid);
+
+        if (cachedItem && !forceRefresh) {
+          setBagSize(cachedItem.bagSize);
+          setCurrentAmount(cachedItem.currentAmount);
+          setDailyConsumption(cachedItem.dailyConsumption);
+          const dogIds = cachedItem.dogs.map((d) => d.id);
+          setSelectedDogs(dogIds);
+          setInitialSelectedDogs(dogIds);
+          setNotificationSettings({
+            notificationEnabled: cachedItem.notificationEnabled,
+            lowStockThresholdDays:
+              cachedItem.lowStockThresholdDays ?? DEFAULT_FOOD_NOTIFICATION.lowStockThresholdDays,
+          });
+          if (isAsyncWorkCurrent(generation)) setLoading(false);
+        } else if (!cachedItem) {
+          setLoading(true);
+        }
+
+        const [stocksSettled, remindersSettled] = await Promise.allSettled([
+          forceRefresh
+            ? refreshFoodInventoryFromServer(uid).then((items) =>
+                items.find((item) => item.id === editStockId)
+              )
+            : foodStockAPI.getFoodStocksForUser(uid).then((response) => {
+                const stock = response.foodStocks?.find((s: FoodStockRow) => s.id === editStockId);
+                if (stock) {
+                  upsertFoodInventoryItem(uid, transformFoodStockRow(stock));
+                }
+                return stock ? transformFoodStockRow(stock) : undefined;
+              }),
+          refreshHomeRemindersFromServer(uid).catch(async () => {
+            const homeReminders = getHomeCache(uid)?.reminders ?? [];
+            if (homeReminders.length > 0) return homeReminders;
+            const response = await reminderAPI.getRemindersForUser(uid);
+            return response.success && response.reminders ? response.reminders : [];
+          }),
+        ]);
+
+        if (!isAsyncWorkCurrent(generation)) return;
+
+        const stockItem =
+          stocksSettled.status === 'fulfilled' ? stocksSettled.value : cachedItem;
+        const reminders =
+          remindersSettled.status === 'fulfilled' ? remindersSettled.value : getHomeCache(uid)?.reminders ?? [];
+
+        if (!stockItem) {
+          Alert.alert('שגיאה', 'מלאי מזון לא נמצא', [
+            { text: 'אישור', onPress: () => navigation.goBack() },
+          ]);
+          return;
+        }
+
+        setBagSize(stockItem.bagSize);
+        setCurrentAmount(stockItem.currentAmount);
+        setDailyConsumption(stockItem.dailyConsumption);
+        const dogIds = stockItem.dogs.map((d) => d.id);
+        setSelectedDogs(dogIds);
+        setInitialSelectedDogs(dogIds);
+
+        const nextNotificationSettings = {
+          notificationEnabled: stockItem.notificationEnabled,
+          lowStockThresholdDays:
+            stockItem.lowStockThresholdDays ?? DEFAULT_FOOD_NOTIFICATION.lowStockThresholdDays,
+        };
+        setNotificationSettings(nextNotificationSettings);
+        setLoadedSyncSnapshot({
+          threshold: nextNotificationSettings.lowStockThresholdDays,
+          currentAmount: stockItem.currentAmount,
+          dailyConsumption: stockItem.dailyConsumption,
+        });
+
+        const foodReminder = findFoodReminderForStock(reminders, editStockId);
+        setLinkedFoodReminder(foodReminder);
+
+        if (forceRefresh) {
+          clearFoodInventoryDirty(uid);
+        }
+      } else if (!hasCachedDogs && isAsyncWorkCurrent(generation)) {
+        setLoading(false);
+      }
     } catch (error: any) {
-      console.error('Error loading user/dogs:', error);
-      Alert.alert('שגיאה', 'שגיאה בטעינת הנתונים');
+      if (!isAsyncWorkCurrent(generation)) return;
+      console.error('Error loading food intake data:', error);
+      Alert.alert('שגיאה', error?.message || 'שגיאה בטעינת הנתונים');
     } finally {
-      setLoading(false);
+      if (isAsyncWorkCurrent(generation)) {
+        setLoading(false);
+      }
+    }
+  }, [beginAsyncWork, isAsyncWorkCurrent, navigation]);
+
+  useFocusEffect(
+    useCallback(() => {
+      markMounted();
+      void loadInitialData(inventoryId);
+      return () => {
+        runDeferredBlurCleanup(() => {
+          if (!isMountedRef.current) return;
+          setShowDogModal(false);
+        });
+      };
+    }, [inventoryId, loadInitialData, markMounted, runDeferredBlurCleanup, isMountedRef])
+  );
+
+  const refreshDogsList = async () => {
+    const uid = userId;
+    if (!uid) return;
+    try {
+      const dogsResponse = await dogAPI.getDogsForUser(uid);
+      if (dogsResponse.success && dogsResponse.dogs) {
+        setDogs(dogsResponse.dogs);
+      }
+    } catch (error) {
+      console.warn('Failed to refresh dogs list:', error);
     }
   };
 
@@ -104,6 +284,44 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
     return selectedDogNames.join(', ');
   };
 
+  const getSelectedDogNames = (): string[] =>
+    selectedDogs
+      .map((dogId) => dogs.find((d) => d.id === dogId)?.name)
+      .filter((name): name is string => Boolean(name));
+
+  const foodPreviewContext = (() => {
+    const dailyGrams = parseFloat(dailyConsumption);
+    const currentKg = parseFloat(currentAmount);
+    if (Number.isNaN(dailyGrams) || Number.isNaN(currentKg) || dailyGrams <= 0 || currentKg < 0) {
+      return undefined;
+    }
+    return {
+      currentKg,
+      dailyGrams,
+      dogNames: getSelectedDogNames(),
+    };
+  })();
+
+  const linkedReminderPreview = (() => {
+    if (!linkedFoodReminder?.remindAt || !loadedSyncSnapshot) return null;
+    const reminderDate = new Date(linkedFoodReminder.remindAt);
+    if (Number.isNaN(reminderDate.getTime())) return null;
+
+    const inventoryUnchanged =
+      currentAmount === loadedSyncSnapshot.currentAmount &&
+      dailyConsumption === loadedSyncSnapshot.dailyConsumption;
+    const thresholdUnchanged =
+      notificationSettings.lowStockThresholdDays === loadedSyncSnapshot.threshold;
+
+    if (!inventoryUnchanged || !thresholdUnchanged) return null;
+
+    return {
+      title: linkedFoodReminder.title || '',
+      description: linkedFoodReminder.description || '',
+      remindAt: reminderDate,
+    };
+  })();
+
   // Calculate and add to inventory
   const handleCalculate = async () => {
     // Validation
@@ -132,6 +350,15 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
       return;
     }
 
+    if (
+      notificationSettings.notificationEnabled &&
+      (notificationSettings.lowStockThresholdDays == null ||
+        notificationSettings.lowStockThresholdDays <= 0)
+    ) {
+      Alert.alert('שגיאה', 'יש להגדיר כמה ימים לפני סיום המלאי תופיע התזכורת בדף הבית');
+      return;
+    }
+
     // Calculate days remaining until bag is finished
     // currentAmount is in kg, dailyConsumption is in grams
     const currentGrams = currentKg * 1000;
@@ -156,36 +383,116 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
     }
 
     try {
-      // Save to database - create food stock for the first dog
+      setSaving(true);
+
+      const applyInventoryCacheUpdate = (stockRow: FoodStockRow) => {
+        if (!userId) return;
+        const item = transformFoodStockRow({
+          ...stockRow,
+          dogs: selectedDogsInfo.map((d) => ({ id: d!.id, name: d!.name, profileImageUrl: d!.imageUrl })),
+        });
+        upsertFoodInventoryItem(userId, item);
+        markHomeDataDirty(userId);
+        markFoodInventoryDirty(userId);
+        resyncAllNotificationsInBackground(userId);
+      };
+
+      if (isEditMode && foodStockId && userId) {
+        const dogsToConnect = selectedDogs.filter((dogId) => !initialSelectedDogs.includes(dogId));
+        if (dogsToConnect.length > 0) {
+          await Promise.all(
+            dogsToConnect.map((dogId) => foodStockAPI.connectFoodStockToDog(dogId, foodStockId))
+          );
+        }
+
+        const updatedStock = await foodStockAPI.updateFoodStock(
+          foodStockId,
+          'מזון כלבים',
+          bagKg,
+          dailyGrams,
+          currentKg,
+          notificationSettings.notificationEnabled,
+          notificationSettings.lowStockThresholdDays
+        );
+
+        applyInventoryCacheUpdate(
+          (updatedStock as FoodStockRow)?.id
+            ? (updatedStock as FoodStockRow)
+            : {
+                id: foodStockId,
+                brandName: 'מזון כלבים',
+                bagSizeInKg: bagKg,
+                dailyConsumptionInGram: dailyGrams,
+                currentLevelInKg: currentKg,
+                notificationEnabled: notificationSettings.notificationEnabled,
+                lowStockThresholdDays: notificationSettings.lowStockThresholdDays,
+              }
+        );
+
+        try {
+          await refreshHomeRemindersFromServer(userId);
+        } catch (refreshError) {
+          console.warn('Failed to refresh home reminders after food stock update:', refreshError);
+        }
+
+        navigation.navigate('FoodInventoryHub');
+        Alert.alert('הצלחה', 'מלאי המזון עודכן בהצלחה!');
+        return;
+      }
+
       const firstDogId = selectedDogs[0];
       const response = await foodStockAPI.createFoodStock(
         firstDogId,
-        'מזון כלבים', // Default brand name
+        'מזון כלבים',
         bagKg,
         dailyGrams,
         currentKg
       );
 
-      // If there are more dogs, connect the food stock to them
-      if (selectedDogs.length > 1 && response.foodStock?.id) {
-        for (let i = 1; i < selectedDogs.length; i++) {
-          try {
-            await foodStockAPI.connectFoodStockToDog(selectedDogs[i], response.foodStock.id);
-          } catch (connectError) {
-            console.error('Failed to connect food stock to dog:', connectError);
-          }
+      const newStockId = response.foodStockId ?? response.foodStock?.id;
+
+      if (selectedDogs.length > 1 && newStockId) {
+        await Promise.all(
+          selectedDogs.slice(1).map((dogId) =>
+            foodStockAPI.connectFoodStockToDog(dogId, newStockId).catch((connectError) => {
+              console.error('Failed to connect food stock to dog:', connectError);
+            })
+          )
+        );
+      }
+
+      let savedStock: FoodStockRow | undefined;
+      if (newStockId) {
+        savedStock = (await foodStockAPI.updateFoodStock(
+          newStockId,
+          'מזון כלבים',
+          bagKg,
+          dailyGrams,
+          currentKg,
+          notificationSettings.notificationEnabled,
+          notificationSettings.lowStockThresholdDays
+        )) as FoodStockRow;
+      }
+
+      if (savedStock) {
+        applyInventoryCacheUpdate(savedStock);
+      }
+
+      if (userId) {
+        try {
+          await refreshHomeRemindersFromServer(userId);
+        } catch (refreshError) {
+          console.warn('Failed to refresh home reminders after food stock create:', refreshError);
         }
       }
 
-      Alert.alert('הצלחה', 'מלאי המזון נשמר בהצלחה!', [
-        {
-          text: 'אישור',
-          onPress: () => navigation.navigate('FoodInventoryHub', { refresh: true }),
-        },
-      ]);
+      navigation.navigate('FoodInventoryHub');
+      Alert.alert('הצלחה', 'מלאי המזון נשמר בהצלחה!');
     } catch (error: any) {
       console.error('Error saving food stock:', error);
       Alert.alert('שגיאה', error.message || 'שגיאה בשמירת מלאי המזון');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -206,7 +513,9 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
         {/* Header */}
         <View style={styles.header}>
           <View style={{ width: 40 }} />
-          <Text style={styles.headerTitle}>חישוב מלאי מזון</Text>
+          <Text style={styles.headerTitle}>
+            {isEditMode ? 'עריכת מלאי מזון' : 'חישוב מלאי מזון'}
+          </Text>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
@@ -226,8 +535,7 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
             <TouchableOpacity
               style={styles.pickerInput}
               onPress={async () => {
-                // Reload dogs before opening modal - same as HomeScreen does
-                await loadUserAndDogs();
+                await refreshDogsList();
                 setShowDogModal(true);
               }}
               activeOpacity={0.7}
@@ -296,13 +604,28 @@ const FoodIntakeScreen = ({ navigation, route }: any) => {
             </View>
           </View>
 
+          <ReminderSettingsSection
+            variant="food"
+            value={notificationSettings}
+            onChange={setNotificationSettings}
+            previewContext={foodPreviewContext}
+            linkedReminder={linkedReminderPreview}
+          />
+
           {/* Calculate Button */}
           <TouchableOpacity
-            style={styles.calculateButton}
+            style={[styles.calculateButton, saving && styles.calculateButtonDisabled]}
             onPress={handleCalculate}
             activeOpacity={0.85}
+            disabled={saving}
           >
-            <Text style={styles.calculateButtonText}>חשב והצג</Text>
+            {saving ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.calculateButtonText}>
+                {isEditMode ? 'שמור שינויים' : 'חשב והצג'}
+              </Text>
+            )}
           </TouchableOpacity>
         </ScrollView>
 
@@ -494,7 +817,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
@@ -513,7 +836,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginLeft: 8,
     borderWidth: 1,
     borderColor: '#E0D5C7',
   },
@@ -533,6 +856,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
+  },
+  calculateButtonDisabled: {
+    opacity: 0.7,
   },
   calculateButtonText: {
     color: '#FFFFFF',

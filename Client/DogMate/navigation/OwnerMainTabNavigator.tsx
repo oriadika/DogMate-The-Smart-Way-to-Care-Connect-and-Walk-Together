@@ -10,6 +10,8 @@ import OwnerWalkersScreen from '../screens/OwnerWalkersScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import HealthScreen from '../screens/Health/HealthScreen';
 import { OWNER_MAIN_TAB } from './ownerTabRoutes';
+import websocketService from '../services/websocket';
+import { getOwnerSession, setOwnerSession } from '../utils/ownerSession';
 
 const Tab = createBottomTabNavigator();
 
@@ -90,7 +92,29 @@ function RaisedHomeTabButton({ onPress, accessibilityState }: BottomTabBarButton
 
 export default function OwnerMainTabNavigator({ route }: { route: { params?: OwnerStackParams } }) {
   const insets = useSafeAreaInsets();
-  const ownerParams = React.useMemo(() => flattenOwnerRouteParams(route.params as Record<string, unknown>), [route.params]);
+  const ownerParams = React.useMemo(() => {
+    const incoming = flattenOwnerRouteParams(route.params as Record<string, unknown>);
+    setOwnerSession(incoming);
+    const session = getOwnerSession();
+    if (incoming.refresh !== undefined) {
+      return { ...session, refresh: incoming.refresh };
+    }
+    return session;
+  }, [route.params]);
+
+  React.useEffect(() => {
+    const userId = ownerParams.userId;
+    if (!userId || ownerParams.userRole === 'walker') {
+      return;
+    }
+    const connectTimer = setTimeout(() => {
+      void websocketService.ensureConnected(userId);
+    }, 2500);
+    return () => {
+      clearTimeout(connectTimer);
+      websocketService.disconnect();
+    };
+  }, [ownerParams.userId, ownerParams.userRole]);
 
   /** Extra dip so the white fill clearly reaches below icons/labels (avoids the bar “ending” too high). */
   const tabBarBottomExtra = 0;

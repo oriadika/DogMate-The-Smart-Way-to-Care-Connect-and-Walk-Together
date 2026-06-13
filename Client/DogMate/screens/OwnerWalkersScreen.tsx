@@ -2,7 +2,7 @@
  * מסך ייעודי לבעלי כלבים: רשימת דוגווקרים עם סינון, מיון ודירוגים.
  * נפרד מ-Profile (טיולים/מפה) כדי שהניווט יוביל תמיד לחוויה הנכונה.
  */
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   SafeAreaView,
   View,
@@ -20,15 +20,30 @@ import {
   ScrollView,
 } from 'react-native';
 import * as Linking from 'expo-linking';
+import { useFocusEffect } from '@react-navigation/native';
 import { FontAwesome, FontAwesome5, Ionicons } from '@expo/vector-icons';
-import { userAPI, dogWalkerAPI, type ProfessionalProfileResponse } from '../services/dogmateApi';
+import { dogWalkerAPI, type ProfessionalProfileResponse } from '../services/api';
+import { resolveOwnerUserId, getOwnerSession } from '../utils/ownerSession';
+import { deferScreenCleanup, useScreenLifecycleGuard } from '../utils/screenLifecycle';
+import {
+  clearWalkersDirty,
+  fetchAndCacheLoggedUsers,
+  filterWalkersForOwner,
+  getInitialLoggedUsersState,
+  getInitialWalkersState,
+  getWalkersCache,
+  markWalkersDirty,
+  setWalkersCache,
+  shouldForceWalkersRefresh,
+  type FormattedLoggedUser,
+} from '../utils/walkersDataCache';
 import HebrewAsciiParensText from '../components/HebrewAsciiParensText';
 import { formatLocationLineForStoredCity } from '../utils/locationFieldCodec';
 import {
   displayAvailabilityFromStored,
   getPricingDisplayLinesFromStored,
 } from '../utils/walkerOfferingDisplay';
-import locationService, { LocationService } from '../services/dogmateLocation';
+import locationService, { LocationService } from '../services/location';
 import WalkerListToolbar from '../components/walkerList/WalkerListToolbar';
 import WalkerFiltersModal from '../components/walkerList/WalkerFiltersModal';
 import WalkerSortModal from '../components/walkerList/WalkerSortModal';
@@ -52,6 +67,7 @@ const WHATSAPP_GREEN = '#25D366';
 const WHATSAPP_PREFILL_MESSAGE =
   'שלום, ראיתי את הפרופיל שלך ב-DogMate ואשמח לקבוע טיול לכלב שלי!';
 const USERS_REFRESH_INTERVAL_MS = 5000;
+const WALKERS_REFRESH_INTERVAL_MS = 30000;
 
 function getWalkerPhoneRaw(item: ProfessionalProfileResponse): string | number | null | undefined {
   const ext = item as ProfessionalProfileResponse & {
@@ -73,14 +89,30 @@ const formatReviewDate = (rawDate: string | null | undefined): string => {
 };
 
 const OwnerWalkersScreen = ({ navigation, route }: any) => {
-  const ownerId = route?.params?.userId as string | undefined;
+  const initialOwnerId = resolveOwnerUserId(route?.params?.userId, getOwnerSession().userId ?? null);
+  const initialWalkers = getInitialWalkersState(initialOwnerId);
+  const initialLogged = getInitialLoggedUsersState(initialOwnerId ?? undefined);
 
-  const [availableWalkers, setAvailableWalkers] = useState<ProfessionalProfileResponse[]>([]);
-  const [loadingWalkers, setLoadingWalkers] = useState(true);
-  const [loggedUsers, setLoggedUsers] = useState<any[]>([]);
+  const [availableWalkers, setAvailableWalkers] = useState<ProfessionalProfileResponse[]>(
+    initialWalkers.walkers
+  );
+  const [loadingWalkers, setLoadingWalkers] = useState(initialWalkers.loading);
+  const [ownerId, setOwnerId] = useState<string | null>(initialWalkers.ownerId);
+  const [loggedUsers, setLoggedUsers] = useState<FormattedLoggedUser[]>(initialLogged.users);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(
     null
   );
+  const walkersRef = useRef(availableWalkers);
+  walkersRef.current = availableWalkers;
+
+  const {
+    isMountedRef,
+    markMounted,
+    markUnmounted,
+    cancelInflightAsyncWork,
+    beginAsyncWork,
+    isAsyncWorkCurrent,
+  } = useScreenLifecycleGuard();
 
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [selectedWalker, setSelectedWalker] = useState<ProfessionalProfileResponse | null>(null);
@@ -94,75 +126,94 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
   const [walkerFilterModalVisible, setWalkerFilterModalVisible] = useState(false);
   const [walkerSortModalVisible, setWalkerSortModalVisible] = useState(false);
 
-  const fetchAvailableWalkers = useCallback(
-    async (options?: { showLoader?: boolean }) => {
-      const shouldShowLoader = options?.showLoader ?? true;
-      try {
-        if (shouldShowLoader) setLoadingWalkers(true);
-        const data = await dogWalkerAPI.getWalkersWithProfessionalProfiles(ownerId);
-        const list = Array.isArray(data) ? data : [];
-        const filtered = list.filter((w) => String(w.userId) !== String(ownerId));
-        setAvailableWalkers(filtered);
-      } catch (error) {
-        console.error('Failed to fetch available walkers:', error);
-        if (shouldShowLoader) {
-          Alert.alert('שגיאה', 'טעינת רשימת הדוגווקרים נכשלה');
-        }
-      } finally {
-        if (shouldShowLoader) setLoadingWalkers(false);
-      }
-    },
-    [ownerId]
-  );
+  const loadAvailableWalkers = useCallback(async () => {
+    const generation = beginAsyncWork();
+    try {
+      if (!isAsyncWorkCurrent(generation)) return;
 
-  useEffect(() => {
-    fetchAvailableWalkers();
-    const interval = setInterval(() => fetchAvailableWalkers({ showLoader: false }), 10000);
-    return () => clearInterval(interval);
-  }, [fetchAvailableWalkers]);
+      const uid = resolveOwnerUserId(route?.params?.userId, ownerId);
+      if (!uid) {
+        setAvailableWalkers([]);
+        setLoadingWalkers(false);
+        return;
+      }
+      setOwnerId(uid);
+
+      const forceRefresh = shouldForceWalkersRefresh(uid);
+      const cached = !forceRefresh ? getWalkersCache(uid) : undefined;
+
+      if (cached) {
+        setAvailableWalkers(cached.walkers);
+        setLoadingWalkers(false);
+      } else if (walkersRef.current.length === 0) {
+        setLoadingWalkers(true);
+      }
+
+      if (forceRefresh) {
+        clearWalkersDirty(uid);
+      }
+
+      const data = await dogWalkerAPI.getWalkersWithProfessionalProfiles(uid);
+      if (!isAsyncWorkCurrent(generation)) return;
+
+      const list = Array.isArray(data) ? data : [];
+      const filtered = filterWalkersForOwner(list, uid);
+      setAvailableWalkers(filtered);
+      setWalkersCache(uid, filtered);
+    } catch (error) {
+      if (!isAsyncWorkCurrent(generation)) return;
+      console.error('Failed to fetch available walkers:', error);
+      if (walkersRef.current.length === 0) {
+        Alert.alert('שגיאה', 'טעינת רשימת הדוגווקרים נכשלה');
+      }
+    } finally {
+      if (isAsyncWorkCurrent(generation)) {
+        setLoadingWalkers(false);
+      }
+    }
+  }, [beginAsyncWork, isAsyncWorkCurrent, ownerId, route?.params?.userId]);
 
   const fetchLoggedUsersForDistances = useCallback(async () => {
+    const uid = resolveOwnerUserId(route?.params?.userId, ownerId);
     try {
-      const data = await userAPI.getLoggedUsers();
-      const currentUserId = ownerId;
-      if (!data.success || !data.users) return;
-
-      const formattedUsers = data.users
-        .filter((user: any) => user.id !== currentUserId)
-        .map((user: any) => {
-          const userObj: any = {
-            id: user.id,
-            name:
-              user.type === 'RegularUser' || user.type === 'DogWalkerUser'
-                ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
-                : `Admin: ${user.email}`,
-            role:
-              user.type === 'RegularUser'
-                ? 'בעל כלב'
-                : user.type === 'DogWalkerUser'
-                  ? 'דוגווקר'
-                  : `מנהל (רמה ${user.permissionLevel})`,
-            email: user.email,
-            type: user.type,
-          };
-
-          const canHaveLocation =
-            (user.type === 'RegularUser' || user.type === 'DogWalkerUser') &&
-            user.latitude != null &&
-            user.longitude != null;
-          if (canHaveLocation) {
-            userObj.latitude = user.latitude;
-            userObj.longitude = user.longitude;
-          }
-
-          return userObj;
-        });
-
-      setLoggedUsers(formattedUsers);
+      const formatted = await fetchAndCacheLoggedUsers(uid ?? undefined);
+      if (isMountedRef.current) {
+        setLoggedUsers(formatted);
+      }
     } catch (error) {
       console.error('Failed to fetch logged users:', error);
     }
-  }, [ownerId]);
+  }, [isMountedRef, ownerId, route?.params?.userId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      markMounted();
+      void loadAvailableWalkers();
+      void fetchLoggedUsersForDistances();
+
+      const walkersInterval = setInterval(() => {
+        void loadAvailableWalkers();
+      }, WALKERS_REFRESH_INTERVAL_MS);
+      const usersInterval = setInterval(() => {
+        void fetchLoggedUsersForDistances();
+      }, USERS_REFRESH_INTERVAL_MS);
+
+      return () => {
+        cancelInflightAsyncWork();
+        clearInterval(walkersInterval);
+        clearInterval(usersInterval);
+        deferScreenCleanup(() => {
+          markUnmounted();
+        });
+      };
+    }, [
+      loadAvailableWalkers,
+      fetchLoggedUsersForDistances,
+      markMounted,
+      markUnmounted,
+      cancelInflightAsyncWork,
+    ])
+  );
 
   useEffect(() => {
     let alive = true;
@@ -175,13 +226,10 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
         /* ignore */
       }
     })();
-    fetchLoggedUsersForDistances();
-    const id = setInterval(() => fetchLoggedUsersForDistances(), USERS_REFRESH_INTERVAL_MS);
     return () => {
       alive = false;
-      clearInterval(id);
     };
-  }, [fetchLoggedUsersForDistances]);
+  }, []);
 
   const walkerDistanceByUserId = useMemo(() => {
     if (!userLocation) return {};
@@ -269,7 +317,8 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
       setSelectedWalker(null);
       setRatingComment('');
       Alert.alert('הצלחה', 'הדירוג נשמר בהצלחה');
-      await fetchAvailableWalkers({ showLoader: false });
+      markWalkersDirty(String(ownerId));
+      await loadAvailableWalkers();
     } catch (error: any) {
       Alert.alert('שגיאה', error?.message || 'שמירת הדירוג נכשלה');
     } finally {
@@ -453,7 +502,8 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
                                     currentOwnerId
                                   );
                                   Alert.alert('הצלחה', 'הביקורת נמחקה בהצלחה');
-                                  await fetchAvailableWalkers({ showLoader: false });
+                                  markWalkersDirty(currentOwnerId);
+                                  await loadAvailableWalkers();
                                 } catch (error: any) {
                                   Alert.alert('שגיאה', error?.message || 'מחיקת הביקורת נכשלה');
                                 } finally {
@@ -482,7 +532,7 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
   };
 
   const listEmpty =
-    loadingWalkers ? (
+    loadingWalkers && availableWalkers.length === 0 ? (
       <View style={styles.loadingContainer}>
         <ActivityIndicator color={PRIMARY_COLOR} size="large" />
         <Text style={styles.loadingText}>טוען דוגווקרים...</Text>
@@ -505,7 +555,12 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
       <View style={styles.headerRow}>
         <TouchableOpacity
           onPress={() => {
-            navigation.navigate(OWNER_MAIN_TAB.Dashboard);
+            const parent = navigation.getParent();
+            if (parent && (parent as any).getState?.()?.type === 'tab') {
+              navigation.navigate(OWNER_MAIN_TAB.Dashboard);
+              return;
+            }
+            navigation.goBack();
           }}
         >
           <Ionicons name="arrow-forward" size={28} color="#5C4033" />

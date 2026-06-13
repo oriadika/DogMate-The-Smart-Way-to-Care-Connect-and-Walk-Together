@@ -14,4 +14,8 @@ public class ReminderResponse {
     public LocalDateTime remindAt;
 
     public String description;
+    public boolean notificationEnabled;
+    public String sourceType;
+    public UUID sourceId;
+    public boolean systemGenerated;
 }

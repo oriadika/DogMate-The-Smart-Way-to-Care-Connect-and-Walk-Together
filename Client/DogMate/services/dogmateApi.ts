@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { getApiBaseUrlWithPath } from './config';
+import { isAbortError } from '../utils/isAbortError';
 
 
 const API_BASE_URL = getApiBaseUrlWithPath('api');
@@ -109,6 +110,28 @@ export interface VerifyEmailPayload {
 
 export interface ResendVerificationPayload {
   email: string;
+}
+
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  success: boolean;
+  message: string;
+  /** False if SMTP is not configured or send failed — check server logs for OTP. */
+  resetEmailSent?: boolean;
+}
+
+export interface ResetPasswordPayload {
+  email: string;
+  code: string;
+  newPassword: string;
+}
+
+export interface ResetPasswordResponse {
+  success: boolean;
+  message: string;
 }
 
 export interface VerifyEmailResponse {
@@ -353,6 +376,32 @@ export const userAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage = getAuthFlowErrorMessage(error, 'שליחת קוד האימות מחדש נכשלה');
+      throw new Error(errorMessage);
+    }
+  },
+
+  forgotPassword: async (payload: ForgotPasswordPayload): Promise<ForgotPasswordResponse> => {
+    try {
+      const response = await apiClient.post('/auth/forgot-password', {
+        email: payload.email.trim(),
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = getAuthFlowErrorMessage(error, 'שליחת קוד איפוס הסיסמה נכשלה');
+      throw new Error(errorMessage);
+    }
+  },
+
+  resetPassword: async (payload: ResetPasswordPayload): Promise<ResetPasswordResponse> => {
+    try {
+      const response = await apiClient.post('/auth/reset-password', {
+        email: payload.email.trim(),
+        code: payload.code.trim(),
+        newPassword: payload.newPassword,
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = getAuthFlowErrorMessage(error, 'איפוס הסיסמה נכשל');
       throw new Error(errorMessage);
     }
   },
@@ -689,11 +738,14 @@ export const dogAPI = {
   /**
    * Get all dogs for a user
    */
-  getDogsForUser: async (userId: string) => {
+  getDogsForUser: async (userId: string, options?: { signal?: AbortSignal }) => {
     try {
-      const response = await apiClient.get(`/dogs/user/${userId}`);
+      const response = await apiClient.get(`/dogs/user/${userId}`, {
+        signal: options?.signal,
+      });
       return response.data;
     } catch (error: any) {
+      if (isAbortError(error)) throw error;
       const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון את רשימת הכלבים';
       console.error("Failed to get dogs:", errorMessage);
       throw new Error(errorMessage);
@@ -865,6 +917,19 @@ export const dogWalkerAPI = {
 };
 
 // Reminder API methods
+export interface ReminderRow {
+  id: string;
+  userId?: string;
+  dogIds: string[];
+  title: string;
+  description?: string | null;
+  remindAt: string;
+  notificationEnabled?: boolean;
+  sourceType?: 'FOOD' | 'VACCINATION' | 'MEDICATION' | null;
+  sourceId?: string | null;
+  systemGenerated?: boolean;
+}
+
 export const reminderAPI = {
   /**
    * Create a new reminder for a user
@@ -903,13 +968,49 @@ export const reminderAPI = {
   /**
    * Get all reminders for a user
    */
-  getRemindersForUser: async (userId: string) => {
+  getRemindersForUser: async (userId: string, options?: { signal?: AbortSignal }) => {
     try {
-      const response = await apiClient.get(`/users/${userId}/reminders`);
+      const response = await apiClient.get(`/users/${userId}/reminders`, {
+        signal: options?.signal,
+      });
       return response.data;
     } catch (error: any) {
+      if (isAbortError(error)) throw error;
       const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון תזכורות';
       console.error("Failed to get reminders:", errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /**
+   * Update an existing reminder
+   */
+  updateReminder: async (
+    userId: string,
+    reminderId: string,
+    title: string,
+    description: string,
+    remindAt: Date,
+    dogIds: string[]
+  ): Promise<{ success: boolean; message: string; reminder: any }> => {
+    try {
+      const year = remindAt.getFullYear();
+      const month = String(remindAt.getMonth() + 1).padStart(2, '0');
+      const day = String(remindAt.getDate()).padStart(2, '0');
+      const hours = String(remindAt.getHours()).padStart(2, '0');
+      const minutes = String(remindAt.getMinutes()).padStart(2, '0');
+      const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}`;
+
+      const response = await apiClient.put(`/users/${userId}/reminders/${reminderId}`, {
+        title,
+        description,
+        remindAt: formattedDate,
+        dogIds,
+      });
+      return { success: true, message: 'התזכורת עודכנה בהצלחה', reminder: response.data };
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל עדכון התזכורת';
+      console.error('Failed to update reminder:', errorMessage);
       throw new Error(errorMessage);
     }
   },
@@ -927,6 +1028,37 @@ export const reminderAPI = {
       throw new Error(errorMessage);
     }
   },
+
+  /** Mark reminder as done from home (logs health actions for system reminders). */
+  completeReminder: async (
+    userId: string,
+    reminderId: string,
+    options?: { administeredAt?: string }
+  ) => {
+    try {
+      const response = await apiClient.post(
+        `/users/${userId}/reminders/${reminderId}/complete`,
+        options?.administeredAt ? { administeredAt: options.administeredAt } : undefined
+      );
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל סימון התזכורת כבוצעה';
+      console.error('Failed to complete reminder:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+
+  /** Remove expired reminders from home and disable food-stock alerts that already fired. */
+  processExpiredReminders: async (userId: string) => {
+    try {
+      const response = await apiClient.post(`/users/${userId}/reminders/process-expired`);
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל עיבוד תזכורות שפג תוקפן';
+      console.error('Failed to process expired reminders:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
 };
 
 export interface VaccinationRow {
@@ -938,6 +1070,8 @@ export interface VaccinationRow {
   nextDueDate?: string | null;
   vetClinicName?: string | null;
   createdAt?: string | null;
+  notificationEnabled?: boolean;
+  remindDaysBefore?: string;
 }
 
 export type VaccinationPayload = {
@@ -946,6 +1080,8 @@ export type VaccinationPayload = {
   administeredDate: string;
   nextDueDate?: string | null;
   vetClinicName?: string | null;
+  notificationEnabled?: boolean;
+  remindDaysBefore?: string;
 };
 
 export const vaccinationAPI = {
@@ -968,6 +1104,8 @@ export const vaccinationAPI = {
         administeredDate: payload.administeredDate,
         nextDueDate: payload.nextDueDate ?? null,
         vetClinicName: payload.vetClinicName?.trim() || null,
+        notificationEnabled: payload.notificationEnabled,
+        remindDaysBefore: payload.remindDaysBefore,
       });
       return response.data;
     } catch (error: any) {
@@ -1002,6 +1140,19 @@ export const vaccinationAPI = {
       throw new Error(errorMessage);
     }
   },
+
+  logDose: async (userId: string, vaccinationId: string) => {
+    try {
+      const response = await apiClient.post(`/vaccinations/${vaccinationId}/log-dose`, null, {
+        params: { userId },
+      });
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל רישום החיסון';
+      console.error('Failed to log vaccination dose:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
 };
 
 export interface MedicationRow {
@@ -1010,17 +1161,29 @@ export interface MedicationRow {
   dogName: string;
   medicationName: string;
   administeredDate: string;
+  administeredTime?: string | null;
   nextDueDate?: string | null;
+  nextDueTime?: string | null;
   vetClinicName?: string | null;
   createdAt?: string | null;
+  notificationEnabled?: boolean;
+  remindBeforeValue?: number | null;
+  remindBeforeUnit?: string | null;
+  /** @deprecated use remindBeforeValue */
+  remindDaysBefore?: number | null;
 }
 
 export type MedicationPayload = {
   dogId: string;
   medicationName: string;
   administeredDate: string;
+  administeredTime?: string | null;
   nextDueDate?: string | null;
+  nextDueTime?: string | null;
   vetClinicName?: string | null;
+  notificationEnabled?: boolean;
+  remindBeforeValue?: number | null;
+  remindBeforeUnit?: string | null;
 };
 
 export const medicationAPI = {
@@ -1041,8 +1204,13 @@ export const medicationAPI = {
         dogId: payload.dogId,
         medicationName: payload.medicationName,
         administeredDate: payload.administeredDate,
+        administeredTime: payload.administeredTime ?? null,
         nextDueDate: payload.nextDueDate ?? null,
+        nextDueTime: payload.nextDueTime ?? null,
         vetClinicName: payload.vetClinicName?.trim() || null,
+        notificationEnabled: payload.notificationEnabled,
+        remindBeforeValue: payload.remindBeforeValue,
+        remindBeforeUnit: payload.remindBeforeUnit,
       });
       return response.data;
     } catch (error: any) {
@@ -1076,6 +1244,72 @@ export const medicationAPI = {
       console.error('Failed to delete medication:', errorMessage);
       throw new Error(errorMessage);
     }
+  },
+
+  logDose: async (
+    userId: string,
+    medicationId: string,
+    options?: { administeredDate: string; administeredTime?: string }
+  ) => {
+    try {
+      const response = await apiClient.post(
+        `/medications/${medicationId}/log-dose`,
+        options ?? null,
+        { params: { userId } }
+      );
+      return response.data;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.error || error.message || 'נכשל רישום המנה';
+      console.error('Failed to log medication dose:', errorMessage);
+      throw new Error(errorMessage);
+    }
+  },
+};
+
+export interface FoodStockRow {
+  id: string;
+  brandName: string;
+  bagSizeInKg: number;
+  dailyConsumptionInGram: number;
+  currentLevelInKg: number;
+  notificationEnabled?: boolean;
+  lowStockThresholdDays?: number | null;
+  dogs?: Array<{ id: string; name: string }>;
+}
+
+export interface NotificationPreferencesResponse {
+  success: boolean;
+  preferences: { notificationsEnabled: boolean };
+}
+
+export interface SchedulableNotificationRow {
+  sourceType: 'REMINDER' | 'MEDICATION' | 'VACCINATION' | 'FOOD';
+  sourceId: string;
+  title: string;
+  body: string;
+  triggerAt: string;
+}
+
+export const notificationPreferencesAPI = {
+  get: async (userId: string): Promise<NotificationPreferencesResponse> => {
+    const response = await apiClient.get(`/users/${userId}/notification-preferences`);
+    return response.data;
+  },
+  update: async (
+    userId: string,
+    prefs: { notificationsEnabled: boolean }
+  ): Promise<NotificationPreferencesResponse> => {
+    const response = await apiClient.put(`/users/${userId}/notification-preferences`, prefs);
+    return response.data;
+  },
+};
+
+export const notificationScheduleAPI = {
+  getSchedulable: async (
+    userId: string
+  ): Promise<{ success: boolean; count: number; notifications: SchedulableNotificationRow[] }> => {
+    const response = await apiClient.get(`/users/${userId}/notification-schedule`);
+    return response.data;
   },
 };
 
@@ -1145,13 +1379,23 @@ export const foodStockAPI = {
   /**
    * Update food stock details
    */
-  updateFoodStock: async (foodStockId: string, brandName?: string, bagSize?: number, dailyConsumption?: number, currentLevel?: number) => {
+  updateFoodStock: async (
+    foodStockId: string,
+    brandName?: string,
+    bagSize?: number,
+    dailyConsumption?: number,
+    currentLevel?: number,
+    notificationEnabled?: boolean,
+    lowStockThresholdDays?: number | null
+  ) => {
     try {
       const response = await apiClient.put(`/food-stock/${foodStockId}`, {
         brandName,
-        bagSize,
-        dailyConsumption,
-        currentLevel,
+        bagSizeInKg: bagSize,
+        dailyConsumptionInGram: dailyConsumption,
+        currentLevelInKg: currentLevel,
+        notificationEnabled,
+        lowStockThresholdDays,
       });
       return response.data;
     } catch (error: any) {

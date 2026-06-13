@@ -47,6 +47,13 @@ public class DogVaccination {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "notification_enabled", nullable = false)
+    private boolean notificationEnabled = false;
+
+    /** Comma-separated days before due date, e.g. "7,1" */
+    @Column(name = "remind_days_before", columnDefinition = "TEXT")
+    private String remindDaysBefore = "7";
+
     protected DogVaccination() {
     }
 
@@ -117,5 +124,21 @@ public class DogVaccination {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public boolean isNotificationEnabled() {
+        return notificationEnabled;
+    }
+
+    public void setNotificationEnabled(boolean notificationEnabled) {
+        this.notificationEnabled = notificationEnabled;
+    }
+
+    public String getRemindDaysBefore() {
+        return remindDaysBefore;
+    }
+
+    public void setRemindDaysBefore(String remindDaysBefore) {
+        this.remindDaysBefore = remindDaysBefore != null && !remindDaysBefore.isBlank() ? remindDaysBefore.trim() : "7";
     }
 }
