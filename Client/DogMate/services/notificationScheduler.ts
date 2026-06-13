@@ -3,7 +3,7 @@ import {
   cancelNotificationByIdentifier,
   scheduleHealthNotification,
 } from './notifications';
-import { notificationScheduleAPI } from './api';
+import { notificationScheduleAPI } from './dogmateApi';
 import { isGlobalNotificationsEnabled } from './notificationPreferences';
 import type { NotificationSourceType, SchedulableNotification } from '../types/notifications';
 import {

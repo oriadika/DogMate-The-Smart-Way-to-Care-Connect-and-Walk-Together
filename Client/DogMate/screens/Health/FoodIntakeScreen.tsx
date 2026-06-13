@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, foodStockAPI, reminderAPI, type FoodStockRow } from '../../services/api';
+import { dogAPI, foodStockAPI, reminderAPI, type FoodStockRow } from '../../services/dogmateApi';
 import ReminderSettingsSection from '../../components/health/ReminderSettingsSection';
 import { DEFAULT_FOOD_NOTIFICATION, type FoodNotificationSettings } from '../../types/notifications';
 import { resyncAllNotificationsInBackground } from '../../services/notificationScheduler';

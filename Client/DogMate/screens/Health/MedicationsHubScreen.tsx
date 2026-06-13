@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { medicationAPI, type MedicationRow } from '../../services/api';
+import { medicationAPI, type MedicationRow } from '../../services/dogmateApi';
 import { deferScreenCleanup, useScreenLifecycleGuard } from '../../utils/screenLifecycle';
 import {
   navigateBackToOwnerHealth,

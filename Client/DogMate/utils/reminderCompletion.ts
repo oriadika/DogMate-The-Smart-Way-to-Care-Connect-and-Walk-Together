@@ -1,4 +1,4 @@
-import { reminderAPI, type ReminderRow } from '../services/api';
+import { reminderAPI, type ReminderRow } from '../services/dogmateApi';
 import { cancelReminderNotification } from '../services/notifications';
 import { resyncAllNotificationsInBackground } from '../services/notificationScheduler';
 import { markHomeDataDirty, refreshHomeRemindersFromServer } from './homeDataCache';

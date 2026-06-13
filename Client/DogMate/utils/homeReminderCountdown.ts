@@ -1,4 +1,4 @@
-import type { MedicationRow, VaccinationRow } from '../services/api';
+import type { MedicationRow, VaccinationRow } from '../services/dogmateApi';
 import type { FoodInventoryItem } from './healthDataCache';
 import {
   getFoodInventoryCache,

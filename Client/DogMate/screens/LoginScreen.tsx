@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { userAPI } from '../services/api';
+import { userAPI } from '../services/dogmateApi';
 import { prefetchOwnerData } from '../utils/prefetchOwnerData';
 import { setOwnerSession } from '../utils/ownerSession';
 import { scheduleLoginWelcomeMessage } from '../utils/loginWelcomeMessage';

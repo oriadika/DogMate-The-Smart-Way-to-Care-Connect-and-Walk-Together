@@ -718,28 +718,6 @@ const ProfileScreen = ({ navigation, route }: any) => {
     }
   };
 
-  const toggleLocationSharing = async () => {
-    if (isWalkerProfile) {
-      return;
-    }
-    const newState = !isLocationSharingEnabled;
-    setIsLocationSharingEnabled(newState);
-
-    const userId = route?.params?.userId;
-    if (!newState && userId) {
-      try {
-        await userAPI.clearLocation(userId);
-      } catch (error) {
-        console.error('Failed to clear location:', error);
-      }
-    }
-
-    if (userId) {
-      profileDirtyUsers.add(userId);
-      fetchLoggedUsers({ showLoader: false });
-    }
-  };
-
   const focusOnUser = useCallback((user: any) => {
     if (user.latitude != null && user.longitude != null && mapRef.current) {
       mapRef.current.animateToRegion(

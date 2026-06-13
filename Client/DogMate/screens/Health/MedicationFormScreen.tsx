@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { dogAPI, medicationAPI, type MedicationRow } from '../../services/api';
+import { dogAPI, medicationAPI, type MedicationRow } from '../../services/dogmateApi';
 import ReminderSettingsSection from '../../components/health/ReminderSettingsSection';
 import {
   DEFAULT_MEDICATION_NOTIFICATION,

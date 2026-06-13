@@ -22,7 +22,7 @@ import {
 import * as Linking from 'expo-linking';
 import { useFocusEffect } from '@react-navigation/native';
 import { FontAwesome, FontAwesome5, Ionicons } from '@expo/vector-icons';
-import { dogWalkerAPI, type ProfessionalProfileResponse } from '../services/api';
+import { dogWalkerAPI, type ProfessionalProfileResponse } from '../services/dogmateApi';
 import { resolveOwnerUserId, getOwnerSession } from '../utils/ownerSession';
 import { deferScreenCleanup, useScreenLifecycleGuard } from '../utils/screenLifecycle';
 import {
@@ -43,7 +43,7 @@ import {
   displayAvailabilityFromStored,
   getPricingDisplayLinesFromStored,
 } from '../utils/walkerOfferingDisplay';
-import locationService, { LocationService } from '../services/location';
+import locationService, { LocationService } from '../services/dogmateLocation';
 import WalkerListToolbar from '../components/walkerList/WalkerListToolbar';
 import WalkerFiltersModal from '../components/walkerList/WalkerFiltersModal';
 import WalkerSortModal from '../components/walkerList/WalkerSortModal';

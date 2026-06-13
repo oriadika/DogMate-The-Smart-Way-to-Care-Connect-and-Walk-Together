@@ -2,7 +2,7 @@ import {
   dogWalkerAPI,
   userAPI,
   type ProfessionalProfileResponse,
-} from '../services/api';
+} from '../services/dogmateApi';
 import { isAbortError } from './isAbortError';
 import { withApiRetry } from './apiRetry';
 

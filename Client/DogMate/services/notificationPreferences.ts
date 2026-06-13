@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { notificationPreferencesAPI } from './api';
+import { notificationPreferencesAPI } from './dogmateApi';
 import type { NotificationPreferences } from '../types/notifications';
 
 const CACHE_KEY = 'dogmate:notification-preferences';

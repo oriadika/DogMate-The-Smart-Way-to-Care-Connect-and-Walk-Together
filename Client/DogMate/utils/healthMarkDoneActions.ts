@@ -1,4 +1,4 @@
-import { medicationAPI } from '../services/api';
+import { medicationAPI } from '../services/dogmateApi';
 import { resyncAllNotificationsInBackground } from '../services/notificationScheduler';
 import { markMedicationsDirty, refreshMedicationsFromServer } from './healthDataCache';
 import { formatMedicationLogDosePayload } from './healthMarkDone';

@@ -1,4 +1,4 @@
-import { dogAPI, reminderAPI } from '../services/api';
+import { dogAPI, reminderAPI } from '../services/dogmateApi';
 import { sortRemindersNearestFirst, filterActiveReminders } from './daysDisplay';
 import { isAbortError } from './isAbortError';
 

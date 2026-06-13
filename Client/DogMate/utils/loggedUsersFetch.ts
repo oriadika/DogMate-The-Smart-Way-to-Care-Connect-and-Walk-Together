@@ -1,4 +1,4 @@
-import { userAPI } from '../services/api';
+import { userAPI } from '../services/dogmateApi';
 import { withApiRetry } from './apiRetry';
 import { isAbortError } from './isAbortError';
 

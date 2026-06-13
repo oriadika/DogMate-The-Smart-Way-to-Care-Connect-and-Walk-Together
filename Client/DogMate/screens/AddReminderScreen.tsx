@@ -18,7 +18,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, reminderAPI } from '../services/api';
+import { dogAPI, reminderAPI } from '../services/dogmateApi';
 import { cancelReminderNotification } from '../services/notifications';
 import { resyncAllNotificationsInBackground } from '../services/notificationScheduler';
 import {

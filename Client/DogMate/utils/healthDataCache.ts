@@ -5,7 +5,7 @@ import {
   vaccinationAPI,
   type MedicationRow,
   type VaccinationRow,
-} from '../services/api';
+} from '../services/dogmateApi';
 import { getHomeCache } from './homeDataCache';
 import { runOwnerPrefetch } from './ownerPrefetchCoordinator';
 import { isAbortError } from './isAbortError';
