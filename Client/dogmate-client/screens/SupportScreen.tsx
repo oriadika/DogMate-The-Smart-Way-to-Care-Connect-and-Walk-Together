@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SupportRequestPayload, userAPI } from '../services/api';
+import { SupportRequestPayload, userAPI } from '../services/dogmateApi';
 
 type CategoryOption = {
   id: SupportRequestPayload['category'];

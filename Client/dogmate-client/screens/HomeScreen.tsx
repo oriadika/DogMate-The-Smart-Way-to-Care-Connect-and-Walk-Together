@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, reminderAPI, type ReminderRow } from '../services/api';
+import { dogAPI, reminderAPI, type ReminderRow } from '../services/dogmateApi';
 import { cancelReminderNotification } from '../services/notifications';
 import { loadNotificationPreferences } from '../services/notificationPreferences';
 import { resyncAllNotifications } from '../services/notificationScheduler';
@@ -77,7 +77,7 @@ function ReminderCountdownLabel({
   sourceEmoji,
 }: {
   unit: string;
-  sourceEmoji?: string;
+  sourceEmoji?: string | null;
 }) {
   return (
     <Text style={styles.reminderStatusLabel}>

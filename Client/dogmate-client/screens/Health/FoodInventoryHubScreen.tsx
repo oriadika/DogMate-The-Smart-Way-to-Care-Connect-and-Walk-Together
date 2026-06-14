@@ -13,7 +13,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import FoodInventoryCard from '../../components/FoodInventoryCard';
-import { foodStockAPI } from '../../services/api';
+import { foodStockAPI } from '../../services/dogmateApi';
 import { resyncAllNotificationsInBackground } from '../../services/notificationScheduler';
 import { markHomeDataDirty, shouldForceHomeRefresh } from '../../utils/homeDataCache';
 import {

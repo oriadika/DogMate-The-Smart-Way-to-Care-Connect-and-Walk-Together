@@ -1,4 +1,4 @@
-import { LocationService } from '../services/location';
+import { LocationService } from '../services/dogmateLocation';
 import { fetchRawLoggedUsers } from './loggedUsersFetch';
 import { isAbortError } from './isAbortError';
 

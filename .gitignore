@@ -3,8 +3,5 @@ node_modules/
 Server/DogMate/data/*.mv.db
 Server/DogMate/data/*.trace.db
 Server/DogMate/data/*.db
-Client/dogmate-client/package-lock.json
-Client/dogmate-client/services/api.ts
-Client/dogmate-client/services/websocket.ts
 Server/DogMate/data/dogmate_db.mv.db
 Server/DogMate/data/dogmate_db.trace.db

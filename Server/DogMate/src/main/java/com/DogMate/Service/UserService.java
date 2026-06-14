@@ -312,10 +312,10 @@ public class UserService {
             throw new IllegalArgumentException("אימייל או סיסמה שגויים");
         }
 
-        if (user.isLoggedIn()){
-            throw new IllegalArgumentException("המשתמש כבר מחובר");
-
+        if (user.isLoggedIn()) {
+            System.out.println("User " + email + " is already marked logged in; refreshing session state.");
         }
+
         // Set logged in status to true
         user.setLoggedIn(true);
         System.out.println("Setting user " + email + " loggedIn to true");
@@ -400,6 +400,21 @@ public class UserService {
      * @param email The email of the user to logout
      * @throws IllegalArgumentException if email is null/empty or user doesn't exist
      */
+    @Transactional
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    public void logoutAllUsers() {
+        List<UserAccount> users = userRepository.findAll();
+        for (UserAccount user : users) {
+            user.setLoggedIn(false);
+            if (user instanceof RegularUser) {
+                RegularUser regularUser = (RegularUser) user;
+                regularUser.setLatitude(null);
+                regularUser.setLongitude(null);
+            }
+            userRepository.save(user);
+        }
+    }
+
     @Transactional
     @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public void logoutByEmail(String email) {

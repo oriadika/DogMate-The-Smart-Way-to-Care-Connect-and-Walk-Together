@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { getApiBaseUrlWithPath } from './config';
 import { isAbortError } from '../utils/isAbortError';
+import { clearAuthToken as clearStoredAuthToken, getAuthToken, saveAuthToken as saveStoredAuthToken } from '../utils/appSession';
 
 
 const API_BASE_URL = getApiBaseUrlWithPath('api');
@@ -31,14 +32,23 @@ apiClient.interceptors.request.use(
 // Export function to set token
 export const setAuthToken = (token: string) => {
   authToken = token;
-  // Update the default header for future requests
   apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  void saveStoredAuthToken(token);
 };
 
 // Export function to clear token
 export const clearAuthToken = () => {
   authToken = null;
   delete apiClient.defaults.headers.common['Authorization'];
+  void clearStoredAuthToken();
+};
+
+export const restoreAuthToken = async () => {
+  const token = await getAuthToken();
+  if (token) {
+    authToken = token;
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  }
 };
 
 /**

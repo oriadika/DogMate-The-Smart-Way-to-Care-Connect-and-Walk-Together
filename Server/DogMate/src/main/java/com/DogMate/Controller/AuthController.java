@@ -86,6 +86,25 @@ public class AuthController {
     }
 
     /**
+     * Logout all users.
+     * POST /api/auth/logout-all
+     */
+    @PostMapping("/logout-all")
+    public ResponseEntity<?> logoutAll() {
+        try {
+            userService.logoutAllUsers();
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "כל המשתמשים התנתקו בהצלחה");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("אירעה שגיאה בהתנתקות כלל המשתמשים. נסה שוב מאוחר יותר."));
+        }
+    }
+
+    /**
      * Logout a user
      * POST /api/auth/logout
      * Supports logout by userId or email

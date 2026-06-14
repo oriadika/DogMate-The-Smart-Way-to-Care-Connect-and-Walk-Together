@@ -1,4 +1,4 @@
-import type { MedicationRow } from '../services/api';
+import type { MedicationRow } from '../services/dogmateApi';
 import { getMedicationsCache, refreshMedicationsFromServer } from './healthDataCache';
 import { formatTimeHe, parseStoredNextDueTime } from './healthReminderSettings';
 

@@ -2,7 +2,7 @@ import {
   dogWalkerAPI,
   userAPI,
   type ProfessionalProfileResponse,
-} from '../services/api';
+} from '../services/dogmateApi';
 import { isAbortError } from './isAbortError';
 import { withApiRetry } from './apiRetry';
 
@@ -113,6 +113,11 @@ export function getLoggedUsersCache(): FormattedLoggedUser[] | null {
 export function setLoggedUsersCache(users: FormattedLoggedUser[]): void {
   loggedUsersCache = users;
   loggedUsersCacheTime = Date.now();
+}
+
+export function clearLoggedUsersCache(): void {
+  loggedUsersCache = null;
+  loggedUsersCacheTime = 0;
 }
 
 export function getInitialLoggedUsersState(excludeUserId?: string) {

@@ -1,4 +1,4 @@
-import { dogAPI, reminderAPI } from '../services/api';
+import { dogAPI, reminderAPI } from '../services/dogmateApi';
 import {
   buildHomeDataSignature,
   clearHomeDirty,

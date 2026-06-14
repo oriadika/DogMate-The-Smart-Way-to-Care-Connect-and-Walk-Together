@@ -1,7 +1,7 @@
 /**
  * סינון ומיון לרשימת דוג-ווקרים (לוגיקה טהורה).
  */
-import type { CityOffering, ProfessionalProfileResponse } from '../services/api';
+import type { CityOffering, ProfessionalProfileResponse } from '../services/dogmateApi';
 import { getRegionByCity } from './cityToDistrictMap';
 import { parseLocationFromCityField } from './locationFieldCodec';
 import { parseWalkerCityOffering } from './walkerOfferingDisplay';

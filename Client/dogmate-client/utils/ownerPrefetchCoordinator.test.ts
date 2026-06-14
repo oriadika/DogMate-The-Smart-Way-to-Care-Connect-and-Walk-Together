@@ -1,7 +1,7 @@
 import { runOwnerPrefetch, waitForOwnerPrefetchHome } from './ownerPrefetchCoordinator';
 import { getHomeCache, setHomeCache } from './homeDataCache';
 
-jest.mock('../services/api', () => ({
+jest.mock('../services/dogmateApi', () => ({
   dogAPI: { getDogsForUser: jest.fn() },
   reminderAPI: { getRemindersForUser: jest.fn() },
   vaccinationAPI: { list: jest.fn() },
@@ -21,7 +21,7 @@ import {
   vaccinationAPI,
   medicationAPI,
   foodStockAPI,
-} from '../services/api';
+} from '../services/dogmateApi';
 import {
   getMedicationsCache,
   getVaccinationsCache,

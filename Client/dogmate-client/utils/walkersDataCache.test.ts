@@ -6,7 +6,7 @@ import {
   setWalkersCache,
   formatLoggedUsers,
 } from './walkersDataCache';
-import type { ProfessionalProfileResponse } from '../services/api';
+import type { ProfessionalProfileResponse } from '../services/dogmateApi';
 
 describe('walkersDataCache', () => {
   const ownerId = 'owner-1';

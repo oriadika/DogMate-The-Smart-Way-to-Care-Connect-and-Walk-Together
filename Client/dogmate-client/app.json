@@ -1,34 +1,40 @@
 {
   "expo": {
-    "name": "dogmate-client",
+    "name": "DogMate",
     "slug": "dogmate-client",
-    "version": "1.0.0",
+    "version": "1.0.12",
     "orientation": "portrait",
     "icon": "./assets/LoadingPage.jpg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/LoadingPage.jpg",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "cover",
       "backgroundColor": "#FAEFDD"
     },
     "ios": {
       "supportsTablet": true,
+      "buildNumber": "13",
       "config": {
         "googleMapsApiKey": ""
       },
       "bundleIdentifier": "com.dogmate.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
       }
     },
     "android": {
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FAEFDD"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
+      "versionCode": 13,
       "package": "com.anonymous.dogmateclient",
       "config": {
         "googleMaps": {
@@ -43,16 +49,25 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+          "icon": "./assets/LoadingPage.jpg",
           "color": "#7FB069",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font"
     ],
     "extra": {
       "eas": {
-        "projectId": "c90b3a31-93e7-4537-b369-0d96e5af42dd"
+        "projectId": "1a2fae6f-1354-479c-931d-eb234dff5fce"
       }
+    },
+    "owner": "gilede",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1a2fae6f-1354-479c-931d-eb234dff5fce"
     }
   }
 }

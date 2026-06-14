@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { userAPI } from '../../../services/api';
+import { userAPI } from '../../../services/dogmateApi';
 import { useUsers } from '../../../contexts/UsersContext';
 import { TextInput } from 'react-native';
 

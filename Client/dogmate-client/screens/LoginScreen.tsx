@@ -13,9 +13,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { userAPI } from '../services/api';
+import { userAPI } from '../services/dogmateApi';
 import { prefetchOwnerData } from '../utils/prefetchOwnerData';
 import { setOwnerSession } from '../utils/ownerSession';
+import { savePersistedSession } from '../utils/appSession';
 import { scheduleLoginWelcomeMessage } from '../utils/loginWelcomeMessage';
 
 const LoginScreen = ({ navigation }: any) => {
@@ -54,6 +55,14 @@ const LoginScreen = ({ navigation }: any) => {
             phoneNumber: response.phoneNumber || '',
           };
           setOwnerSession(ownerParams);
+          await savePersistedSession({
+            userId: response.userId,
+            email: response.email || email.trim(),
+            userRole: role,
+            userFirstName: ownerParams.userFirstName,
+            userLastName: ownerParams.userLastName,
+            phoneNumber: ownerParams.phoneNumber,
+          });
           if (role !== 'walker' && response.userId) {
             await prefetchOwnerData(
               response.userId,

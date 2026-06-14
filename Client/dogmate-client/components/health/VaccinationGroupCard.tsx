@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { VaccinationRow } from '../../services/api';
+import type { VaccinationRow } from '../../services/dogmateApi';
 import type { VaccinationGroup } from '../../utils/vaccinationGroups';
 import { getLatestVaccinationRecord } from '../../utils/vaccinationGroups';
 import {

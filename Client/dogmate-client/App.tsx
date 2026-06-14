@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 import { UsersProvider } from './contexts/UsersContext';
 import MessageDialogHost from './components/MessageDialogHost';
 
@@ -39,15 +40,91 @@ import UserDetailsScreen from './screens/ManageScreens/Users/UserDetailsScreen';
 import ManageDogScreens from './screens/ManageScreens/Dogs/ManageDogScreens';
 import DogDetailScreen from './screens/ManageScreens/Dogs/DogDetailScreen';
 import { rootNavigationRef } from './navigation/rootNavigationRef';
+import { clearAuthToken as clearApiAuthToken, restoreAuthToken as restoreApiAuthToken } from './services/api';
+import { clearAuthToken as clearDogmateAuthToken } from './services/dogmateApi';
+import { clearOwnerSession, setOwnerSession } from './utils/ownerSession';
+import {
+  clearPersistedSession,
+  getPersistedSession,
+  getSavedAppVersion,
+  setSavedAppVersion,
+  shouldForceReauth,
+} from './utils/appSession';
+import { clearLoggedUsersCache } from './utils/walkersDataCache';
+import { userAPI } from './services/dogmateApi';
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   useEffect(() => {
-    const initializeNotifications = async () => {
+    const initializeApp = async () => {
+      const currentVersion = Constants.expoConfig?.version ?? '1.0.11';
+      const previousVersion = await getSavedAppVersion();
+      const isDevMode = __DEV__;
+
+      try {
+        await userAPI.logoutAll();
+      } catch (error) {
+        console.warn('Startup logout-all failed:', error);
+      }
+
+      const persistedSession = await getPersistedSession();
+
+      if (isDevMode) {
+        try {
+          if (persistedSession?.userId) {
+            await userAPI.logout(persistedSession.userId, persistedSession.email);
+          }
+        } catch (error) {
+          console.warn('Dev-mode logout cleanup failed:', error);
+        }
+
+        clearApiAuthToken();
+        clearDogmateAuthToken();
+        clearOwnerSession();
+        await clearPersistedSession();
+        await clearLoggedUsersCache();
+      } else {
+        await restoreApiAuthToken();
+        await userAPI.restoreAuthToken();
+      }
+
+      if (!isDevMode && persistedSession?.userId) {
+        setOwnerSession(persistedSession);
+      }
+
+      if (shouldForceReauth(previousVersion, currentVersion)) {
+        try {
+          const persistedSession = await getPersistedSession();
+          if (persistedSession?.userId) {
+            await userAPI.logout(persistedSession.userId, persistedSession.email);
+          }
+        } catch (error) {
+          console.warn('Version-based logout failed:', error);
+        } finally {
+          clearApiAuthToken();
+          clearDogmateAuthToken();
+          clearOwnerSession();
+          clearPersistedSession();
+          clearLoggedUsersCache();
+        }
+      }
+
+      if (!isDevMode && persistedSession?.userId && persistedSession.userRole) {
+        const routeName = persistedSession.userRole === 'walker' ? 'WalkerHome' : 'Home';
+        setTimeout(() => {
+          rootNavigationRef.current?.reset({
+            index: 0,
+            routes: [{ name: routeName, params: persistedSession }],
+          });
+        }, 0);
+      }
+
+      await setSavedAppVersion(currentVersion);
       await requestNotificationPermissions();
     };
-    initializeNotifications();
+
+    void initializeApp();
 
     const cleanup = setupNotificationListeners();
     return cleanup;
