@@ -40,8 +40,12 @@ public class NotificationResyncService {
     public List<SchedulableNotificationDTO> getSchedulableNotifications(UUID userId) {
         boolean globalEnabled = preferencesService.isGlobalNotificationsEnabled(userId);
 
+        // System health reminders (medication / vaccination / food) are scheduled via the
+        // entity-specific builders below — exclude them from manual to avoid duplicate push.
         List<SchedulableNotificationDTO> manual = scheduleService.buildManualReminderTriggers(
-                reminderService.getRemindersForUser(userId),
+                reminderService.getRemindersForUser(userId).stream()
+                        .filter(r -> !r.isSystemGenerated())
+                        .toList(),
                 globalEnabled
         );
         List<SchedulableNotificationDTO> medications = scheduleService.buildMedicationTriggers(

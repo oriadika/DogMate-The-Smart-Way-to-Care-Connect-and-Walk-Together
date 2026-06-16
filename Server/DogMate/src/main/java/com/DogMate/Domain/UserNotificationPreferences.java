@@ -37,7 +37,6 @@ public class UserNotificationPreferences {
 
     public UserNotificationPreferences(RegularUser user) {
         this.user = user;
-        this.userId = user.getId();
         this.notificationsEnabled = true;
         this.updatedAt = LocalDateTime.now();
     }

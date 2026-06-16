@@ -90,10 +90,6 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
         clearFoodInventoryDirty(uid);
       }
 
-      if (!forceRefresh && cached) {
-        return;
-      }
-
       const response = await foodStockAPI.getFoodStocksForUser(uid);
       if (!isAsyncWorkCurrent(generation)) return;
 

@@ -51,14 +51,25 @@ export const saveNotificationPreferences = async (
   userId: string,
   prefs: NotificationPreferences
 ): Promise<NotificationPreferences> => {
-  const response = await notificationPreferencesAPI.update(userId, prefs);
-  const saved: NotificationPreferences = {
-    notificationsEnabled: response.preferences?.notificationsEnabled ?? prefs.notificationsEnabled,
-  };
-  prefsByUser.set(userId, saved);
-  lastFetchAtByUser.set(userId, Date.now());
-  await AsyncStorage.setItem(`${CACHE_KEY}:${userId}`, JSON.stringify(saved));
-  return saved;
+  try {
+    const response = await notificationPreferencesAPI.update(userId, prefs);
+    if (!response.success) {
+      throw new Error('עדכון הגדרות ההתראות נכשל');
+    }
+    const saved: NotificationPreferences = {
+      notificationsEnabled: response.preferences?.notificationsEnabled ?? prefs.notificationsEnabled,
+    };
+    prefsByUser.set(userId, saved);
+    lastFetchAtByUser.set(userId, Date.now());
+    await AsyncStorage.setItem(`${CACHE_KEY}:${userId}`, JSON.stringify(saved));
+    return saved;
+  } catch (error: any) {
+    const serverMsg = error?.response?.data?.error;
+    if (typeof serverMsg === 'string' && serverMsg.trim().length > 0) {
+      throw new Error(serverMsg);
+    }
+    throw new Error(error?.message || 'עדכון הגדרות ההתראות נכשל');
+  }
 };
 
 export const isGlobalNotificationsEnabled = (): boolean => {

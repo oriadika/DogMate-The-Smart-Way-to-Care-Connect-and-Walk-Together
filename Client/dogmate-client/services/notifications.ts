@@ -1,16 +1,30 @@
 import * as Notifications from 'expo-notifications';
 import type { NotificationSourceType } from '../types/notifications';
+import { isGlobalNotificationsEnabled } from './notificationPreferences';
 import { shouldScheduleNotification } from './notificationSchedulerLogic';
 import { handleReminderNotificationDelivered } from '../utils/reminderCompletion';
 
+const hiddenNotificationPresentation = {
+  shouldShowAlert: false,
+  shouldPlaySound: false,
+  shouldSetBadge: false,
+  shouldShowBanner: false,
+  shouldShowList: false,
+} as const;
+
+const visibleNotificationPresentation = {
+  shouldShowAlert: true,
+  shouldPlaySound: true,
+  shouldSetBadge: false,
+  shouldShowBanner: true,
+  shouldShowList: true,
+} as const;
+
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async () =>
+    isGlobalNotificationsEnabled()
+      ? visibleNotificationPresentation
+      : hiddenNotificationPresentation,
 });
 
 export interface ScheduleHealthNotificationParams {
@@ -151,8 +165,6 @@ export const setupNotificationListeners = () => {
 
   const responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
     handleNotificationResponse(response);
-    const data = response.notification.request.content.data as { sourceType?: NotificationSourceType };
-    void handleReminderNotificationDelivered(data?.sourceType);
   });
 
   return () => {

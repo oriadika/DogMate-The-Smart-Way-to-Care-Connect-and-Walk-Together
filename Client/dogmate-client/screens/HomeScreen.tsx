@@ -148,6 +148,35 @@ const HomeScreen = ({ navigation, route }: any) => {
     return generation === loadGenerationRef.current;
   }, []);
 
+  /**
+   * Keep stable order on Home cards:
+   * existing dogs stay in place, newly added dogs appear at the end
+   * (leftmost when the horizontal list is inverted).
+   */
+  const orderDogsForHomeDisplay = useCallback((incomingDogs: any[], previousDogs: any[]): any[] => {
+    if (!Array.isArray(incomingDogs) || incomingDogs.length <= 1) return incomingDogs ?? [];
+    if (!Array.isArray(previousDogs) || previousDogs.length === 0) return incomingDogs;
+
+    const previousOrder = new Map<string, number>();
+    previousDogs.forEach((dog, index) => {
+      if (dog?.id != null) previousOrder.set(String(dog.id), index);
+    });
+
+    return incomingDogs
+      .map((dog, index) => ({ dog, index }))
+      .sort((a, b) => {
+        const aPos = previousOrder.get(String(a.dog?.id));
+        const bPos = previousOrder.get(String(b.dog?.id));
+        const aKnown = aPos != null;
+        const bKnown = bPos != null;
+        if (aKnown && bKnown) return (aPos as number) - (bPos as number);
+        if (aKnown) return -1;
+        if (bKnown) return 1;
+        return a.index - b.index;
+      })
+      .map((entry) => entry.dog);
+  }, []);
+
   const hydrateFromCache = useCallback((userIdKey: string): boolean => {
     const cached = getHomeCache(userIdKey);
     if (!cached) return false;
@@ -224,7 +253,9 @@ const HomeScreen = ({ navigation, route }: any) => {
       let nextDogs: any[] = [];
       if (dogsSettled.status === 'fulfilled') {
         const dogsResponse = dogsSettled.value;
-        nextDogs = dogsResponse.success && dogsResponse.dogs ? dogsResponse.dogs : [];
+        const fetchedDogs = dogsResponse.success && dogsResponse.dogs ? dogsResponse.dogs : [];
+        const previousDogs = priorCache?.dogs ?? dogsRef.current;
+        nextDogs = orderDogsForHomeDisplay(fetchedDogs, previousDogs);
       } else {
         if (isAbortError(dogsSettled.reason)) return;
         console.error('Error loading dogs:', dogsSettled.reason);
@@ -309,7 +340,7 @@ const HomeScreen = ({ navigation, route }: any) => {
         setLoading(false);
       }
     }
-  }, [beginHomeFetch, hydrateFromCache, isHomeFetchCurrent, userLastName]);
+  }, [beginHomeFetch, hydrateFromCache, isHomeFetchCurrent, orderDogsForHomeDisplay, userLastName]);
 
   // Load data when screen is focused (including when returning from AddDog screen)
   useFocusEffect(

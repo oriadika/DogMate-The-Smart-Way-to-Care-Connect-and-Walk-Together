@@ -5,9 +5,10 @@ import {
 } from './notifications';
 import { notificationScheduleAPI } from './api';
 import { isGlobalNotificationsEnabled } from './notificationPreferences';
-import type { NotificationSourceType, SchedulableNotification } from '../types/notifications';
+import type { NotificationSourceType } from '../types/notifications';
 import {
   buildNotificationIdentifier,
+  dedupeSchedulableNotifications,
   shouldScheduleNotification,
 } from './notificationSchedulerLogic';
 
@@ -22,7 +23,7 @@ export const resyncAllNotifications = async (userId: string): Promise<number> =>
   }
 
   const response = await notificationScheduleAPI.getSchedulable(userId);
-  const items: SchedulableNotification[] = response.notifications ?? [];
+  const items = dedupeSchedulableNotifications(response.notifications ?? []);
   const now = new Date();
 
   const results = await Promise.all(

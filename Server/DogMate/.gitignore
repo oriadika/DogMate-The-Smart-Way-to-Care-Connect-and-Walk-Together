@@ -32,6 +32,9 @@ build/
 data/*.mv.db
 data/*.trace.db
 *.db
+.env
+db/seed/*.sql
+!db/seed/.gitignore
 
 
 ### VS Code ###

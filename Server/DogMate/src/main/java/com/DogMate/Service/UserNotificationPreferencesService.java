@@ -4,6 +4,7 @@ import com.DogMate.Domain.RegularUser;
 import com.DogMate.Domain.UserNotificationPreferences;
 import com.DogMate.DTO.NotificationPreferencesDTO;
 import com.DogMate.Infrastructure.UserNotificationPreferencesRepository;
+import jakarta.persistence.EntityManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,13 +15,16 @@ public class UserNotificationPreferencesService {
 
     private final UserNotificationPreferencesRepository preferencesRepository;
     private final IUserRepository userRepository;
+    private final EntityManager entityManager;
 
     public UserNotificationPreferencesService(
             UserNotificationPreferencesRepository preferencesRepository,
-            IUserRepository userRepository
+            IUserRepository userRepository,
+            EntityManager entityManager
     ) {
         this.preferencesRepository = preferencesRepository;
         this.userRepository = userRepository;
+        this.entityManager = entityManager;
     }
 
     @Transactional(readOnly = true)
@@ -46,8 +50,10 @@ public class UserNotificationPreferencesService {
     }
 
     private UserNotificationPreferences createDefaultPreferences(UUID userId) {
-        RegularUser user = (RegularUser) userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId));
+        if (userRepository.findById(userId).filter(RegularUser.class::isInstance).isEmpty()) {
+            throw new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId);
+        }
+        RegularUser user = entityManager.getReference(RegularUser.class, userId);
         return new UserNotificationPreferences(user);
     }
 }

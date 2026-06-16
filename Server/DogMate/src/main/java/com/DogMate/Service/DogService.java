@@ -32,18 +32,21 @@ public class DogService {
     private final IFoodStockRepository foodStockRepository;
     private final ReminderService reminderService;
     private final HealthReminderSyncService healthReminderSyncService;
+    private final FoodStockConsumptionService foodStockConsumptionService;
 
     @Autowired
     public DogService(IDogRepository dogRepository, IDogRelationshipRepository dogRelationshipRepository, 
                       IUserRepository userRepository, IFoodStockRepository foodStockRepository,
                       ReminderService reminderService,
-                      HealthReminderSyncService healthReminderSyncService) {
+                      HealthReminderSyncService healthReminderSyncService,
+                      FoodStockConsumptionService foodStockConsumptionService) {
         this.dogRepository = dogRepository;
         this.dogRelationshipRepository = dogRelationshipRepository;
         this.userRepository = userRepository;
         this.foodStockRepository = foodStockRepository;
         this.reminderService = reminderService;
         this.healthReminderSyncService = healthReminderSyncService;
+        this.foodStockConsumptionService = foodStockConsumptionService;
     }
 
     /**
@@ -246,8 +249,44 @@ public class DogService {
         // If no relationships left, remove from reminders and delete the dog
         if (!hasRelationships) {
             reminderService.removeDogFromAllReminders(dogId);
-            dogRepository.deleteById(dogId);
+            deleteDogSafely(dogId);
         }
+    }
+
+    /**
+     * Deletes a dog and ensures all dependent rows are removed first
+     * (to avoid FK constraint errors such as "update or delete on table dogs violates foreign key").
+     *
+     * The caller is expected to remove reminders (reminder_dogs + reminders) if needed.
+     */
+    private void deleteDogSafely(UUID dogId) {
+        Dog dog = dogRepository.findById(dogId)
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא כלב עם המזהה: " + dogId));
+
+        // Disconnect food stock (owning side is Dog.foodStock).
+        FoodStock foodStock = dog.getFoodStock();
+        if (foodStock != null) {
+            foodStock.removeDog(dog);
+            dog.setFoodStock(null);
+            if (foodStock.getDogs().isEmpty()) {
+                foodStockRepository.deleteById(foodStock.getId());
+            }
+        }
+
+        // Force-load children collections before clearing, so orphanRemoval can delete them.
+        dog.getDogEvents().size();
+        dog.getDogEvents().clear();
+
+        dog.getDogMoodLogs().size();
+        dog.getDogMoodLogs().clear();
+
+        dog.getDogDocuments().size();
+        dog.getDogDocuments().clear();
+
+        dog.getDogRelationships().size();
+        dog.getDogRelationships().clear();
+
+        dogRepository.deleteById(dogId);
     }
 
     /**
@@ -277,6 +316,7 @@ public class DogService {
         if (foodStock != null) {
             // disconnect (owning side)
             foodStock.removeDog(dog);
+            dog.setFoodStock(null);
             if (foodStock.getDogs().isEmpty()) {
                 foodStockRepository.deleteById(foodStock.getId());
             }
@@ -316,6 +356,7 @@ public class DogService {
         if (oldFoodStock != null) {
             // disconnect (owning side)
             oldFoodStock.removeDog(dog);
+            dog.setFoodStock(null);
             if (oldFoodStock.getDogs().isEmpty()) {
                 healthReminderSyncService.deleteFoodStockReminder(oldFoodStock.getId());
                 foodStockRepository.deleteById(oldFoodStock.getId());
@@ -361,6 +402,7 @@ public class DogService {
         FoodStock oldFoodStock = dog.getFoodStock();
         if (oldFoodStock != null) {
             oldFoodStock.removeDog(dog);
+            dog.setFoodStock(null);
             if (oldFoodStock.getDogs().isEmpty()) {
                 healthReminderSyncService.deleteFoodStockReminder(oldFoodStock.getId());
                 foodStockRepository.deleteById(oldFoodStock.getId());
@@ -471,14 +513,15 @@ public class DogService {
         throw new IllegalStateException("מאגר הכלבים לא מוגדר כראוי");
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<FoodStock> getUserFoodStockEntities(UUID userId) {
+        foodStockConsumptionService.applyElapsedConsumptionForUser(userId);
         return foodStockRepository.findAllForRegularUserWithDogs(userId);
     }
 
-    @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "foodStocksByUser", key = "#userId")
+    @Transactional
     public List<FoodStockDTO> getUserFoodStocks(UUID userId) {
+        foodStockConsumptionService.applyElapsedConsumptionForUser(userId);
         return foodStockRepository.findAllForRegularUserWithDogs(userId).stream()
                 .map(FoodStockDTO::new)
                 .toList();
@@ -574,6 +617,7 @@ public class DogService {
         FoodStock oldFoodStock = dog.getFoodStock();
         if (oldFoodStock != null && !oldFoodStock.getId().equals(foodStockId)) {
             oldFoodStock.removeDog(dog);
+            dog.setFoodStock(null);
             if (oldFoodStock.getDogs().isEmpty()) {
                 healthReminderSyncService.deleteFoodStockReminder(oldFoodStock.getId());
                 foodStockRepository.deleteById(oldFoodStock.getId());
@@ -611,6 +655,7 @@ public class DogService {
         foodStock.setDailyConsumptionInGram(foodStockDTO.getDailyConsumptionInGram());
         foodStock.setNotificationEnabled(foodStockDTO.isNotificationEnabled());
         foodStock.setLowStockThresholdDays(foodStockDTO.getLowStockThresholdDays());
+        foodStock.markLevelAdjustedToday();
 
         FoodStock updatedStock = foodStockRepository.save(foodStock);
         healthReminderSyncService.syncFoodStockReminder(updatedStock);
