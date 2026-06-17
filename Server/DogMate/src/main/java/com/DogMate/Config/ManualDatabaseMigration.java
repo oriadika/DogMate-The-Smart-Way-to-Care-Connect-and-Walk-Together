@@ -26,6 +26,7 @@ public class ManualDatabaseMigration implements ApplicationRunner {
             "db/manual/dog_medications.sql",
             "db/manual/dog_vaccinations.sql",
             "db/manual/notification_schema_update.sql",
+            "db/manual/performance_indexes.sql",
     };
 
     private final JdbcTemplate jdbcTemplate;

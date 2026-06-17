@@ -18,8 +18,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -255,7 +257,7 @@ public class NotificationScheduleService {
         List<SchedulableNotificationDTO> result = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
 
-        for (DogMedication med : medications) {
+        for (DogMedication med : filterLatestMedicationPerGroup(medications)) {
             if (!shouldSchedule(globalEnabled, med.isNotificationEnabled())) {
                 continue;
             }
@@ -264,11 +266,13 @@ public class NotificationScheduleService {
                 continue;
             }
             String dogName = med.getDog() != null ? med.getDog().getName() : "כלב";
+            String medName = med.getMedicationName() != null ? med.getMedicationName() : "תרופה";
+            String defaultBody = "הגיע הזמן לתת ל-" + dogName + " את " + medName;
             result.add(new SchedulableNotificationDTO(
                     "MEDICATION",
                     med.getId(),
-                    "תזכורת תרופה: " + med.getMedicationName(),
-                    "הגיע הזמן לתת ל-" + dogName + " את " + med.getMedicationName(),
+                    "תזכורת תרופה: " + medName,
+                    HealthDescriptionHelper.orDefault(med.getDescription(), defaultBody),
                     trigger.format(ISO_FORMATTER)
             ));
         }
@@ -280,17 +284,19 @@ public class NotificationScheduleService {
             boolean globalEnabled
     ) {
         List<SchedulableNotificationDTO> result = new ArrayList<>();
-        for (DogVaccination v : vaccinations) {
+        for (DogVaccination v : filterLatestVaccinationPerGroup(vaccinations)) {
             if (!shouldSchedule(globalEnabled, v.isNotificationEnabled())) {
                 continue;
             }
             String dogName = v.getDog() != null ? v.getDog().getName() : "כלב";
+            String vaccineName = v.getVaccineName() != null ? v.getVaccineName() : "חיסון";
+            String defaultBody = "חיסון " + vaccineName + " עבור " + dogName + " מתקרב";
             for (LocalDateTime trigger : computeVaccinationTriggers(v.getNextDueDate(), v.getRemindDaysBefore())) {
                 result.add(new SchedulableNotificationDTO(
                         "VACCINATION",
                         v.getId(),
-                        "תזכורת חיסון: " + v.getVaccineName(),
-                        "חיסון " + v.getVaccineName() + " עבור " + dogName + " מתקרב",
+                        "תזכורת חיסון: " + vaccineName,
+                        HealthDescriptionHelper.orDefault(v.getDescription(), defaultBody),
                         trigger.format(ISO_FORMATTER)
                 ));
             }
@@ -336,5 +342,57 @@ public class NotificationScheduleService {
         int hour = Integer.parseInt(parts[0].trim());
         int minute = parts.length > 1 ? Integer.parseInt(parts[1].trim()) : 0;
         return LocalTime.of(hour, minute);
+    }
+
+    static List<DogMedication> filterLatestMedicationPerGroup(List<DogMedication> medications) {
+        Map<String, DogMedication> latestByGroup = new LinkedHashMap<>();
+        for (DogMedication med : medications) {
+            if (med.getDog() == null || med.getDog().getID() == null) {
+                continue;
+            }
+            String name = med.getMedicationName();
+            if (name == null || name.isBlank()) {
+                continue;
+            }
+            String key = med.getDog().getID() + "::" + name.trim();
+            DogMedication existing = latestByGroup.get(key);
+            if (existing == null || isMedicationRecordNewer(med, existing)) {
+                latestByGroup.put(key, med);
+            }
+        }
+        return new ArrayList<>(latestByGroup.values());
+    }
+
+    static List<DogVaccination> filterLatestVaccinationPerGroup(List<DogVaccination> vaccinations) {
+        Map<String, DogVaccination> latestByGroup = new LinkedHashMap<>();
+        for (DogVaccination vaccination : vaccinations) {
+            if (vaccination.getDog() == null || vaccination.getDog().getID() == null) {
+                continue;
+            }
+            String name = vaccination.getVaccineName();
+            if (name == null || name.isBlank()) {
+                continue;
+            }
+            String key = vaccination.getDog().getID() + "::" + name.trim();
+            DogVaccination existing = latestByGroup.get(key);
+            if (existing == null || isVaccinationRecordNewer(vaccination, existing)) {
+                latestByGroup.put(key, vaccination);
+            }
+        }
+        return new ArrayList<>(latestByGroup.values());
+    }
+
+    private static boolean isMedicationRecordNewer(DogMedication candidate, DogMedication current) {
+        Comparator<DogMedication> comparator = Comparator
+                .comparing(DogMedication::getAdministeredDate)
+                .thenComparing(DogMedication::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()));
+        return comparator.compare(candidate, current) > 0;
+    }
+
+    private static boolean isVaccinationRecordNewer(DogVaccination candidate, DogVaccination current) {
+        Comparator<DogVaccination> comparator = Comparator
+                .comparing(DogVaccination::getAdministeredDate)
+                .thenComparing(DogVaccination::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()));
+        return comparator.compare(candidate, current) > 0;
     }
 }

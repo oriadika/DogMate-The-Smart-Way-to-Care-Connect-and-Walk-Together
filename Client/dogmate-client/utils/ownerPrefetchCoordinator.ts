@@ -26,21 +26,28 @@ function createDeferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
-async function prefetchHomeSequential(
+/** Parallel dogs + reminders fetch (no waterfall). */
+async function prefetchHomeParallel(
   userId: string,
   userName?: string,
   userLastName?: string
 ): Promise<void> {
-  const dogsResponse = await withApiRetry(() => dogAPI.getDogsForUser(userId));
-  const nextDogs =
-    dogsResponse.success && dogsResponse.dogs ? dogsResponse.dogs : [];
+  const [dogsSettled, remindersSettled] = await Promise.allSettled([
+    withApiRetry(() => dogAPI.getDogsForUser(userId)),
+    withApiRetry(() => reminderAPI.getRemindersForUser(userId)),
+  ]);
 
-  const remindersResponse = await withApiRetry(() => reminderAPI.getRemindersForUser(userId));
-  const nextReminders = sortRemindersNearestFirst(
-    filterActiveReminders(
-      remindersResponse.success && remindersResponse.reminders ? remindersResponse.reminders : []
-    )
-  );
+  const nextDogs =
+    dogsSettled.status === 'fulfilled' && dogsSettled.value.success && dogsSettled.value.dogs
+      ? dogsSettled.value.dogs
+      : [];
+
+  const nextReminders =
+    remindersSettled.status === 'fulfilled' &&
+    remindersSettled.value.success &&
+    remindersSettled.value.reminders
+      ? sortRemindersNearestFirst(filterActiveReminders(remindersSettled.value.reminders))
+      : [];
 
   setHomeCache(userId, {
     userName: userName || getHomeCache(userId)?.userName || 'חברים',
@@ -59,37 +66,42 @@ async function executeOwnerPrefetch(
   homeGate?: { resolve: () => void }
 ): Promise<void> {
   try {
-    const homeNeeded = !getHomeCache(userId);
-    const healthNeeded = !isHealthDataWarm(userId);
-
-    if (homeNeeded && healthNeeded) {
-      await Promise.all([
-        prefetchHomeSequential(userId, userName, userLastName),
-        warmHealthCountdownCache(userId, []),
-      ]);
-    } else if (homeNeeded) {
-      await prefetchHomeSequential(userId, userName, userLastName);
-    } else if (healthNeeded) {
-      const dogOptions = toDogOptions(getHomeCache(userId)?.dogs ?? []);
-      await warmHealthCountdownCache(userId, dogOptions);
+    if (!getHomeCache(userId)) {
+      await prefetchHomeParallel(userId, userName, userLastName);
     }
   } catch (error) {
     if (!isAbortError(error)) {
-      console.warn('Owner prefetch: home/health phase failed:', error);
+      console.warn('Owner prefetch: home phase failed:', error);
     }
   } finally {
     homeGate?.resolve();
   }
 
-  try {
-    if (!isWalkersDataWarm(userId)) {
-      await prefetchWalkersData(userId);
+  void (async () => {
+    try {
+      if (!isHealthDataWarm(userId)) {
+        const dogOptions = toDogOptions(getHomeCache(userId)?.dogs ?? []);
+        await warmHealthCountdownCache(
+          userId,
+          dogOptions.length > 0 ? dogOptions : undefined
+        );
+      }
+    } catch (error) {
+      if (!isAbortError(error)) {
+        console.warn('Owner prefetch: health phase failed:', error);
+      }
     }
-  } catch (error) {
-    if (!isAbortError(error)) {
-      console.warn('Owner prefetch: walkers phase failed:', error);
+
+    try {
+      if (!isWalkersDataWarm(userId)) {
+        await prefetchWalkersData(userId);
+      }
+    } catch (error) {
+      if (!isAbortError(error)) {
+        console.warn('Owner prefetch: walkers phase failed:', error);
+      }
     }
-  }
+  })();
 }
 
 function getOrCreatePrefetchJob(

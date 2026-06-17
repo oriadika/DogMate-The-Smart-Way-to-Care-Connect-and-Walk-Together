@@ -61,6 +61,11 @@ public interface IUserRepository {
      */
     List<UserAccount> findAll();
 
+    /**
+     * Logged-in users only — avoids full table scan for map endpoints.
+     */
+    List<UserAccount> findAllLoggedIn();
+
     @Query("""
     SELECT u FROM UserAccount u
     WHERE LOWER(u.email) LIKE LOWER(CONCAT('%', :text, '%'))

@@ -38,6 +38,7 @@ import {
   setHomeCache,
   shouldForceHomeRefresh,
   clearHomeDirty,
+  isHomeCacheFresh,
 } from '../utils/homeDataCache';
 import MedicationOverdueMarkDoneModal from '../components/health/MedicationOverdueMarkDoneModal';
 import {
@@ -52,6 +53,7 @@ import {
   consumeLoginWelcomeMessage,
   showLoginWelcomeMessage,
 } from '../utils/loginWelcomeMessage';
+import { runReminderMaintenanceInBackground } from '../utils/reminderMaintenance';
 import { isAbortError } from '../utils/isAbortError';
 import { getOwnerSession, resolveOwnerUserId } from '../utils/ownerSession';
 import {
@@ -222,12 +224,17 @@ const HomeScreen = ({ navigation, route }: any) => {
   const loadUserAndDogs = useCallback(async (
     userIdToLoad: string,
     userNameToLoad?: string,
-    options?: { showLoader?: boolean; syncNotifications?: boolean }
+    options?: { showLoader?: boolean; syncNotifications?: boolean; skipIfFresh?: boolean }
   ) => {
     const { generation, signal } = beginHomeFetch();
 
     const shouldShowLoader = options?.showLoader ?? false;
     const shouldSyncNotifications = options?.syncNotifications ?? false;
+    const skipIfFresh = options?.skipIfFresh ?? false;
+
+    if (skipIfFresh && isHomeCacheFresh(userIdToLoad)) {
+      return;
+    }
 
     try {
       if (shouldShowLoader) {
@@ -411,7 +418,10 @@ const HomeScreen = ({ navigation, route }: any) => {
         void loadUserAndDogs(resolvedUserId, userNameRef.current, {
           showLoader: !visible,
           syncNotifications: false,
+          skipIfFresh: !forceRefresh,
         });
+
+        runReminderMaintenanceInBackground(resolvedUserId);
       };
 
       const interactionTask = hasVisibleData

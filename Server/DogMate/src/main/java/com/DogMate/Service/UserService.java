@@ -342,6 +342,16 @@ public class UserService {
     }
 
     /**
+     * Active sessions only — used by map / logged-users API.
+     */
+    public java.util.List<UserAccount> getLoggedInUsers() {
+        if (userRepository instanceof com.DogMate.Infrastructure.UserRepository repo) {
+            return repo.findAllLoggedIn();
+        }
+        return getAllUsers().stream().filter(UserAccount::isLoggedIn).toList();
+    }
+
+    /**
      * Suspend a user with userId
      * @param userId
      */

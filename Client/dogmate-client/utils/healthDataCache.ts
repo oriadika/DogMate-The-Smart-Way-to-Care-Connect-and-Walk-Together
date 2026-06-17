@@ -48,9 +48,15 @@ const vaccinationsCache = new Map<string, VaccinationsCacheEntry>();
 const medicationsCache = new Map<string, MedicationsCacheEntry>();
 const foodInventoryCache = new Map<string, FoodInventoryCacheEntry>();
 
+const vaccinationsCacheUpdatedAt = new Map<string, number>();
+const medicationsCacheUpdatedAt = new Map<string, number>();
+const foodInventoryCacheUpdatedAt = new Map<string, number>();
+
 const dirtyVaccinationsUsers = new Set<string>();
 const dirtyMedicationsUsers = new Set<string>();
 const dirtyFoodInventoryUsers = new Set<string>();
+
+const HEALTH_CACHE_FRESH_MS = 30_000;
 
 export function toDogOptions(dogs: Array<{ id?: string; name?: string }>): DogOption[] {
   return dogs.map((d) => ({
@@ -97,6 +103,7 @@ export function getVaccinationsCache(userId: string): VaccinationsCacheEntry | u
 
 export function setVaccinationsCache(userId: string, entry: VaccinationsCacheEntry): void {
   vaccinationsCache.set(userId, entry);
+  vaccinationsCacheUpdatedAt.set(userId, Date.now());
 }
 
 export function getMedicationsCache(userId: string): MedicationsCacheEntry | undefined {
@@ -105,6 +112,7 @@ export function getMedicationsCache(userId: string): MedicationsCacheEntry | und
 
 export function setMedicationsCache(userId: string, entry: MedicationsCacheEntry): void {
   medicationsCache.set(userId, entry);
+  medicationsCacheUpdatedAt.set(userId, Date.now());
 }
 
 export function getFoodInventoryCache(userId: string): FoodInventoryCacheEntry | undefined {
@@ -113,6 +121,46 @@ export function getFoodInventoryCache(userId: string): FoodInventoryCacheEntry |
 
 export function setFoodInventoryCache(userId: string, entry: FoodInventoryCacheEntry): void {
   foodInventoryCache.set(userId, entry);
+  foodInventoryCacheUpdatedAt.set(userId, Date.now());
+}
+
+export function isVaccinationsCacheFresh(
+  userId: string,
+  maxAgeMs = HEALTH_CACHE_FRESH_MS
+): boolean {
+  const updatedAt = vaccinationsCacheUpdatedAt.get(userId);
+  return (
+    Boolean(getVaccinationsCache(userId)) &&
+    updatedAt != null &&
+    Date.now() - updatedAt < maxAgeMs &&
+    !dirtyVaccinationsUsers.has(userId)
+  );
+}
+
+export function isMedicationsCacheFresh(
+  userId: string,
+  maxAgeMs = HEALTH_CACHE_FRESH_MS
+): boolean {
+  const updatedAt = medicationsCacheUpdatedAt.get(userId);
+  return (
+    Boolean(getMedicationsCache(userId)) &&
+    updatedAt != null &&
+    Date.now() - updatedAt < maxAgeMs &&
+    !dirtyMedicationsUsers.has(userId)
+  );
+}
+
+export function isFoodInventoryCacheFresh(
+  userId: string,
+  maxAgeMs = HEALTH_CACHE_FRESH_MS
+): boolean {
+  const updatedAt = foodInventoryCacheUpdatedAt.get(userId);
+  return (
+    Boolean(getFoodInventoryCache(userId)) &&
+    updatedAt != null &&
+    Date.now() - updatedAt < maxAgeMs &&
+    !dirtyFoodInventoryUsers.has(userId)
+  );
 }
 
 export function transformFoodStockRow(stock: any): FoodInventoryItem {
@@ -158,23 +206,27 @@ export async function refreshFoodInventoryFromServer(userId: string): Promise<Fo
 }
 
 export async function refreshVaccinationsFromServer(userId: string): Promise<VaccinationRow[]> {
-  const dogOptions = await fetchDogOptionsForUser(userId);
-  const vaccinationsResponse = await withApiRetry(() => vaccinationAPI.list(userId));
+  const [dogOptionsResult, vaccinationsResponse] = await Promise.all([
+    fetchDogOptionsForUser(userId),
+    withApiRetry(() => vaccinationAPI.list(userId)),
+  ]);
   const rows = Array.isArray(vaccinationsResponse.vaccinations)
     ? (vaccinationsResponse.vaccinations as VaccinationRow[])
     : [];
-  setVaccinationsCache(userId, { rows, userDogs: dogOptions });
+  setVaccinationsCache(userId, { rows, userDogs: dogOptionsResult });
   clearVaccinationsDirty(userId);
   return rows;
 }
 
 export async function refreshMedicationsFromServer(userId: string): Promise<MedicationRow[]> {
-  const dogOptions = await fetchDogOptionsForUser(userId);
-  const medicationsResponse = await withApiRetry(() => medicationAPI.list(userId));
+  const [dogOptionsResult, medicationsResponse] = await Promise.all([
+    fetchDogOptionsForUser(userId),
+    withApiRetry(() => medicationAPI.list(userId)),
+  ]);
   const rows = Array.isArray(medicationsResponse.medications)
     ? (medicationsResponse.medications as MedicationRow[])
     : [];
-  setMedicationsCache(userId, { rows, userDogs: dogOptions });
+  setMedicationsCache(userId, { rows, userDogs: dogOptionsResult });
   clearMedicationsDirty(userId);
   return rows;
 }

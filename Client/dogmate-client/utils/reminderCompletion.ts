@@ -1,3 +1,4 @@
+import { runReminderMaintenanceInBackground } from './reminderMaintenance';
 import { reminderAPI, type ReminderRow } from '../services/dogmateApi';
 import { cancelReminderNotification } from '../services/notifications';
 import { resyncAllNotificationsInBackground } from '../services/notificationScheduler';
@@ -17,7 +18,6 @@ export async function handleReminderNotificationDelivered(
   sourceType?: string
 ): Promise<void> {
   if (
-    sourceType !== 'REMINDER' &&
     sourceType !== 'FOOD' &&
     sourceType !== 'VACCINATION' &&
     sourceType !== 'MEDICATION'
@@ -29,7 +29,7 @@ export async function handleReminderNotificationDelivered(
   if (!userId) return;
 
   try {
-    await reminderAPI.processExpiredReminders(userId);
+    runReminderMaintenanceInBackground(userId);
     markHomeDataDirty(userId);
     if (sourceType === 'FOOD') {
       markFoodInventoryDirty(userId);

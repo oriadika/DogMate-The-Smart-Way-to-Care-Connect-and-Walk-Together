@@ -649,35 +649,35 @@ public class UserController {
     @Cacheable(cacheNames = "loggedUsers")
     public ResponseEntity<?> getAllLoggedUsers() {
         try {
-            System.out.println("Fetching all logged in users");
-            java.util.List<com.DogMate.Domain.UserAccount> users = userService.getAllUsers();
-            
+            java.util.List<com.DogMate.Domain.UserAccount> users = userService.getLoggedInUsers();
+
+            java.util.List<UUID> regularUserIds = users.stream()
+                    .filter(com.DogMate.Domain.RegularUser.class::isInstance)
+                    .map(com.DogMate.Domain.UserAccount::getId)
+                    .toList();
+            java.util.Map<UUID, java.util.List<com.DogMate.Domain.Dog>> dogsByUser =
+                    dogService.getDogsGroupedByRegularUserIds(regularUserIds);
+
             java.util.List<Map<String, Object>> usersList = new java.util.ArrayList<>();
             for (com.DogMate.Domain.UserAccount user : users) {
-                if (!user.isLoggedIn()) {
-                    continue; // Skip inactive users
-                }
                 Map<String, Object> userInfo = new HashMap<>();
                 userInfo.put("id", user.getId());
                 userInfo.put("email", user.getEmail());
                 userInfo.put("createdAt", user.getCreatedAt());
                 userInfo.put("suspended", user.isSuspended());
-                
-                if (user instanceof com.DogMate.Domain.RegularUser) {
-                    com.DogMate.Domain.RegularUser regularUser = (com.DogMate.Domain.RegularUser) user;
+
+                if (user instanceof com.DogMate.Domain.RegularUser regularUser) {
                     userInfo.put("type", "RegularUser");
                     userInfo.put("firstName", regularUser.getFirst_name());
                     userInfo.put("lastName", regularUser.getLast_name());
-                    // Add location if available
                     if (regularUser.getLatitude() != null && regularUser.getLongitude() != null) {
                         userInfo.put("latitude", regularUser.getLatitude());
                         userInfo.put("longitude", regularUser.getLongitude());
                     }
-                    dogService.getFirstMapDogProfileImageUrl(regularUser.getId())
-                            .ifPresent(url -> userInfo.put("mapDogProfileImageUrl", url));
-                    dogService.putMapDogSummaryFields(regularUser.getId(), userInfo);
-                } else if (user instanceof com.DogMate.Domain.DogWalkerUser) {
-                    com.DogMate.Domain.DogWalkerUser walker = (com.DogMate.Domain.DogWalkerUser) user;
+                    java.util.List<com.DogMate.Domain.Dog> userDogs =
+                            dogsByUser.getOrDefault(regularUser.getId(), java.util.List.of());
+                    dogService.putMapDogSummaryFields(regularUser.getId(), userInfo, userDogs);
+                } else if (user instanceof com.DogMate.Domain.DogWalkerUser walker) {
                     userInfo.put("type", "DogWalkerUser");
                     userInfo.put("firstName", walker.getFirst_name());
                     userInfo.put("lastName", walker.getLast_name());

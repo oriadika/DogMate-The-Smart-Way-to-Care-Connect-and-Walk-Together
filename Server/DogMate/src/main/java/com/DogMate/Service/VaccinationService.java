@@ -48,6 +48,31 @@ public class VaccinationService {
         return v;
     }
 
+    private List<DogVaccination> findVaccinationGroupRecords(UUID userId, UUID dogId, String vaccineName) {
+        if (dogId == null || vaccineName == null || vaccineName.isBlank()) {
+            return List.of();
+        }
+        return vaccinationRepository.findAllForRegularUser(userId).stream()
+                .filter(v -> v.getDog().getID().equals(dogId))
+                .filter(v -> vaccineName.equals(v.getVaccineName()))
+                .toList();
+    }
+
+    private void propagateGroupNotificationSettings(UUID userId, DogVaccination source) {
+        if (source.getDog() == null || source.getVaccineName() == null) {
+            return;
+        }
+        for (DogVaccination vaccination : findVaccinationGroupRecords(
+                userId,
+                source.getDog().getID(),
+                source.getVaccineName()
+        )) {
+            vaccination.setNotificationEnabled(source.isNotificationEnabled());
+            vaccination.setRemindDaysBefore(source.getRemindDaysBefore());
+            vaccinationRepository.save(vaccination);
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<VaccinationDTO> listForUser(UUID userId) {
         return vaccinationRepository.findAllForRegularUser(userId).stream()
@@ -57,7 +82,7 @@ public class VaccinationService {
 
     @Transactional
     public VaccinationDTO create(UUID userId, UUID dogId, String vaccineName, LocalDate administeredDate,
-                                 LocalDate nextDueDate, String vetClinicName,
+                                 LocalDate nextDueDate, String vetClinicName, String description,
                                  Boolean notificationEnabled, String remindDaysBefore) {
         if (vaccineName == null || vaccineName.isBlank()) {
             throw new IllegalArgumentException("חובה להזין שם חיסון");
@@ -73,6 +98,7 @@ public class VaccinationService {
         DogVaccination entity = new DogVaccination(null, dog, vaccineName, administeredDate);
         entity.setNextDueDate(nextDueDate);
         entity.setVetClinicName(vetClinicName);
+        entity.setDescription(description);
         NotificationSettingsHelper.applyVaccinationSettings(entity, notificationEnabled, remindDaysBefore);
         DogVaccination saved = vaccinationRepository.save(entity);
         healthReminderSyncService.syncVaccinationReminder(saved, userId);
@@ -82,6 +108,7 @@ public class VaccinationService {
     @Transactional
     public VaccinationDTO update(UUID userId, UUID vaccinationId, UUID dogId, String vaccineName,
                                  LocalDate administeredDate, LocalDate nextDueDate, String vetClinicName,
+                                 String description,
                                  Boolean notificationEnabled, String remindDaysBefore) {
         DogVaccination v = loadOwnedOrThrow(userId, vaccinationId);
         if (vaccineName == null || vaccineName.isBlank()) {
@@ -102,8 +129,10 @@ public class VaccinationService {
         v.setAdministeredDate(administeredDate);
         v.setNextDueDate(nextDueDate);
         v.setVetClinicName(vetClinicName);
+        v.setDescription(description);
         NotificationSettingsHelper.applyVaccinationSettings(v, notificationEnabled, remindDaysBefore);
         DogVaccination saved = vaccinationRepository.save(v);
+        propagateGroupNotificationSettings(userId, saved);
         healthReminderSyncService.syncVaccinationReminder(saved, userId);
         return VaccinationDTO.fromEntity(saved);
     }
@@ -133,6 +162,7 @@ public class VaccinationService {
                 doseDate
         );
         entity.setVetClinicName(template.getVetClinicName());
+        entity.setDescription(template.getDescription());
         entity.setNextDueDate(HealthCycleScheduleHelper.computeNextDueAfterAdministration(
                 template.getAdministeredDate(),
                 template.getNextDueDate(),

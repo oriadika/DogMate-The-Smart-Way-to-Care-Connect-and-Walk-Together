@@ -123,12 +123,46 @@ class NotificationScheduleServiceTest {
     }
 
     @Test
-    void buildVaccinationTriggers_skipsWhenItemDisabled() {
+    void buildMedicationTriggers_usesOnlyLatestHistoryRecordPerGroup() {
         Dog dog = new Dog(UUID.randomUUID(), "Rex", "Mix", LocalDate.of(2020, 1, 1), 'M', "url");
-        DogVaccination v = new DogVaccination(null, dog, "Rabies", LocalDate.now());
-        v.setNextDueDate(LocalDate.now().plusDays(14));
-        v.setNotificationEnabled(false);
+        DogMedication older = new DogMedication(UUID.randomUUID(), dog, "Pill", LocalDate.now().minusDays(30));
+        older.setNotificationEnabled(true);
+        older.setNextDueDate(LocalDate.now().plusDays(5));
+        older.setRemindBeforeValue(2);
 
-        assertTrue(service.buildVaccinationTriggers(List.of(v), true).isEmpty());
+        DogMedication latest = new DogMedication(UUID.randomUUID(), dog, "Pill", LocalDate.now().minusDays(2));
+        latest.setNotificationEnabled(false);
+        latest.setNextDueDate(LocalDate.now().plusDays(10));
+        latest.setRemindBeforeValue(2);
+
+        assertTrue(service.buildMedicationTriggers(List.of(older, latest), true).isEmpty());
+    }
+
+    @Test
+    void buildVaccinationTriggers_usesOnlyLatestHistoryRecordPerGroup() {
+        Dog dog = new Dog(UUID.randomUUID(), "Rex", "Mix", LocalDate.of(2020, 1, 1), 'M', "url");
+        DogVaccination older = new DogVaccination(UUID.randomUUID(), dog, "Rabies", LocalDate.now().minusDays(30));
+        older.setNotificationEnabled(true);
+        older.setNextDueDate(LocalDate.now().plusDays(14));
+
+        DogVaccination latest = new DogVaccination(UUID.randomUUID(), dog, "Rabies", LocalDate.now().minusDays(2));
+        latest.setNotificationEnabled(false);
+        latest.setNextDueDate(LocalDate.now().plusDays(14));
+
+        assertTrue(service.buildVaccinationTriggers(List.of(older, latest), true).isEmpty());
+    }
+
+    @Test
+    void buildMedicationTriggers_usesCustomDescriptionWhenPresent() {
+        Dog dog = new Dog(UUID.randomUUID(), "Rex", "Mix", LocalDate.of(2020, 1, 1), 'M', "url");
+        DogMedication med = new DogMedication(null, dog, "Pill", LocalDate.now());
+        med.setNotificationEnabled(true);
+        med.setNextDueDate(LocalDate.now().plusDays(14));
+        med.setRemindBeforeValue(7);
+        med.setDescription("לתת עם אוכל");
+
+        var triggers = service.buildMedicationTriggers(List.of(med), true);
+        assertEquals(1, triggers.size());
+        assertEquals("לתת עם אוכל", triggers.get(0).body());
     }
 }

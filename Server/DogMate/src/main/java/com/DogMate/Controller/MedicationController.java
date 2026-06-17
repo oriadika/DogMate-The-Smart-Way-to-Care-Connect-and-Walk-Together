@@ -62,7 +62,7 @@ public class MedicationController {
             LocalDate nextDue = parseOptionalDate(body.getNextDueDate());
             MedicationDTO saved = medicationService.create(uid, body.getDogId(), body.getMedicationName(), date,
                     parseOptionalTime(body.getAdministeredTime()), nextDue,
-                    parseOptionalTime(body.getNextDueTime()), body.getVetClinicName(),
+                    parseOptionalTime(body.getNextDueTime()), body.getVetClinicName(), body.getDescription(),
                     body.getNotificationEnabled(), resolveRemindBeforeValue(body),
                     RemindBeforeUnit.fromString(body.getRemindBeforeUnit()));
             Map<String, Object> ok = new HashMap<>();
@@ -92,7 +92,7 @@ public class MedicationController {
             LocalDate nextDue = parseOptionalDate(body.getNextDueDate());
             MedicationDTO saved = medicationService.update(uid, mid, body.getDogId(), body.getMedicationName(), date,
                     parseOptionalTime(body.getAdministeredTime()), nextDue,
-                    parseOptionalTime(body.getNextDueTime()), body.getVetClinicName(),
+                    parseOptionalTime(body.getNextDueTime()), body.getVetClinicName(), body.getDescription(),
                     body.getNotificationEnabled(), resolveRemindBeforeValue(body),
                     RemindBeforeUnit.fromString(body.getRemindBeforeUnit()));
             Map<String, Object> ok = new HashMap<>();
@@ -227,6 +227,7 @@ public class MedicationController {
         private String administeredTime;
         private String nextDueDate;
         private String vetClinicName;
+        private String description;
         private Boolean notificationEnabled;
         private Integer remindBeforeValue;
         private String remindBeforeUnit;
@@ -287,6 +288,14 @@ public class MedicationController {
 
         public void setVetClinicName(String vetClinicName) {
             this.vetClinicName = vetClinicName;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public void setDescription(String description) {
+            this.description = description;
         }
 
         public Boolean getNotificationEnabled() {
@@ -330,6 +339,7 @@ public class MedicationController {
         private String administeredTime;
         private String nextDueDate;
         private String vetClinicName;
+        private String description;
         private Boolean notificationEnabled;
         private Integer remindBeforeValue;
         private String remindBeforeUnit;
@@ -390,6 +400,14 @@ public class MedicationController {
 
         public void setVetClinicName(String vetClinicName) {
             this.vetClinicName = vetClinicName;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public void setDescription(String description) {
+            this.description = description;
         }
 
         public Boolean getNotificationEnabled() {

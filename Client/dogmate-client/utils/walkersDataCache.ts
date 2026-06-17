@@ -21,7 +21,10 @@ type WalkersCacheEntry = {
 };
 
 const walkersCache = new Map<string, WalkersCacheEntry>();
+const walkersCacheUpdatedAt = new Map<string, number>();
 const dirtyWalkersUsers = new Set<string>();
+
+const WALKERS_CACHE_FRESH_MS = 30_000;
 
 let loggedUsersCache: FormattedLoggedUser[] | null = null;
 let loggedUsersCacheTime = 0;
@@ -40,6 +43,20 @@ export function getWalkersCache(ownerId: string): WalkersCacheEntry | undefined 
 
 export function setWalkersCache(ownerId: string, walkers: ProfessionalProfileResponse[]): void {
   walkersCache.set(ownerId, { walkers });
+  walkersCacheUpdatedAt.set(ownerId, Date.now());
+}
+
+export function isWalkersCacheFresh(
+  ownerId: string,
+  maxAgeMs = WALKERS_CACHE_FRESH_MS
+): boolean {
+  const updatedAt = walkersCacheUpdatedAt.get(ownerId);
+  return (
+    Boolean(getWalkersCache(ownerId)) &&
+    updatedAt != null &&
+    Date.now() - updatedAt < maxAgeMs &&
+    !dirtyWalkersUsers.has(ownerId)
+  );
 }
 
 export function markWalkersDirty(ownerId: string): void {

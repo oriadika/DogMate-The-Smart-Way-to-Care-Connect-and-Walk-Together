@@ -11,6 +11,7 @@ import {
   Modal,
   Pressable,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,6 +32,7 @@ import {
   markVaccinationsDirty,
   setVaccinationsCache,
   shouldForceVaccinationsRefresh,
+  isVaccinationsCacheFresh,
   type DogOption,
 } from '../../utils/healthDataCache';
 import VaccinationSortModal, {
@@ -117,6 +119,10 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
         setLoading(false);
       } else if (rowsRef.current.length === 0) {
         setLoading(true);
+      }
+
+      if (!forceRefresh && isVaccinationsCacheFresh(uid)) {
+        return;
       }
 
       if (forceRefresh) {
@@ -448,6 +454,10 @@ const VaccinationsHubScreen = ({ navigation }: any) => {
           data={sortedGroupedRows}
           keyExtractor={(item) => item.key}
           contentContainerStyle={styles.listPad}
+          initialNumToRender={8}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
           renderItem={({ item }) => (
             <VaccinationGroupCard
               group={item}

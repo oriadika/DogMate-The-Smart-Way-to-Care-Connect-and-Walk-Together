@@ -63,6 +63,7 @@ class MedicationReminderReconcileIntegrationTest {
                 LocalDate.now().plusDays(2),
                 LocalTime.of(9, 0),
                 null,
+                null,
                 true,
                 1,
                 RemindBeforeUnit.DAYS
@@ -115,6 +116,7 @@ class MedicationReminderReconcileIntegrationTest {
                 LocalTime.of(9, 0),
                 LocalDate.now().plusDays(2),
                 LocalTime.of(9, 0),
+                null,
                 null,
                 true,
                 1,

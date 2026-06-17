@@ -11,7 +11,10 @@ export type HomeCacheEntry = {
 };
 
 const homeDataCache = new Map<string, HomeCacheEntry>();
+const homeCacheUpdatedAt = new Map<string, number>();
 const dirtyHomeDataUsers = new Set<string>();
+
+const HOME_CACHE_FRESH_MS = 20_000;
 
 const profileImageFingerprint = (url: unknown): string => {
   const s = typeof url === 'string' ? url : '';
@@ -47,10 +50,12 @@ export function getHomeCache(userId: string): HomeCacheEntry | undefined {
 
 export function setHomeCache(userId: string, entry: HomeCacheEntry): void {
   homeDataCache.set(userId, entry);
+  homeCacheUpdatedAt.set(userId, Date.now());
 }
 
 export function clearHomeCache(userId: string): void {
   homeDataCache.delete(userId);
+  homeCacheUpdatedAt.delete(userId);
 }
 
 export function markHomeDataDirty(userId: string): void {
@@ -65,6 +70,16 @@ export function consumeHomeDirty(userId: string): boolean {
 
 export function shouldForceHomeRefresh(userId: string, routeRefresh?: boolean): boolean {
   return routeRefresh === true || dirtyHomeDataUsers.has(userId);
+}
+
+export function isHomeCacheFresh(userId: string, maxAgeMs = HOME_CACHE_FRESH_MS): boolean {
+  const updatedAt = homeCacheUpdatedAt.get(userId);
+  return (
+    Boolean(getHomeCache(userId)) &&
+    updatedAt != null &&
+    Date.now() - updatedAt < maxAgeMs &&
+    !dirtyHomeDataUsers.has(userId)
+  );
 }
 
 export function clearHomeDirty(userId: string): void {

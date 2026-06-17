@@ -16,7 +16,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -446,7 +448,11 @@ public class DogService {
      */
     @Transactional(readOnly = true)
     public Optional<String> getFirstMapDogProfileImageUrl(UUID userId) {
-        List<Dog> userDogs = getDogsForUser(userId);
+        return getFirstMapDogProfileImageUrl(getDogsForUser(userId));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<String> getFirstMapDogProfileImageUrl(List<Dog> userDogs) {
         for (Dog dog : userDogs) {
             String url = dog.getProfileImageURL();
             if (url != null && !url.isBlank()) {
@@ -461,7 +467,11 @@ public class DogService {
      */
     @Transactional(readOnly = true)
     public Optional<Dog> getPrimaryDogForMap(UUID userId) {
-        List<Dog> userDogs = getDogsForUser(userId);
+        return getPrimaryDogForMap(getDogsForUser(userId));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Dog> getPrimaryDogForMap(List<Dog> userDogs) {
         if (userDogs.isEmpty()) {
             return Optional.empty();
         }
@@ -479,18 +489,49 @@ public class DogService {
      */
     @Transactional(readOnly = true)
     public void putMapDogSummaryFields(UUID userId, Map<String, Object> userInfo) {
-        getPrimaryDogForMap(userId).ifPresent(dog -> {
-            if (dog.getName() != null && !dog.getName().isBlank()) {
-                userInfo.put("mapDogName", dog.getName().trim());
+        putMapDogSummaryFields(userId, userInfo, getDogsForUser(userId));
+    }
+
+    @Transactional(readOnly = true)
+    public void putMapDogSummaryFields(UUID userId, Map<String, Object> userInfo, List<Dog> userDogs) {
+        getPrimaryDogForMap(userDogs).ifPresent(dog -> applyMapDogSummaryFields(dog, userInfo));
+        getFirstMapDogProfileImageUrl(userDogs)
+                .ifPresent(url -> userInfo.put("mapDogProfileImageUrl", url));
+    }
+
+    private void applyMapDogSummaryFields(Dog dog, Map<String, Object> userInfo) {
+        if (dog.getName() != null && !dog.getName().isBlank()) {
+            userInfo.put("mapDogName", dog.getName().trim());
+        }
+        if (dog.getBreed() != null && !dog.getBreed().isBlank()) {
+            userInfo.put("mapDogBreed", dog.getBreed().trim());
+        }
+        if (dog.getBirthdate() != null) {
+            userInfo.put("mapDogBirthdate", dog.getBirthdate().toString());
+            userInfo.put("mapDogAgeYears", Period.between(dog.getBirthdate(), LocalDate.now()).getYears());
+        }
+    }
+
+    /**
+     * Batch-load dogs for map markers — one query for all logged-in regular users.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, List<Dog>> getDogsGroupedByRegularUserIds(Collection<UUID> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, List<Dog>> grouped = new HashMap<>();
+        if (!(dogRelationshipRepository instanceof com.DogMate.Infrastructure.DogRelationshipRepository repo)) {
+            for (UUID userId : userIds) {
+                grouped.put(userId, getDogsForUser(userId));
             }
-            if (dog.getBreed() != null && !dog.getBreed().isBlank()) {
-                userInfo.put("mapDogBreed", dog.getBreed().trim());
-            }
-            if (dog.getBirthdate() != null) {
-                userInfo.put("mapDogBirthdate", dog.getBirthdate().toString());
-                userInfo.put("mapDogAgeYears", Period.between(dog.getBirthdate(), LocalDate.now()).getYears());
-            }
-        });
+            return grouped;
+        }
+        for (DogRelationship relationship : repo.findByRegularUserIdInWithDog(userIds)) {
+            UUID ownerId = relationship.getRegularUser().getId();
+            grouped.computeIfAbsent(ownerId, ignored -> new ArrayList<>()).add(relationship.getDog());
+        }
+        return grouped;
     }
 
     @Transactional(readOnly = true)

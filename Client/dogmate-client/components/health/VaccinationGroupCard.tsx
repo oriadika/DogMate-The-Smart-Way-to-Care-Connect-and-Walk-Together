@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { VaccinationRow } from '../../services/dogmateApi';
@@ -9,6 +9,7 @@ import {
   getHealthHubCountdown,
 } from '../../utils/daysDisplay';
 import { isAdministeredToday } from '../../utils/healthLogDose';
+import ExpandableDescription, { animateDescriptionToggle } from './ExpandableDescription';
 
 const PRIMARY_COLOR = '#7FB069';
 const TEXT_DARK = '#5C4033';
@@ -39,9 +40,16 @@ export default function VaccinationGroupCard({
   loggingDose = false,
   formatDate,
 }: Props) {
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const latest = getLatestVaccinationRecord(group.history);
   const loggedToday = latest ? isAdministeredToday(latest.administeredDate) : false;
   const countdown = getHealthHubCountdown(latest?.nextDueDate ?? null, null, 'החיסון הבא');
+  const description = latest?.description?.trim() ?? '';
+
+  const toggleDescriptionExpanded = useCallback(() => {
+    animateDescriptionToggle();
+    setDescriptionExpanded((prev) => !prev);
+  }, []);
 
   return (
     <View style={styles.card}>
@@ -57,6 +65,13 @@ export default function VaccinationGroupCard({
           ) : (
             <Text style={styles.nextDueMuted}>חיסון הבא: לא נקבע</Text>
           )}
+          {description ? (
+            <ExpandableDescription
+              description={description}
+              expanded={descriptionExpanded}
+              onToggle={toggleDescriptionExpanded}
+            />
+          ) : null}
           {latest && onLogDose ? (
             <TouchableOpacity
               style={[

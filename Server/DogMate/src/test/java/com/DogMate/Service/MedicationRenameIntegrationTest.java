@@ -63,6 +63,7 @@ class MedicationRenameIntegrationTest {
                 LocalDate.now().minusDays(7),
                 LocalTime.of(9, 0),
                 null,
+                null,
                 true,
                 1,
                 RemindBeforeUnit.DAYS
@@ -91,6 +92,7 @@ class MedicationRenameIntegrationTest {
                 LocalTime.of(10, 0),
                 LocalDate.now().plusDays(7),
                 LocalTime.of(9, 0),
+                null,
                 null,
                 true,
                 1,

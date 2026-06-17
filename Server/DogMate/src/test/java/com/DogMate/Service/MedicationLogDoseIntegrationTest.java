@@ -61,6 +61,7 @@ class MedicationLogDoseIntegrationTest {
                 nextDue,
                 LocalTime.of(8, 0),
                 null,
+                null,
                 true,
                 1,
                 RemindBeforeUnit.HOURS

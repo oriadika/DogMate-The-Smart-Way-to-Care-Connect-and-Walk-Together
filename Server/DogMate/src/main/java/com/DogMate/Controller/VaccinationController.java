@@ -58,7 +58,7 @@ public class VaccinationController {
             LocalDate date = parseDate(body.getAdministeredDate());
             LocalDate nextDue = parseOptionalDate(body.getNextDueDate());
             VaccinationDTO saved = vaccinationService.create(uid, body.getDogId(), body.getVaccineName(), date,
-                    nextDue, body.getVetClinicName(),
+                    nextDue, body.getVetClinicName(), body.getDescription(),
                     body.getNotificationEnabled(), body.getRemindDaysBefore());
             Map<String, Object> ok = new HashMap<>();
             ok.put("success", true);
@@ -86,7 +86,7 @@ public class VaccinationController {
             LocalDate date = parseDate(body.getAdministeredDate());
             LocalDate nextDue = parseOptionalDate(body.getNextDueDate());
             VaccinationDTO saved = vaccinationService.update(uid, vid, body.getDogId(), body.getVaccineName(), date,
-                    nextDue, body.getVetClinicName(),
+                    nextDue, body.getVetClinicName(), body.getDescription(),
                     body.getNotificationEnabled(), body.getRemindDaysBefore());
             Map<String, Object> ok = new HashMap<>();
             ok.put("success", true);
@@ -165,6 +165,7 @@ public class VaccinationController {
         private String administeredDate;
         private String nextDueDate;
         private String vetClinicName;
+        private String description;
         private Boolean notificationEnabled;
         private String remindDaysBefore;
 
@@ -206,6 +207,14 @@ public class VaccinationController {
 
         public void setVetClinicName(String vetClinicName) {
             this.vetClinicName = vetClinicName;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public void setDescription(String description) {
+            this.description = description;
         }
 
         public Boolean getNotificationEnabled() {
@@ -232,6 +241,7 @@ public class VaccinationController {
         private String administeredDate;
         private String nextDueDate;
         private String vetClinicName;
+        private String description;
         private Boolean notificationEnabled;
         private String remindDaysBefore;
 
@@ -273,6 +283,14 @@ public class VaccinationController {
 
         public void setVetClinicName(String vetClinicName) {
             this.vetClinicName = vetClinicName;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public void setDescription(String description) {
+            this.description = description;
         }
 
         public Boolean getNotificationEnabled() {

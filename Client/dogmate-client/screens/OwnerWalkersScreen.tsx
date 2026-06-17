@@ -35,6 +35,7 @@ import {
   markWalkersDirty,
   setWalkersCache,
   shouldForceWalkersRefresh,
+  isWalkersCacheFresh,
   type FormattedLoggedUser,
 } from '../utils/walkersDataCache';
 import HebrewAsciiParensText from '../components/HebrewAsciiParensText';
@@ -147,6 +148,10 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
         setLoadingWalkers(false);
       } else if (walkersRef.current.length === 0) {
         setLoadingWalkers(true);
+      }
+
+      if (!forceRefresh && isWalkersCacheFresh(uid)) {
+        return;
       }
 
       if (forceRefresh) {

@@ -1065,7 +1065,7 @@ export const reminderAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'נכשל עיבוד תזכורות שפג תוקפן';
-      console.error('Failed to process expired reminders:', errorMessage);
+      console.warn('Failed to process expired reminders:', errorMessage);
       throw new Error(errorMessage);
     }
   },
@@ -1079,6 +1079,7 @@ export interface VaccinationRow {
   administeredDate: string;
   nextDueDate?: string | null;
   vetClinicName?: string | null;
+  description?: string | null;
   createdAt?: string | null;
   notificationEnabled?: boolean;
   remindDaysBefore?: string;
@@ -1090,6 +1091,7 @@ export type VaccinationPayload = {
   administeredDate: string;
   nextDueDate?: string | null;
   vetClinicName?: string | null;
+  description?: string | null;
   notificationEnabled?: boolean;
   remindDaysBefore?: string;
 };
@@ -1114,6 +1116,7 @@ export const vaccinationAPI = {
         administeredDate: payload.administeredDate,
         nextDueDate: payload.nextDueDate ?? null,
         vetClinicName: payload.vetClinicName?.trim() || null,
+        description: payload.description?.trim() || null,
         notificationEnabled: payload.notificationEnabled,
         remindDaysBefore: payload.remindDaysBefore,
       });
@@ -1175,6 +1178,7 @@ export interface MedicationRow {
   nextDueDate?: string | null;
   nextDueTime?: string | null;
   vetClinicName?: string | null;
+  description?: string | null;
   createdAt?: string | null;
   notificationEnabled?: boolean;
   remindBeforeValue?: number | null;
@@ -1191,6 +1195,7 @@ export type MedicationPayload = {
   nextDueDate?: string | null;
   nextDueTime?: string | null;
   vetClinicName?: string | null;
+  description?: string | null;
   notificationEnabled?: boolean;
   remindBeforeValue?: number | null;
   remindBeforeUnit?: string | null;
@@ -1218,6 +1223,7 @@ export const medicationAPI = {
         nextDueDate: payload.nextDueDate ?? null,
         nextDueTime: payload.nextDueTime ?? null,
         vetClinicName: payload.vetClinicName?.trim() || null,
+        description: payload.description?.trim() || null,
         notificationEnabled: payload.notificationEnabled,
         remindBeforeValue: payload.remindBeforeValue,
         remindBeforeUnit: payload.remindBeforeUnit,

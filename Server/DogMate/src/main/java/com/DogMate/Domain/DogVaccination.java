@@ -44,6 +44,9 @@ public class DogVaccination {
     @Column(name = "vet_clinic_name", columnDefinition = "TEXT")
     private String vetClinicName;
 
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -120,6 +123,23 @@ public class DogVaccination {
 
     public void setVetClinicName(String vetClinicName) {
         this.vetClinicName = vetClinicName != null ? vetClinicName.trim() : null;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        if (description == null) {
+            this.description = null;
+            return;
+        }
+        String trimmed = description.trim();
+        if (trimmed.isEmpty()) {
+            this.description = null;
+            return;
+        }
+        this.description = trimmed.length() > 200 ? trimmed.substring(0, 200) : trimmed;
     }
 
     public LocalDateTime getCreatedAt() {

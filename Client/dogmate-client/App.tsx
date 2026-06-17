@@ -52,6 +52,7 @@ import {
 } from './utils/appSession';
 import { clearLoggedUsersCache } from './utils/walkersDataCache';
 import { userAPI } from './services/dogmateApi';
+import { runOwnerPrefetch } from './utils/ownerPrefetchCoordinator';
 
 const Stack = createNativeStackNavigator();
 
@@ -112,6 +113,13 @@ export default function App() {
 
       if (!isDevMode && persistedSession?.userId && persistedSession.userRole) {
         const routeName = persistedSession.userRole === 'walker' ? 'WalkerHome' : 'Home';
+        if (persistedSession.userRole !== 'walker') {
+          void runOwnerPrefetch(
+            persistedSession.userId,
+            persistedSession.userFirstName,
+            persistedSession.userLastName
+          );
+        }
         setTimeout(() => {
           rootNavigationRef.current?.reset({
             index: 0,
