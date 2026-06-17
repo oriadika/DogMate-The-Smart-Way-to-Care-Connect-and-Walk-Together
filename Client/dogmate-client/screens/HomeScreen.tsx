@@ -57,12 +57,14 @@ import { runReminderMaintenanceInBackground } from '../utils/reminderMaintenance
 import { isAbortError } from '../utils/isAbortError';
 import { getOwnerSession, resolveOwnerUserId } from '../utils/ownerSession';
 import {
-  ensureOwnerDataPrefetched,
   isHealthDataWarm,
   toDogOptions,
   warmHealthCountdownCache,
 } from '../utils/healthDataCache';
-import { waitForOwnerPrefetchHome } from '../utils/ownerPrefetchCoordinator';
+import {
+  ensureOwnerDataPrefetched,
+  waitForOwnerPrefetchHome,
+} from '../utils/ownerPrefetchCoordinator';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background

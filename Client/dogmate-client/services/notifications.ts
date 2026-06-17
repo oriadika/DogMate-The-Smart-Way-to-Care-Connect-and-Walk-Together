@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import type { NotificationSourceType } from '../types/notifications';
 import { isGlobalNotificationsEnabled } from './notificationPreferences';
 import { shouldScheduleNotification } from './notificationSchedulerLogic';
-import { handleReminderNotificationDelivered } from '../utils/reminderCompletion';
+import { handleReminderNotificationDelivered } from '../utils/reminderNotificationDelivery';
 
 const hiddenNotificationPresentation = {
   shouldShowAlert: false,

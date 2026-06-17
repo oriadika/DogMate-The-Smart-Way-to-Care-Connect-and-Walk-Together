@@ -23,6 +23,7 @@ import * as Linking from 'expo-linking';
 import { useFocusEffect } from '@react-navigation/native';
 import { FontAwesome, FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { dogWalkerAPI, type ProfessionalProfileResponse } from '../services/dogmateApi';
+import { notifyCaughtApiFailure } from '../utils/caughtApiFailureReporting';
 import { resolveOwnerUserId, getOwnerSession } from '../utils/ownerSession';
 import { deferScreenCleanup, useScreenLifecycleGuard } from '../utils/screenLifecycle';
 import {
@@ -168,9 +169,13 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
     } catch (error) {
       if (!isAsyncWorkCurrent(generation)) return;
       console.error('Failed to fetch available walkers:', error);
-      if (walkersRef.current.length === 0) {
-        Alert.alert('שגיאה', 'טעינת רשימת הדוגווקרים נכשלה');
-      }
+      notifyCaughtApiFailure(error, {
+        context: 'Failed to fetch available walkers',
+        isCriticalFlow: walkersRef.current.length === 0,
+        retryAction: async () => {
+          await loadAvailableWalkers();
+        },
+      });
     } finally {
       if (isAsyncWorkCurrent(generation)) {
         setLoadingWalkers(false);
@@ -187,6 +192,12 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
       }
     } catch (error) {
       console.error('Failed to fetch logged users:', error);
+      notifyCaughtApiFailure(error, {
+        context: 'Failed to fetch logged users',
+        retryAction: async () => {
+          await fetchLoggedUsersForDistances();
+        },
+      });
     }
   }, [isMountedRef, ownerId, route?.params?.userId]);
 

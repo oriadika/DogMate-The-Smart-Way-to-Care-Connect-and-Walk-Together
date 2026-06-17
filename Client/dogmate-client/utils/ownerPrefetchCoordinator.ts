@@ -9,6 +9,7 @@ import { isHealthDataWarm, toDogOptions, warmHealthCountdownCache } from './heal
 import { prefetchWalkersData, isWalkersDataWarm } from './walkersDataCache';
 import { sortRemindersNearestFirst, filterActiveReminders } from './daysDisplay';
 import { isAbortError } from './isAbortError';
+import { notifyCaughtApiFailure } from './caughtApiFailureReporting';
 import { withApiRetry } from './apiRetry';
 
 type PrefetchJob = {
@@ -72,6 +73,13 @@ async function executeOwnerPrefetch(
   } catch (error) {
     if (!isAbortError(error)) {
       console.warn('Owner prefetch: home phase failed:', error);
+      notifyCaughtApiFailure(error, {
+        context: 'Owner prefetch home',
+        isCriticalFlow: true,
+        retryAction: async () => {
+          await prefetchHomeParallel(userId, userName, userLastName);
+        },
+      });
     }
   } finally {
     homeGate?.resolve();
@@ -89,6 +97,16 @@ async function executeOwnerPrefetch(
     } catch (error) {
       if (!isAbortError(error)) {
         console.warn('Owner prefetch: health phase failed:', error);
+        notifyCaughtApiFailure(error, {
+          context: 'Owner prefetch health',
+          retryAction: async () => {
+            const dogOptions = toDogOptions(getHomeCache(userId)?.dogs ?? []);
+            await warmHealthCountdownCache(
+              userId,
+              dogOptions.length > 0 ? dogOptions : undefined
+            );
+          },
+        });
       }
     }
 
@@ -99,6 +117,12 @@ async function executeOwnerPrefetch(
     } catch (error) {
       if (!isAbortError(error)) {
         console.warn('Owner prefetch: walkers phase failed:', error);
+        notifyCaughtApiFailure(error, {
+          context: 'Owner prefetch walkers',
+          retryAction: async () => {
+            await prefetchWalkersData(userId);
+          },
+        });
       }
     }
   })();
@@ -139,4 +163,13 @@ export function runOwnerPrefetch(
 export function waitForOwnerPrefetchHome(userId: string): Promise<void> {
   const job = inflightByUser.get(userId);
   return job?.homeReady ?? Promise.resolve();
+}
+
+/** Fetch any owner caches that are still cold (e.g. missed login prefetch). */
+export async function ensureOwnerDataPrefetched(
+  userId: string,
+  userName?: string,
+  userLastName?: string
+): Promise<void> {
+  return runOwnerPrefetch(userId, userName, userLastName);
 }

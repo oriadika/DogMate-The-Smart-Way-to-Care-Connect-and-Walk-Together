@@ -7,8 +7,8 @@ import {
   type VaccinationRow,
 } from '../services/dogmateApi';
 import { getHomeCache } from './homeDataCache';
-import { runOwnerPrefetch } from './ownerPrefetchCoordinator';
 import { isAbortError } from './isAbortError';
+import { notifyCaughtApiFailure } from './caughtApiFailureReporting';
 import { withApiRetry } from './apiRetry';
 import {
   computeDaysUntilFoodReminder,
@@ -344,15 +344,12 @@ export async function prefetchHealthData(userId: string): Promise<void> {
   } catch (error) {
     if (!isAbortError(error)) {
       console.warn('Health prefetch failed:', error);
+      notifyCaughtApiFailure(error, {
+        context: 'Health prefetch',
+        retryAction: async () => {
+          await warmHealthCountdownCache(userId);
+        },
+      });
     }
   }
-}
-
-/** Fetch any owner caches that are still cold (e.g. missed login prefetch). */
-export async function ensureOwnerDataPrefetched(
-  userId: string,
-  userName?: string,
-  userLastName?: string
-): Promise<void> {
-  return runOwnerPrefetch(userId, userName, userLastName);
 }

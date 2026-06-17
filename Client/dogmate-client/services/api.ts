@@ -2,6 +2,8 @@ import axios, { AxiosInstance } from 'axios';
 import { getApiBaseUrlWithPath } from './config';
 import { isAbortError } from '../utils/isAbortError';
 import { clearAuthToken as clearStoredAuthToken, getAuthToken, saveAuthToken as saveStoredAuthToken } from '../utils/appSession';
+import { installApiSystemErrorInterceptor } from './installApiSystemErrorInterceptor';
+import { notifyCaughtApiFailure } from '../utils/caughtApiFailureReporting';
 
 
 const API_BASE_URL = getApiBaseUrlWithPath('api');
@@ -28,6 +30,8 @@ apiClient.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+
+installApiSystemErrorInterceptor(apiClient);
 
 // Export function to set token
 export const setAuthToken = (token: string) => {
@@ -464,6 +468,7 @@ export const userAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון משתמשים מחוברים';
+      notifyCaughtApiFailure(error, { context: 'Failed to fetch logged users' });
       throw new Error(errorMessage);
     }
   },
@@ -473,19 +478,19 @@ export const userAPI = {
    */
   logout: async (userId: string, email?: string): Promise<{ success: boolean; message: string }> => {
     try {
-      // Call logout endpoint on backend
       console.log('Logging out user:', { userId, email });
-      const response = await apiClient.post('/auth/logout', { userId, email });
+      const response = await apiClient.post(
+        '/auth/logout',
+        { userId, email },
+        { skipSystemErrorReporting: true }
+      );
 
-      // Clear token on logout
       clearAuthToken();
 
       return response.data;
     } catch (error: any) {
-      // Even if logout fails on backend, we can still clear local data
-      console.warn('Logout request failed:', error.message);
+      console.warn('Logout request failed:', error?.message || error);
       clearAuthToken();
-      // Return success anyway to allow local logout
       return { success: true, message: 'ההתנתקות המקומית הושלמה' };
     }
   },
@@ -1341,6 +1346,7 @@ export const foodStockAPI = {
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון את מלאי המזון';
       console.error("Failed to get food stocks:", errorMessage);
+      notifyCaughtApiFailure(error, { context: 'Failed to get food stocks' });
       throw new Error(errorMessage);
     }
   },

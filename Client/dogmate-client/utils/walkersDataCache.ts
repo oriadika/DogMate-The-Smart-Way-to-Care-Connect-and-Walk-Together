@@ -4,6 +4,7 @@ import {
   type ProfessionalProfileResponse,
 } from '../services/dogmateApi';
 import { isAbortError } from './isAbortError';
+import { notifyCaughtApiFailure } from './caughtApiFailureReporting';
 import { withApiRetry } from './apiRetry';
 
 export type FormattedLoggedUser = {
@@ -158,16 +159,32 @@ export async function prefetchWalkersData(ownerId: string): Promise<void> {
   } catch (error) {
     if (!isAbortError(error)) {
       console.warn('Walkers prefetch failed:', error);
+      notifyCaughtApiFailure(error, {
+        context: 'Walkers prefetch',
+        retryAction: async () => {
+          await prefetchWalkersData(ownerId);
+        },
+      });
     }
   }
 }
 
 export async function fetchAndCacheLoggedUsers(excludeUserId?: string): Promise<FormattedLoggedUser[]> {
-  const data = await userAPI.getLoggedUsers();
-  if (!data.success || !data.users) {
-    return getLoggedUsersCache()?.filter((u) => u.id !== excludeUserId) ?? [];
+  try {
+    const data = await userAPI.getLoggedUsers();
+    if (!data.success || !data.users) {
+      return getLoggedUsersCache()?.filter((u) => u.id !== excludeUserId) ?? [];
+    }
+    const formatted = formatLoggedUsers(data.users, excludeUserId);
+    setLoggedUsersCache(formatted);
+    return formatted;
+  } catch (error) {
+    notifyCaughtApiFailure(error, {
+      context: 'Failed to fetch logged users',
+      retryAction: async () => {
+        await fetchAndCacheLoggedUsers(excludeUserId);
+      },
+    });
+    throw error;
   }
-  const formatted = formatLoggedUsers(data.users, excludeUserId);
-  setLoggedUsersCache(formatted);
-  return formatted;
 }

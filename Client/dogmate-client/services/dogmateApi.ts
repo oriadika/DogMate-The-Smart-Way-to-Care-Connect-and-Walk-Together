@@ -1,6 +1,9 @@
 import axios, { AxiosInstance } from 'axios';
 import { getApiBaseUrlWithPath } from './config';
 import { isAbortError } from '../utils/isAbortError';
+import { notifyCaughtApiFailure } from '../utils/caughtApiFailureReporting';
+import type { ReportErrorPayload } from '../utils/systemErrorReporting';
+import { installApiSystemErrorInterceptor } from './installApiSystemErrorInterceptor';
 import {
   clearAuthToken as clearStoredAuthToken,
   getAuthToken as getStoredAuthToken,
@@ -32,6 +35,8 @@ apiClient.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+
+installApiSystemErrorInterceptor(apiClient);
 
 export const setAuthToken = (token: string) => {
   authToken = token;
@@ -467,6 +472,7 @@ export const userAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון משתמשים מחוברים';
+      notifyCaughtApiFailure(error, { context: 'Failed to fetch logged users' });
       throw new Error(errorMessage);
     }
   },
@@ -476,9 +482,12 @@ export const userAPI = {
    */
   logoutAll: async (): Promise<{ success: boolean; message: string }> => {
     try {
-      const response = await apiClient.post('/auth/logout-all');
+      const response = await apiClient.post('/auth/logout-all', undefined, {
+        skipSystemErrorReporting: true,
+      });
       return response.data;
     } catch (error: any) {
+      console.warn('Startup logout-all failed:', error?.message || error);
       const errorMessage = getAuthFlowErrorMessage(error, 'התנתקות כלל המשתמשים נכשלה');
       throw new Error(errorMessage);
     }
@@ -486,19 +495,19 @@ export const userAPI = {
 
   logout: async (userId: string, email?: string): Promise<{ success: boolean; message: string }> => {
     try {
-      // Call logout endpoint on backend
       console.log('Logging out user:', { userId, email });
-      const response = await apiClient.post('/auth/logout', { userId, email });
+      const response = await apiClient.post(
+        '/auth/logout',
+        { userId, email },
+        { skipSystemErrorReporting: true }
+      );
 
-      // Clear token on logout
       clearAuthToken();
 
       return response.data;
     } catch (error: any) {
-      // Even if logout fails on backend, we can still clear local data
-      console.warn('Logout request failed:', error.message);
+      console.warn('Logout request failed:', error?.message || error);
       clearAuthToken();
-      // Return success anyway to allow local logout
       return { success: true, message: 'ההתנתקות המקומית הושלמה' };
     }
   },
@@ -856,6 +865,7 @@ export const dogWalkerAPI = {
       const errorMessage =
         error.response?.data?.error || error.message || 'לא ניתן לטעון דוגווקרים זמינים';
       console.error('getWalkersWithProfessionalProfiles failed:', errorMessage);
+      notifyCaughtApiFailure(error, { context: 'Failed to fetch available walkers' });
       throw new Error(errorMessage);
     }
   },
@@ -1355,6 +1365,7 @@ export const foodStockAPI = {
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון את מלאי המזון';
       console.error("Failed to get food stocks:", errorMessage);
+      notifyCaughtApiFailure(error, { context: 'Failed to get food stocks' });
       throw new Error(errorMessage);
     }
   },
@@ -1447,6 +1458,16 @@ export const foodStockAPI = {
       console.error("Failed to delete food stock:", errorMessage);
       throw new Error(errorMessage);
     }
+  },
+};
+
+export const supportAPI = {
+  reportError: async (payload: ReportErrorPayload) => {
+    const response = await apiClient.post('/support/report-error', payload, {
+      skipSystemErrorReporting: true,
+      silentBackgroundRequest: true,
+    });
+    return response.data;
   },
 };
 

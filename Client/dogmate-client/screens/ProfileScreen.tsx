@@ -19,6 +19,7 @@ import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { userAPI } from '../services/dogmateApi';
+import { notifyCaughtApiFailure } from '../utils/caughtApiFailureReporting';
 import websocketService, { type PingNotification } from '../services/dogmateWebsocket';
 import locationService, { LocationService } from '../services/dogmateLocation';
 import { dogMateMapStyle } from '../src/constants/MapStyles';
@@ -623,9 +624,13 @@ const ProfileScreen = ({ navigation, route }: any) => {
       }
     } catch (error) {
       console.error('Failed to fetch logged users:', error);
-      if (shouldShowLoader) {
-        Alert.alert('שגיאה', 'טעינת המשתמשים נכשלה');
-      }
+      notifyCaughtApiFailure(error, {
+        context: 'Failed to fetch logged users',
+        isCriticalFlow: shouldShowLoader,
+        retryAction: async () => {
+          await fetchLoggedUsers({ showLoader: shouldShowLoader });
+        },
+      });
     } finally {
       isFetchingLoggedUsersRef.current = false;
       if (shouldShowLoader) {

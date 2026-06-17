@@ -1,11 +1,14 @@
 import React, { useEffect } from 'react';
+import { LogBox } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import { UsersProvider } from './contexts/UsersContext';
 import MessageDialogHost from './components/MessageDialogHost';
-
+import AppToastHost from './components/AppToastHost';
+import SystemErrorModalHost from './components/SystemErrorModalHost';
+import GlobalErrorBoundary from './components/GlobalErrorBoundary';
 import StartScreen from './screens/StartScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
@@ -53,83 +56,110 @@ import {
 import { clearLoggedUsersCache } from './utils/walkersDataCache';
 import { userAPI } from './services/dogmateApi';
 import { runOwnerPrefetch } from './utils/ownerPrefetchCoordinator';
+import { setAppInitializing } from './utils/appInitContext';
+import { setCurrentScreenName } from './utils/currentScreenContext';
+import {
+  checkServerConnectivity,
+  flushPendingErrorReportsSilently,
+  syncPendingErrorReportsHintFromStorage,
+} from './utils/errorReportSubmission';
+import { EXPO_INTERNAL_LOGBOX_IGNORE_PATTERNS } from './utils/expoInternalWarningFilter';
+
+LogBox.ignoreLogs(EXPO_INTERNAL_LOGBOX_IGNORE_PATTERNS);
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   useEffect(() => {
     const initializeApp = async () => {
+      setAppInitializing(true);
       const currentVersion = Constants.expoConfig?.version ?? '1.0.11';
       const previousVersion = await getSavedAppVersion();
       const isDevMode = __DEV__;
 
       try {
-        await userAPI.logoutAll();
-      } catch (error) {
-        console.warn('Startup logout-all failed:', error);
-      }
-
-      const persistedSession = await getPersistedSession();
-
-      if (isDevMode) {
         try {
-          if (persistedSession?.userId) {
-            await userAPI.logout(persistedSession.userId, persistedSession.email);
-          }
+          await userAPI.logoutAll();
         } catch (error) {
-          console.warn('Dev-mode logout cleanup failed:', error);
+          console.warn('Startup logout-all failed:', error);
         }
 
-        clearApiAuthToken();
-        clearDogmateAuthToken();
-        clearOwnerSession();
-        await clearPersistedSession();
-        await clearLoggedUsersCache();
-      } else {
-        await restoreApiAuthToken();
-        await userAPI.restoreAuthToken();
-      }
+        const persistedSession = await getPersistedSession();
 
-      if (!isDevMode && persistedSession?.userId) {
-        setOwnerSession(persistedSession);
-      }
-
-      if (shouldForceReauth(previousVersion, currentVersion)) {
-        try {
-          const persistedSession = await getPersistedSession();
-          if (persistedSession?.userId) {
-            await userAPI.logout(persistedSession.userId, persistedSession.email);
+        if (isDevMode) {
+          try {
+            if (persistedSession?.userId) {
+              await userAPI.logout(persistedSession.userId, persistedSession.email);
+            }
+          } catch (error) {
+            console.warn('Dev-mode logout cleanup failed:', error);
           }
-        } catch (error) {
-          console.warn('Version-based logout failed:', error);
-        } finally {
+
           clearApiAuthToken();
           clearDogmateAuthToken();
           clearOwnerSession();
-          clearPersistedSession();
-          clearLoggedUsersCache();
+          await clearPersistedSession();
+          await clearLoggedUsersCache();
+        } else {
+          await restoreApiAuthToken();
+          await userAPI.restoreAuthToken();
         }
-      }
 
-      if (!isDevMode && persistedSession?.userId && persistedSession.userRole) {
-        const routeName = persistedSession.userRole === 'walker' ? 'WalkerHome' : 'Home';
-        if (persistedSession.userRole !== 'walker') {
-          void runOwnerPrefetch(
-            persistedSession.userId,
-            persistedSession.userFirstName,
-            persistedSession.userLastName
-          );
+        if (!isDevMode && persistedSession?.userId) {
+          setOwnerSession(persistedSession);
         }
-        setTimeout(() => {
-          rootNavigationRef.current?.reset({
-            index: 0,
-            routes: [{ name: routeName, params: persistedSession }],
-          });
-        }, 0);
-      }
 
-      await setSavedAppVersion(currentVersion);
-      await requestNotificationPermissions();
+        if (shouldForceReauth(previousVersion, currentVersion)) {
+          try {
+            const persistedSession = await getPersistedSession();
+            if (persistedSession?.userId) {
+              await userAPI.logout(persistedSession.userId, persistedSession.email);
+            }
+          } catch (error) {
+            console.warn('Version-based logout failed:', error);
+          } finally {
+            clearApiAuthToken();
+            clearDogmateAuthToken();
+            clearOwnerSession();
+            clearPersistedSession();
+            clearLoggedUsersCache();
+          }
+        }
+
+        if (!isDevMode && persistedSession?.userId && persistedSession.userRole) {
+          const routeName = persistedSession.userRole === 'walker' ? 'WalkerHome' : 'Home';
+          if (persistedSession.userRole !== 'walker') {
+            void runOwnerPrefetch(
+              persistedSession.userId,
+              persistedSession.userFirstName,
+              persistedSession.userLastName
+            );
+          }
+          setTimeout(() => {
+            rootNavigationRef.current?.reset({
+              index: 0,
+              routes: [{ name: routeName, params: persistedSession }],
+            });
+          }, 0);
+        }
+
+        await setSavedAppVersion(currentVersion);
+        await requestNotificationPermissions();
+
+        if (!isDevMode) {
+          try {
+            await syncPendingErrorReportsHintFromStorage();
+            const online = await checkServerConnectivity();
+            if (online) {
+              await flushPendingErrorReportsSilently();
+            }
+          } catch (error) {
+            console.warn('Background error-report sync skipped:', error);
+          }
+        }
+      } finally {
+        setAppInitializing(false);
+      }
     };
 
     void initializeApp();
@@ -140,9 +170,18 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <UsersProvider>
-        <MessageDialogHost />
-        <NavigationContainer ref={rootNavigationRef}>
+      <GlobalErrorBoundary>
+        <UsersProvider>
+          <MessageDialogHost />
+          <SystemErrorModalHost />
+          <AppToastHost />
+          <NavigationContainer
+            ref={rootNavigationRef}
+            onStateChange={() => {
+              const route = rootNavigationRef.getCurrentRoute();
+              setCurrentScreenName(route?.name);
+            }}
+          >
           <Stack.Navigator initialRouteName="Start" screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Start" component={StartScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
@@ -179,6 +218,7 @@ export default function App() {
           </Stack.Navigator>
         </NavigationContainer>
       </UsersProvider>
+      </GlobalErrorBoundary>
     </SafeAreaProvider>
   );
 }
