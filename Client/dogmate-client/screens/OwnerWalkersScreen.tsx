@@ -22,7 +22,8 @@ import {
 import * as Linking from 'expo-linking';
 import { useFocusEffect } from '@react-navigation/native';
 import { FontAwesome, FontAwesome5, Ionicons } from '@expo/vector-icons';
-import { dogWalkerAPI, type ProfessionalProfileResponse } from '../services/api';
+import { dogWalkerAPI, type ProfessionalProfileResponse } from '../services/dogmateApi';
+import { notifyCaughtApiFailure } from '../utils/caughtApiFailureReporting';
 import { resolveOwnerUserId, getOwnerSession } from '../utils/ownerSession';
 import { deferScreenCleanup, useScreenLifecycleGuard } from '../utils/screenLifecycle';
 import {
@@ -35,6 +36,7 @@ import {
   markWalkersDirty,
   setWalkersCache,
   shouldForceWalkersRefresh,
+  isWalkersCacheFresh,
   type FormattedLoggedUser,
 } from '../utils/walkersDataCache';
 import HebrewAsciiParensText from '../components/HebrewAsciiParensText';
@@ -43,7 +45,7 @@ import {
   displayAvailabilityFromStored,
   getPricingDisplayLinesFromStored,
 } from '../utils/walkerOfferingDisplay';
-import locationService, { LocationService } from '../services/location';
+import locationService, { LocationService } from '../services/dogmateLocation';
 import WalkerListToolbar from '../components/walkerList/WalkerListToolbar';
 import WalkerFiltersModal from '../components/walkerList/WalkerFiltersModal';
 import WalkerSortModal from '../components/walkerList/WalkerSortModal';
@@ -149,6 +151,10 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
         setLoadingWalkers(true);
       }
 
+      if (!forceRefresh && isWalkersCacheFresh(uid)) {
+        return;
+      }
+
       if (forceRefresh) {
         clearWalkersDirty(uid);
       }
@@ -163,9 +169,13 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
     } catch (error) {
       if (!isAsyncWorkCurrent(generation)) return;
       console.error('Failed to fetch available walkers:', error);
-      if (walkersRef.current.length === 0) {
-        Alert.alert('שגיאה', 'טעינת רשימת הדוגווקרים נכשלה');
-      }
+      notifyCaughtApiFailure(error, {
+        context: 'Failed to fetch available walkers',
+        isCriticalFlow: walkersRef.current.length === 0,
+        retryAction: async () => {
+          await loadAvailableWalkers();
+        },
+      });
     } finally {
       if (isAsyncWorkCurrent(generation)) {
         setLoadingWalkers(false);
@@ -182,6 +192,12 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
       }
     } catch (error) {
       console.error('Failed to fetch logged users:', error);
+      notifyCaughtApiFailure(error, {
+        context: 'Failed to fetch logged users',
+        retryAction: async () => {
+          await fetchLoggedUsersForDistances();
+        },
+      });
     }
   }, [isMountedRef, ownerId, route?.params?.userId]);
 
@@ -553,20 +569,9 @@ const OwnerWalkersScreen = ({ navigation, route }: any) => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.headerRow}>
-        <TouchableOpacity
-          onPress={() => {
-            const parent = navigation.getParent();
-            if (parent && (parent as any).getState?.()?.type === 'tab') {
-              navigation.navigate(OWNER_MAIN_TAB.Dashboard);
-              return;
-            }
-            navigation.goBack();
-          }}
-        >
-          <Ionicons name="arrow-forward" size={28} color="#5C4033" />
-        </TouchableOpacity>
+        <View style={styles.headerSpacer} />
         <Text style={styles.headerTitle}>דוגווקרים זמינים</Text>
-        <View style={{ width: 40 }} />
+        <View style={styles.headerSpacer} />
       </View>
 
       <WalkerListToolbar
@@ -690,6 +695,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#5C4033',
+  },
+  headerSpacer: {
+    width: 40,
   },
   listFlex: {
     flex: 1,

@@ -70,8 +70,9 @@ class DogWalkerControllerTest {
         walker.setPhoneNumber("0501234567");
         walker.getCityOfferings().add(new WalkerCityOffering("Haifa", "09:00-17:00", "80 ₪ לשעה"));
         when(dogWalkerService.getWalkersWithProfessionalDetails()).thenReturn(List.of(walker));
-        when(dogWalkerService.getRatingSummaryForWalker(eq(id), isNull()))
-                .thenReturn(new DogWalkerService.WalkerRatingSummary(4.5, 2, false, List.of()));
+        when(dogWalkerService.getRatingSummariesForWalkers(eq(List.of(id)), isNull()))
+                .thenReturn(Map.of(
+                        id, new DogWalkerService.WalkerRatingSummary(4.5, 2, false, List.of())));
 
         mockMvc.perform(get("/api/dog-walkers/available-with-professional-profile"))
                 .andExpect(status().isOk())

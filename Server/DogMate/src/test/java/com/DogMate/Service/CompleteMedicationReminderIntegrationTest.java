@@ -67,6 +67,7 @@ class CompleteMedicationReminderIntegrationTest {
                 nextDue,
                 LocalTime.of(9, 0),
                 null,
+                null,
                 true,
                 1,
                 RemindBeforeUnit.DAYS
@@ -121,6 +122,7 @@ class CompleteMedicationReminderIntegrationTest {
                 overdueDue,
                 LocalTime.of(9, 0),
                 null,
+                null,
                 true,
                 1,
                 RemindBeforeUnit.DAYS
@@ -168,6 +170,7 @@ class CompleteMedicationReminderIntegrationTest {
                 LocalTime.of(9, 0),
                 overdueDue,
                 dueTime,
+                null,
                 null,
                 true,
                 1,

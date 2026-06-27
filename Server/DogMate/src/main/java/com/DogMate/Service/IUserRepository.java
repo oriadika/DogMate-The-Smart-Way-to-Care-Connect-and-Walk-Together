@@ -50,6 +50,15 @@ public interface IUserRepository {
     boolean existsByEmailIgnoreCase(String email);
 
     /**
+     * Reset all users on server startup:
+     * - Set loggedIn to false
+     * - Clear latitude and longitude (hide location)
+     *
+     * @return number of users updated
+     */
+    int resetAllUsersOnStartup();
+
+    /**
      * Delete a user by ID
      * @param id The UUID of the user to delete
      */
@@ -60,6 +69,11 @@ public interface IUserRepository {
      * @return users
      */
     List<UserAccount> findAll();
+
+    /**
+     * Logged-in users only — avoids full table scan for map endpoints.
+     */
+    List<UserAccount> findAllLoggedIn();
 
     @Query("""
     SELECT u FROM UserAccount u

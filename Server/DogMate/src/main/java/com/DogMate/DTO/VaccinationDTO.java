@@ -15,6 +15,7 @@ public record VaccinationDTO(
         String administeredDate,
         String nextDueDate,
         String vetClinicName,
+        String description,
         String createdAt,
         boolean notificationEnabled,
         String remindDaysBefore
@@ -28,6 +29,7 @@ public record VaccinationDTO(
                 v.getAdministeredDate().toString(),
                 v.getNextDueDate() != null ? v.getNextDueDate().toString() : null,
                 v.getVetClinicName(),
+                v.getDescription(),
                 v.getCreatedAt() != null ? v.getCreatedAt().toString() : null,
                 v.isNotificationEnabled(),
                 v.getRemindDaysBefore()

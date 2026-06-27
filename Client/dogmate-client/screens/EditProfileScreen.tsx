@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { userAPI } from '../services/api';
+import { userAPI } from '../services/dogmateApi';
 
 function normalizePhoneToDigits(raw: string): string {
   return raw.replace(/[^\d]/g, '');

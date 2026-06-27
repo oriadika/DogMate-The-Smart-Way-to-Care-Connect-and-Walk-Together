@@ -40,29 +40,52 @@ const navigateToVet = async (lat: number, lng: number, name: string) => {
   const googleMapsWebUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
 
   if (Platform.OS === 'ios') {
-    // Try Waze first
-    if (await Linking.canOpenURL(wazeUrl)) {
-      Linking.openURL(wazeUrl);
-      return;
-    }
+    try {
+      // Try Waze first
+      try {
+        const canOpenWaze = await Linking.canOpenURL(wazeUrl);
+        if (canOpenWaze) {
+          Linking.openURL(wazeUrl);
+          return;
+        }
+      } catch {
+        // ignore - we'll try the next fallback below
+      }
 
-    // Then Google Maps
-    if (await Linking.canOpenURL(googleMapsUrl)) {
-      Linking.openURL(googleMapsUrl);
-      return;
-    }
+      // Then Google Maps
+      try {
+        const canOpenGoogle = await Linking.canOpenURL(googleMapsUrl);
+        if (canOpenGoogle) {
+          Linking.openURL(googleMapsUrl);
+          return;
+        }
+      } catch {
+        // ignore
+      }
 
-    // Apple Maps (fallback)
-    Linking.openURL(appleMapsUrl);
+      // Apple Maps (fallback)
+      Linking.openURL(appleMapsUrl);
+    } catch {
+      Alert.alert('שגיאה', 'לא ניתן לפתוח ניווט לוטרינר.');
+    }
   } else {
-    // Android - try Waze first, then Google Maps
-    if (await Linking.canOpenURL(wazeUrl)) {
-      Linking.openURL(wazeUrl);
-      return;
+    try {
+      // Android - try Waze first, then Google Maps
+      try {
+        const canOpenWaze = await Linking.canOpenURL(wazeUrl);
+        if (canOpenWaze) {
+          Linking.openURL(wazeUrl);
+          return;
+        }
+      } catch {
+        // ignore
+      }
+
+      // Google Maps web fallback works on Android
+      Linking.openURL(googleMapsWebUrl);
+    } catch {
+      Alert.alert('שגיאה', 'לא ניתן לפתוח ניווט לוטרינר.');
     }
-    
-    // Google Maps web fallback works on Android
-    Linking.openURL(googleMapsWebUrl);
   }
 };
 
@@ -232,7 +255,13 @@ const SOSScreen = ({ navigation }: any) => {
         {
           text: 'התקשר',
           style: 'destructive',
-          onPress: () => Linking.openURL(`tel:${cleanPhone}`),
+          onPress: () => {
+            try {
+              Linking.openURL(`tel:${cleanPhone}`);
+            } catch {
+              Alert.alert('שגיאה', 'לא ניתן לפתוח את המכשיר לחיוג.');
+            }
+          },
         },
       ]
     );

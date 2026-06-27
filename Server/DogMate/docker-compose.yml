@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dogmate-postgres
+    restart: unless-stopped
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dogmate123
+      POSTGRES_DB: dogmate_dev
+    volumes:
+      - dogmate_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dogmate_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  dogmate_pg_data:

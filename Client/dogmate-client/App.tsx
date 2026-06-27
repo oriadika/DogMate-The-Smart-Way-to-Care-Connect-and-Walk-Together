@@ -1,10 +1,14 @@
 import React, { useEffect } from 'react';
+import { LogBox } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 import { UsersProvider } from './contexts/UsersContext';
 import MessageDialogHost from './components/MessageDialogHost';
-
+import AppToastHost from './components/AppToastHost';
+import SystemErrorModalHost from './components/SystemErrorModalHost';
+import GlobalErrorBoundary from './components/GlobalErrorBoundary';
 import StartScreen from './screens/StartScreen';
 import SignUpScreen from './screens/SignUpScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
@@ -39,15 +43,124 @@ import UserDetailsScreen from './screens/ManageScreens/Users/UserDetailsScreen';
 import ManageDogScreens from './screens/ManageScreens/Dogs/ManageDogScreens';
 import DogDetailScreen from './screens/ManageScreens/Dogs/DogDetailScreen';
 import { rootNavigationRef } from './navigation/rootNavigationRef';
+import { clearAuthToken as clearApiAuthToken, restoreAuthToken as restoreApiAuthToken } from './services/api';
+import { clearAuthToken as clearDogmateAuthToken } from './services/dogmateApi';
+import { clearOwnerSession, setOwnerSession } from './utils/ownerSession';
+import {
+  clearPersistedSession,
+  getPersistedSession,
+  getSavedAppVersion,
+  setSavedAppVersion,
+  shouldForceReauth,
+} from './utils/appSession';
+import { clearLoggedUsersCache } from './utils/walkersDataCache';
+import { userAPI } from './services/dogmateApi';
+import { runOwnerPrefetch } from './utils/ownerPrefetchCoordinator';
+import { setAppInitializing } from './utils/appInitContext';
+import { setCurrentScreenName } from './utils/currentScreenContext';
+import {
+  checkServerConnectivity,
+  flushPendingErrorReportsSilently,
+  syncPendingErrorReportsHintFromStorage,
+} from './utils/errorReportSubmission';
+import { EXPO_INTERNAL_LOGBOX_IGNORE_PATTERNS } from './utils/expoInternalWarningFilter';
+
+LogBox.ignoreLogs(EXPO_INTERNAL_LOGBOX_IGNORE_PATTERNS);
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   useEffect(() => {
-    const initializeNotifications = async () => {
-      await requestNotificationPermissions();
+    const initializeApp = async () => {
+      setAppInitializing(true);
+      const currentVersion = Constants.expoConfig?.version ?? '1.0.11';
+      const buildNumberRaw = Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode;
+      const currentBuildNumber = Number(buildNumberRaw);
+      const previousVersion = await getSavedAppVersion();
+      const isDevMode = __DEV__;
+
+      try {
+        const persistedSession = await getPersistedSession();
+        let sessionToRestore = persistedSession;
+
+        if (!isDevMode && shouldForceReauth(previousVersion, currentVersion)) {
+          try {
+            await userAPI.logoutOnUpdate(
+              currentVersion,
+              Number.isNaN(currentBuildNumber) ? undefined : currentBuildNumber
+            );
+          } catch (error) {
+            console.warn('Version-based logout-on-update failed:', error);
+          } finally {
+            clearApiAuthToken();
+            clearDogmateAuthToken();
+            clearOwnerSession();
+            await clearPersistedSession();
+            await clearLoggedUsersCache();
+            sessionToRestore = null;
+          }
+        }
+
+        if (isDevMode) {
+          try {
+            if (persistedSession?.userId) {
+              await userAPI.logout(persistedSession.userId, persistedSession.email);
+            }
+          } catch (error) {
+            console.warn('Dev-mode logout cleanup failed:', error);
+          }
+
+          clearApiAuthToken();
+          clearDogmateAuthToken();
+          clearOwnerSession();
+          await clearPersistedSession();
+          await clearLoggedUsersCache();
+        } else {
+          await restoreApiAuthToken();
+          await userAPI.restoreAuthToken();
+        }
+
+        if (!isDevMode && sessionToRestore?.userId) {
+          setOwnerSession(sessionToRestore);
+        }
+
+        if (!isDevMode && sessionToRestore?.userId && sessionToRestore.userRole) {
+          const routeName = sessionToRestore.userRole === 'walker' ? 'WalkerHome' : 'Home';
+          if (sessionToRestore.userRole !== 'walker') {
+            void runOwnerPrefetch(
+              sessionToRestore.userId,
+              sessionToRestore.userFirstName,
+              sessionToRestore.userLastName
+            );
+          }
+          setTimeout(() => {
+            rootNavigationRef.current?.reset({
+              index: 0,
+              routes: [{ name: routeName, params: sessionToRestore }],
+            });
+          }, 0);
+        }
+
+        await setSavedAppVersion(currentVersion);
+        await requestNotificationPermissions();
+
+        if (!isDevMode) {
+          try {
+            await syncPendingErrorReportsHintFromStorage();
+            const online = await checkServerConnectivity();
+            if (online) {
+              await flushPendingErrorReportsSilently();
+            }
+          } catch (error) {
+            console.warn('Background error-report sync skipped:', error);
+          }
+        }
+      } finally {
+        setAppInitializing(false);
+      }
     };
-    initializeNotifications();
+
+    void initializeApp();
 
     const cleanup = setupNotificationListeners();
     return cleanup;
@@ -55,9 +168,18 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <UsersProvider>
-        <MessageDialogHost />
-        <NavigationContainer ref={rootNavigationRef}>
+      <GlobalErrorBoundary>
+        <UsersProvider>
+          <MessageDialogHost />
+          <SystemErrorModalHost />
+          <AppToastHost />
+          <NavigationContainer
+            ref={rootNavigationRef}
+            onStateChange={() => {
+              const route = rootNavigationRef.getCurrentRoute();
+              setCurrentScreenName(route?.name);
+            }}
+          >
           <Stack.Navigator initialRouteName="Start" screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Start" component={StartScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
@@ -94,6 +216,7 @@ export default function App() {
           </Stack.Navigator>
         </NavigationContainer>
       </UsersProvider>
+      </GlobalErrorBoundary>
     </SafeAreaProvider>
   );
 }

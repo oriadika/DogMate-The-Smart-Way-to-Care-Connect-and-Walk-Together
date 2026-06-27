@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { dogAPI, vaccinationAPI, type VaccinationRow } from '../../services/api';
+import { dogAPI, vaccinationAPI, type VaccinationRow } from '../../services/dogmateApi';
 import ReminderSettingsSection from '../../components/health/ReminderSettingsSection';
 import { DEFAULT_VACCINATION_NOTIFICATION, type VaccinationNotificationSettings } from '../../types/notifications';
 import { resyncAllNotifications } from '../../services/notificationScheduler';
@@ -36,6 +36,10 @@ import {
   parseStoredRemindDaysBefore,
   remindDaysBeforeToApiString,
 } from '../../utils/healthReminderSettings';
+import {
+  clampReminderDescription,
+  REMINDER_DESCRIPTION_MAX_LENGTH,
+} from '../../utils/reminderConstants';
 import { useScreenLifecycleGuard } from '../../utils/screenLifecycle';
 import VaccineNamePicker from '../../components/health/VaccineNamePicker';
 import NextDueCycleOptions from '../../components/health/NextDueCycleOptions';
@@ -90,6 +94,7 @@ type VaccinationFormState = {
   nextDueManuallyEdited: boolean;
   noNextCycle: boolean;
   vetClinicName: string;
+  description: string;
 };
 
 type DatePickerTarget = 'administered' | 'nextDue';
@@ -119,6 +124,7 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
       nextDueManuallyEdited: Boolean(paramNextDueDate),
       noNextCycle: !paramNextDueDate,
       vetClinicName: paramVetClinicName ?? '',
+      description: '',
     };
   });
   const [datePickerTarget, setDatePickerTarget] = useState<DatePickerTarget | null>(null);
@@ -187,6 +193,7 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
       nextDueManuallyEdited: Boolean(existing.nextDueDate),
       noNextCycle: !existing.nextDueDate,
       vetClinicName: existing.vetClinicName ?? '',
+      description: clampReminderDescription(existing.description ?? ''),
     });
     const nextNotificationSettings = {
       notificationEnabled: existing.notificationEnabled ?? false,
@@ -216,6 +223,7 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
         nextDueManuallyEdited: Boolean(paramNextDueDate),
         noNextCycle: !paramNextDueDate,
         vetClinicName: paramVetClinicName ?? '',
+        description: '',
       });
     } else {
       setVaccinationId(null);
@@ -228,6 +236,7 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
         nextDueManuallyEdited: false,
         noNextCycle: true,
         vetClinicName: '',
+        description: '',
       });
     }
   }, [
@@ -435,6 +444,7 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
       administeredDate: toIsoLocal(form.administeredDate),
       nextDueDate: form.nextDueDate ? toIsoLocal(form.nextDueDate) : null,
       vetClinicName: form.vetClinicName.trim() || null,
+      description: form.description.trim() || null,
       notificationEnabled: notificationSettings.notificationEnabled,
       remindDaysBefore: remindDaysBeforeToApiString(notificationSettings.remindDaysBefore),
     };
@@ -605,6 +615,25 @@ const VaccinationFormScreen = ({ navigation, route }: any) => {
             editable={!saving}
           />
 
+          <Text style={styles.label}>תיאור</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            value={form.description}
+            onChangeText={(text) =>
+              setForm((prev) => ({ ...prev, description: clampReminderDescription(text) }))
+            }
+            placeholder="הזן תיאור (אופציונלי)"
+            placeholderTextColor="#A9B5C7"
+            textAlign="right"
+            multiline
+            numberOfLines={4}
+            maxLength={REMINDER_DESCRIPTION_MAX_LENGTH}
+            editable={!saving}
+          />
+          <Text style={styles.charCount}>
+            {form.description.length}/{REMINDER_DESCRIPTION_MAX_LENGTH}
+          </Text>
+
           <ReminderSettingsSection
             variant="vaccination"
             value={notificationSettings}
@@ -732,6 +761,17 @@ const styles = StyleSheet.create({
   },
   saveDisabled: { opacity: 0.6 },
   saveText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  charCount: {
+    textAlign: 'left',
+    color: '#8B7355',
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 8,
+  },
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' },
   modalBox: { backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 24 },
   modalHeader: { alignItems: 'flex-end', padding: 12 },

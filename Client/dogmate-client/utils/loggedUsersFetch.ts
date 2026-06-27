@@ -1,6 +1,7 @@
-import { userAPI } from '../services/api';
+import { userAPI } from '../services/dogmateApi';
 import { withApiRetry } from './apiRetry';
 import { isAbortError } from './isAbortError';
+import { notifyCaughtApiFailure } from './caughtApiFailureReporting';
 
 const RAW_LOGGED_USERS_TTL_MS = 4500;
 
@@ -39,6 +40,12 @@ export async function fetchRawLoggedUsers(options?: { force?: boolean }): Promis
       if (isAbortError(error)) {
         return getRawLoggedUsersCache() ?? [];
       }
+      notifyCaughtApiFailure(error, {
+        context: 'Failed to fetch logged users',
+        retryAction: async () => {
+          await fetchRawLoggedUsers({ force: true });
+        },
+      });
       throw error;
     } finally {
       inflightFetch = null;

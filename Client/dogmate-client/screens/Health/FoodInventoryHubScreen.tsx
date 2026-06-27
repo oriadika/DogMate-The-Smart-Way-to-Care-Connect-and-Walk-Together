@@ -13,7 +13,8 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import FoodInventoryCard from '../../components/FoodInventoryCard';
-import { foodStockAPI } from '../../services/api';
+import { foodStockAPI } from '../../services/dogmateApi';
+import { notifyCaughtApiFailure } from '../../utils/caughtApiFailureReporting';
 import { resyncAllNotificationsInBackground } from '../../services/notificationScheduler';
 import { markHomeDataDirty, shouldForceHomeRefresh } from '../../utils/homeDataCache';
 import {
@@ -90,10 +91,6 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
         clearFoodInventoryDirty(uid);
       }
 
-      if (!forceRefresh && cached) {
-        return;
-      }
-
       const response = await foodStockAPI.getFoodStocksForUser(uid);
       if (!isAsyncWorkCurrent(generation)) return;
 
@@ -107,9 +104,13 @@ const FoodInventoryHubScreen = ({ navigation, route }: any) => {
     } catch (error: any) {
       if (!isAsyncWorkCurrent(generation)) return;
       console.error('Error loading food stocks:', error);
-      if (inventoryRef.current.length === 0) {
-        Alert.alert('שגיאה', 'שגיאה בטעינת מלאי המזון');
-      }
+      notifyCaughtApiFailure(error, {
+        context: 'Failed to get food stocks',
+        isCriticalFlow: inventoryRef.current.length === 0,
+        retryAction: async () => {
+          await loadFoodStocks();
+        },
+      });
     } finally {
       if (isAsyncWorkCurrent(generation)) {
         setLoading(false);

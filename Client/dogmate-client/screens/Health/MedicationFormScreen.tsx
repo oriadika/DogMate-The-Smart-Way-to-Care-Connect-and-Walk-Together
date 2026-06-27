@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { dogAPI, medicationAPI, type MedicationRow } from '../../services/api';
+import { dogAPI, medicationAPI, type MedicationRow } from '../../services/dogmateApi';
 import ReminderSettingsSection from '../../components/health/ReminderSettingsSection';
 import {
   DEFAULT_MEDICATION_NOTIFICATION,
@@ -42,7 +42,10 @@ import {
   parseStoredNextDueTime,
   parseStoredRemindBeforeValue,
 } from '../../utils/healthReminderSettings';
-import { useScreenLifecycleGuard } from '../../utils/screenLifecycle';
+import {
+  clampReminderDescription,
+  REMINDER_DESCRIPTION_MAX_LENGTH,
+} from '../../utils/reminderConstants';
 import MedicationNamePicker from '../../components/health/MedicationNamePicker';
 import MedicationNameAutocompleteInput from '../../components/health/MedicationNameAutocompleteInput';
 import NextDueCycleOptions from '../../components/health/NextDueCycleOptions';
@@ -115,6 +118,7 @@ type MedicationFormState = {
   nextDueManuallyEdited: boolean;
   noNextCycle: boolean;
   vetClinicName: string;
+  description: string;
 };
 
 function dateToTimeString(d: Date): string {
@@ -194,6 +198,7 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
       nextDueManuallyEdited: Boolean(paramNextDueDate),
       noNextCycle: !paramNextDueDate,
       vetClinicName: paramVetClinicName ?? '',
+      description: '',
     };
   });
   const [datePickerTarget, setDatePickerTarget] = useState<DatePickerTarget | null>(null);
@@ -287,6 +292,7 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
       nextDueManuallyEdited: Boolean(existing.nextDueDate),
       noNextCycle: !existing.nextDueDate,
       vetClinicName: existing.vetClinicName ?? '',
+      description: clampReminderDescription(existing.description ?? ''),
     });
     const nextNotificationSettings = {
       notificationEnabled: existing.notificationEnabled ?? false,
@@ -580,6 +586,7 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
       nextDueDate: form.nextDueDate ? toIsoLocal(form.nextDueDate) : null,
       nextDueTime: form.nextDueDate ? parseStoredNextDueTime(form.nextDueTime) : null,
       vetClinicName: form.vetClinicName.trim() || null,
+      description: form.description.trim() || null,
       notificationEnabled: notificationSettings.notificationEnabled,
       remindBeforeValue: notificationSettings.remindBeforeValue,
       remindBeforeUnit: notificationSettings.remindBeforeUnit,
@@ -779,6 +786,25 @@ const MedicationFormScreen = ({ navigation, route }: any) => {
             editable={!saving}
           />
 
+          <Text style={styles.label}>תיאור</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            value={form.description}
+            onChangeText={(text) =>
+              setForm((prev) => ({ ...prev, description: clampReminderDescription(text) }))
+            }
+            placeholder="הזן תיאור (אופציונלי)"
+            placeholderTextColor="#A9B5C7"
+            textAlign="right"
+            multiline
+            numberOfLines={4}
+            maxLength={REMINDER_DESCRIPTION_MAX_LENGTH}
+            editable={!saving}
+          />
+          <Text style={styles.charCount}>
+            {form.description.length}/{REMINDER_DESCRIPTION_MAX_LENGTH}
+          </Text>
+
           <ReminderSettingsSection
             variant="medication"
             value={notificationSettings}
@@ -910,6 +936,17 @@ const styles = StyleSheet.create({
   },
   saveDisabled: { opacity: 0.6 },
   saveText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  charCount: {
+    textAlign: 'left',
+    color: '#8B7355',
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 8,
+  },
   modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' },
   modalBox: { backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 24 },
   modalHeader: { alignItems: 'flex-end', padding: 12 },

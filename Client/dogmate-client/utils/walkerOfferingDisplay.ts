@@ -2,7 +2,7 @@
  * פענוח והצגה של שדות זמינות/תעריף שנשמרים כ-JSON מובנה
  * (אותו פורמט כמו ב-WalkerProfessionalProfileScreen).
  */
-import type { CityOffering } from '../services/api';
+import type { CityOffering } from '../services/dogmateApi';
 import { parseLocationFromCityField, type LocationType } from './locationFieldCodec';
 
 /** ימי השבוע מימין לשמאל: א׳ = ראשון — חייב להיות זהה למסך הפרופיל המקצועי */

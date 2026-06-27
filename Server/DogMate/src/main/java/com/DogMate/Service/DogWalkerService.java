@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -171,10 +172,6 @@ public class DogWalkerService {
     @Transactional(readOnly = true)
     public WalkerRatingSummary getRatingSummaryForWalker(UUID walkerId, UUID ownerId) {
         List<DogWalkerRating> ratings = dogWalkerRatingRepository.findByWalkerIdOrderByCreatedAtDesc(walkerId);
-        int count = ratings.size();
-        double average = count == 0 ? 0.0 : ratings.stream().mapToInt(DogWalkerRating::getStars).average().orElse(0.0);
-        boolean alreadyRated = ownerId != null && ratings.stream().anyMatch(r -> r.getOwnerId().equals(ownerId));
-
         Set<UUID> reviewerIds = ratings.stream().map(DogWalkerRating::getOwnerId).collect(Collectors.toSet());
         Map<UUID, String> nameByOwnerId = new HashMap<>();
         if (!reviewerIds.isEmpty()) {
@@ -187,7 +184,53 @@ public class DogWalkerService {
                 }
             }
         }
+        return buildRatingSummary(ratings, ownerId, nameByOwnerId);
+    }
 
+    @Transactional(readOnly = true)
+    public Map<UUID, WalkerRatingSummary> getRatingSummariesForWalkers(
+            Collection<UUID> walkerIds,
+            UUID ownerId
+    ) {
+        if (walkerIds == null || walkerIds.isEmpty()) {
+            return Map.of();
+        }
+        List<DogWalkerRating> allRatings =
+                dogWalkerRatingRepository.findByWalkerIdInOrderByCreatedAtDesc(walkerIds);
+        Map<UUID, List<DogWalkerRating>> ratingsByWalker = allRatings.stream()
+                .collect(Collectors.groupingBy(DogWalkerRating::getWalkerId));
+
+        Set<UUID> reviewerIds = allRatings.stream()
+                .map(DogWalkerRating::getOwnerId)
+                .collect(Collectors.toSet());
+        Map<UUID, String> nameByOwnerId = new HashMap<>();
+        if (!reviewerIds.isEmpty()) {
+            for (UserAccount ua : userRepository.findAllById(reviewerIds)) {
+                if (ua instanceof RegularUser ru) {
+                    String name = (ru.getFirst_name() + " " + ru.getLast_name()).trim();
+                    nameByOwnerId.put(ua.getId(), name.isBlank() ? "בעל כלב" : name);
+                } else {
+                    nameByOwnerId.put(ua.getId(), "בעל כלב");
+                }
+            }
+        }
+
+        Map<UUID, WalkerRatingSummary> summaries = new HashMap<>();
+        for (UUID walkerId : walkerIds) {
+            List<DogWalkerRating> ratings = ratingsByWalker.getOrDefault(walkerId, List.of());
+            summaries.put(walkerId, buildRatingSummary(ratings, ownerId, nameByOwnerId));
+        }
+        return summaries;
+    }
+
+    private WalkerRatingSummary buildRatingSummary(
+            List<DogWalkerRating> ratings,
+            UUID ownerId,
+            Map<UUID, String> nameByOwnerId
+    ) {
+        int count = ratings.size();
+        double average = count == 0 ? 0.0 : ratings.stream().mapToInt(DogWalkerRating::getStars).average().orElse(0.0);
+        boolean alreadyRated = ownerId != null && ratings.stream().anyMatch(r -> r.getOwnerId().equals(ownerId));
         List<WalkerReviewView> reviews = ratings.stream().map(r -> {
             String reviewerName = nameByOwnerId.getOrDefault(r.getOwnerId(), "בעל כלב");
             return new WalkerReviewView(
@@ -199,7 +242,6 @@ public class DogWalkerService {
                     r.getCreatedAt()
             );
         }).toList();
-
         return new WalkerRatingSummary(average, count, alreadyRated, reviews);
     }
 

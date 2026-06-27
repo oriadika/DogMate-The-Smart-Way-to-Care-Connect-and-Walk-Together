@@ -140,13 +140,14 @@ public class HealthReminderSyncService {
         }
 
         String vaccineName = vaccination.getVaccineName() != null ? vaccination.getVaccineName() : "חיסון";
+        String defaultDescription = "הגיע הזמן לתאם חיסון " + vaccineName + " עבור " + dogName;
         reminderService.upsertSystemReminder(
                 userId,
                 ReminderSourceType.VACCINATION,
                 vaccination.getId(),
                 List.of(dogId),
                 "חיסון: " + vaccineName,
-                "הגיע הזמן לתאם חיסון " + vaccineName + " עבור " + dogName,
+                HealthDescriptionHelper.orDefault(vaccination.getDescription(), defaultDescription),
                 nextTrigger,
                 true
         );
@@ -183,13 +184,14 @@ public class HealthReminderSyncService {
         }
 
         String medName = medication.getMedicationName() != null ? medication.getMedicationName() : "תרופה";
+        String defaultDescription = "הגיע הזמן לתת ל-" + dogName + " את " + medName;
         reminderService.upsertSystemReminder(
                 userId,
                 ReminderSourceType.MEDICATION,
                 medication.getId(),
                 List.of(dogId),
                 "תרופה: " + medName,
-                "הגיע הזמן לתת ל-" + dogName + " את " + medName,
+                HealthDescriptionHelper.orDefault(medication.getDescription(), defaultDescription),
                 remindAt,
                 true
         );

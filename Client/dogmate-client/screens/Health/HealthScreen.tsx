@@ -6,7 +6,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { OWNER_MAIN_TAB } from '../../navigation/ownerTabRoutes';
 import { navigateRoot, rootNavigationRef } from '../../navigation/rootNavigationRef';
 import { getOwnerSession } from '../../utils/ownerSession';
-import { ensureOwnerDataPrefetched } from '../../utils/healthDataCache';
+import { ensureOwnerDataPrefetched } from '../../utils/ownerPrefetchCoordinator';
 
 const PRIMARY_COLOR = '#7FB069';
 const BG_COLOR = '#FAEFDD';

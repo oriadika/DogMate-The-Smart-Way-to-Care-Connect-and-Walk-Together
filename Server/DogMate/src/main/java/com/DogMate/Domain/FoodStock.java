@@ -2,6 +2,7 @@ package com.DogMate.Domain;
 
 import jakarta.persistence.*;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -30,6 +31,10 @@ public class FoodStock {
 
     @Column(name = "low_stock_threshold_days")
     private Integer lowStockThresholdDays;
+
+    /** Calendar date when {@link #currentLevelInKg} was last set or consumption was applied. */
+    @Column(name = "level_adjusted_at")
+    private LocalDate levelAdjustedAt;
     
     @OneToMany(mappedBy = "foodStock")
     private List<Dog> dogs = new ArrayList<>();
@@ -45,6 +50,7 @@ public class FoodStock {
         this.bagSizeInKg = bagSizeInKg;
         this.currentLevelInKg = currentLevelInKg;
         this.dailyConsumptionInGram = dailyConsumptionInGram;
+        this.levelAdjustedAt = LocalDate.now();
     }
     
     public FoodStock(String brandName, double bagSizeInKg, double currentLevelInKg,
@@ -55,6 +61,7 @@ public class FoodStock {
         this.currentLevelInKg = currentLevelInKg;
         this.dailyConsumptionInGram = dailyConsumptionInGram;
         this.dogs = dogs;
+        this.levelAdjustedAt = LocalDate.now();
     }
 
     // --- Getters and Setters ---
@@ -100,6 +107,19 @@ public class FoodStock {
 
     public void renewStock() {
         this.currentLevelInKg = this.bagSizeInKg;
+        markLevelAdjustedToday();
+    }
+
+    public LocalDate getLevelAdjustedAt() {
+        return levelAdjustedAt;
+    }
+
+    public void setLevelAdjustedAt(LocalDate levelAdjustedAt) {
+        this.levelAdjustedAt = levelAdjustedAt;
+    }
+
+    public void markLevelAdjustedToday() {
+        this.levelAdjustedAt = LocalDate.now();
     }
 
     public double getDailyConsumptionInGram() {

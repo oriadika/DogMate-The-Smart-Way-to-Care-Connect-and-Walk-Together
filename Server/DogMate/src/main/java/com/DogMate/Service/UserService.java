@@ -312,10 +312,10 @@ public class UserService {
             throw new IllegalArgumentException("אימייל או סיסמה שגויים");
         }
 
-        if (user.isLoggedIn()){
-            throw new IllegalArgumentException("המשתמש כבר מחובר");
-
+        if (user.isLoggedIn()) {
+            System.out.println("User " + email + " is already marked logged in; refreshing session state.");
         }
+
         // Set logged in status to true
         user.setLoggedIn(true);
         System.out.println("Setting user " + email + " loggedIn to true");
@@ -339,6 +339,16 @@ public class UserService {
             return ((com.DogMate.Infrastructure.UserRepository) userRepository).findAll();
         }
         throw new IllegalStateException("מאגר המשתמשים לא מוגדר כראוי");
+    }
+
+    /**
+     * Active sessions only — used by map / logged-users API.
+     */
+    public java.util.List<UserAccount> getLoggedInUsers() {
+        if (userRepository instanceof com.DogMate.Infrastructure.UserRepository repo) {
+            return repo.findAllLoggedIn();
+        }
+        return getAllUsers().stream().filter(UserAccount::isLoggedIn).toList();
     }
 
     /**
@@ -400,6 +410,23 @@ public class UserService {
      * @param email The email of the user to logout
      * @throws IllegalArgumentException if email is null/empty or user doesn't exist
      */
+    @Transactional
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    public void logoutAllUsers() {
+        userRepository.resetAllUsersOnStartup();
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    public boolean logoutAllUsersIfAppUpdated(String appVersion, Integer buildNumber) {
+        if (appVersion == null || appVersion.isBlank()) {
+            throw new IllegalArgumentException("נדרשת גרסת אפליקציה תקינה");
+        }
+
+        logoutAllUsers();
+        return true;
+    }
+
     @Transactional
     @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public void logoutByEmail(String email) {

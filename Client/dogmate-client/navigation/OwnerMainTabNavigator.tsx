@@ -10,7 +10,7 @@ import OwnerWalkersScreen from '../screens/OwnerWalkersScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import HealthScreen from '../screens/Health/HealthScreen';
 import { OWNER_MAIN_TAB } from './ownerTabRoutes';
-import websocketService from '../services/websocket';
+import websocketService from '../services/dogmateWebsocket';
 import { getOwnerSession, setOwnerSession } from '../utils/ownerSession';
 
 const Tab = createBottomTabNavigator();

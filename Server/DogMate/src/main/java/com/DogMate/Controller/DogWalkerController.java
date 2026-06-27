@@ -33,8 +33,11 @@ public class DogWalkerController {
             @RequestParam(name = "ownerId", required = false) UUID ownerId) {
         try {
             List<DogWalkerUser> walkers = dogWalkerService.getWalkersWithProfessionalDetails();
+            List<UUID> walkerIds = walkers.stream().map(DogWalkerUser::getId).toList();
+            Map<UUID, DogWalkerService.WalkerRatingSummary> ratingSummaries =
+                    dogWalkerService.getRatingSummariesForWalkers(walkerIds, ownerId);
             List<ProfessionalProfileResponse> list = walkers.stream()
-                    .map(w -> toResponse(w, ownerId))
+                    .map(w -> toResponse(w, ownerId, ratingSummaries.get(w.getId())))
                     .toList();
             return ResponseEntity.ok(list);
         } catch (Exception e) {
@@ -139,13 +142,24 @@ public class DogWalkerController {
     }
 
     private ProfessionalProfileResponse toResponse(DogWalkerUser walker, UUID ownerId) {
+        DogWalkerService.WalkerRatingSummary ratingSummary =
+                dogWalkerService.getRatingSummaryForWalker(walker.getId(), ownerId);
+        return toResponse(walker, ownerId, ratingSummary);
+    }
+
+    private ProfessionalProfileResponse toResponse(
+            DogWalkerUser walker,
+            UUID ownerId,
+            DogWalkerService.WalkerRatingSummary ratingSummary
+    ) {
         List<CityOfferingDto> offerings = walker.getCityOfferings() != null
                 ? walker.getCityOfferings().stream()
                 .map(o -> new CityOfferingDto(o.getCity(), o.getAvailability(), o.getPricing()))
                 .toList()
                 : List.of();
-        DogWalkerService.WalkerRatingSummary ratingSummary =
-                dogWalkerService.getRatingSummaryForWalker(walker.getId(), ownerId);
+        DogWalkerService.WalkerRatingSummary summary = ratingSummary != null
+                ? ratingSummary
+                : dogWalkerService.getRatingSummaryForWalker(walker.getId(), ownerId);
         return new ProfessionalProfileResponse(
                 walker.getId(),
                 walker.getEmail(),
@@ -153,10 +167,10 @@ public class DogWalkerController {
                 walker.getLast_name(),
                 walker.getPhoneNumber(),
                 offerings,
-                ratingSummary.averageRating(),
-                ratingSummary.ratingsCount(),
-                ratingSummary.alreadyRatedByCurrentOwner(),
-                ratingSummary.reviews().stream()
+                summary.averageRating(),
+                summary.ratingsCount(),
+                summary.alreadyRatedByCurrentOwner(),
+                summary.reviews().stream()
                         .map(r -> new WalkerReviewDto(
                                 r.ratingId(),
                                 r.reviewerId(),

@@ -18,9 +18,10 @@ import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { userAPI } from '../services/api';
-import websocketService, { type PingNotification } from '../services/websocket';
-import locationService, { LocationService } from '../services/location';
+import { userAPI } from '../services/dogmateApi';
+import { notifyCaughtApiFailure } from '../utils/caughtApiFailureReporting';
+import websocketService, { type PingNotification } from '../services/dogmateWebsocket';
+import locationService, { LocationService } from '../services/dogmateLocation';
 import { dogMateMapStyle } from '../src/constants/MapStyles';
 import { OWNER_MAIN_TAB } from '../navigation/ownerTabRoutes';
 
@@ -623,9 +624,13 @@ const ProfileScreen = ({ navigation, route }: any) => {
       }
     } catch (error) {
       console.error('Failed to fetch logged users:', error);
-      if (shouldShowLoader) {
-        Alert.alert('שגיאה', 'טעינת המשתמשים נכשלה');
-      }
+      notifyCaughtApiFailure(error, {
+        context: 'Failed to fetch logged users',
+        isCriticalFlow: shouldShowLoader,
+        retryAction: async () => {
+          await fetchLoggedUsers({ showLoader: shouldShowLoader });
+        },
+      });
     } finally {
       isFetchingLoggedUsersRef.current = false;
       if (shouldShowLoader) {
@@ -754,21 +759,9 @@ const ProfileScreen = ({ navigation, route }: any) => {
       <BlurView intensity={60} tint="light" style={StyleSheet.absoluteFillObject} />
       <View style={[styles.headerTint, { paddingTop: insets.top }]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => {
-              const parent = navigation.getParent();
-              if (parent && (parent as any).getState?.()?.type === 'tab') {
-                navigation.navigate(OWNER_MAIN_TAB.Dashboard);
-                return;
-              }
-              navigation.goBack();
-            }}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Ionicons name="arrow-forward" size={28} color="#5C4033" />
-          </TouchableOpacity>
+          <View style={styles.headerSpacer} />
           <Text style={styles.headerTitle}>טיולים</Text>
-          <View style={{ width: 40 }} />
+          <View style={styles.headerSpacer} />
         </View>
       </View>
     </View>
@@ -1239,6 +1232,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#5C4033',
+  },
+  headerSpacer: {
+    width: 40,
   },
 
   floatingRangeCard: {

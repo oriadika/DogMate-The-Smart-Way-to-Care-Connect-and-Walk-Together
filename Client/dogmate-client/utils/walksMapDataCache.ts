@@ -1,6 +1,7 @@
-import { LocationService } from '../services/location';
+import { LocationService } from '../services/dogmateLocation';
 import { fetchRawLoggedUsers } from './loggedUsersFetch';
 import { isAbortError } from './isAbortError';
+import { notifyCaughtApiFailure } from './caughtApiFailureReporting';
 
 export type MapLoggedUser = {
   id: string;
@@ -248,6 +249,12 @@ export async function prefetchWalksMapData(
   } catch (error) {
     if (!isAbortError(error)) {
       console.warn('Walks map prefetch failed:', error);
+      notifyCaughtApiFailure(error, {
+        context: 'Map prefetch',
+        retryAction: async () => {
+          await prefetchWalksMapData(userId, fallbackFirstName);
+        },
+      });
     }
   }
 }

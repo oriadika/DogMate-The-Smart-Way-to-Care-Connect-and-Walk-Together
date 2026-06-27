@@ -204,6 +204,28 @@ public class ReminderService {
     }
 
     /**
+     * Read-only list for GET /reminders — no maintenance side effects (fast home load).
+     */
+    @Transactional(readOnly = true)
+    public List<Reminder> getRemindersForUser(UUID userId) {
+        return listActiveRemindersForUser(userId);
+    }
+
+    private List<Reminder> listActiveRemindersForUser(UUID userId) {
+        var userAcc = userRepo.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId));
+
+        if (!(userAcc instanceof RegularUser)) {
+            throw new IllegalArgumentException("רק משתמשים מסוג בעל כלב יכולים לצפות בתזכורות");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        return reminderRepo.findByRegularUserIdWithDogs(userId).stream()
+                .filter(r -> r.getRemindAt() != null && r.getRemindAt().isAfter(now))
+                .toList();
+    }
+
+    /**
      * Marks a reminder as completed from home: logs health actions for system reminders
      * (medication dose, vaccination, food acknowledgment) or deletes manual reminders.
      */
@@ -289,25 +311,6 @@ public class ReminderService {
     private void completeVaccinationReminder(UUID userId, UUID vaccinationId, LocalDateTime administeredAt) {
         vaccinationService.logDoseAt(userId, vaccinationId, administeredAt.toLocalDate(), false);
         deleteSystemReminder(userId, ReminderSourceType.VACCINATION, vaccinationId);
-    }
-
-    @Transactional
-    @CacheEvict(cacheNames = "remindersByUser", key = "#userId")
-    public List<Reminder> getRemindersForUser(UUID userId) {
-        processExpiredRemindersInternal(userId);
-        medicationService.reconcileAllMedicationRemindersForUser(userId);
-
-        var userAcc = userRepo.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("לא נמצא משתמש עם המזהה: " + userId));
-
-        if (!(userAcc instanceof RegularUser)) {
-            throw new IllegalArgumentException("רק משתמשים מסוג בעל כלב יכולים לצפות בתזכורות");
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-        return reminderRepo.findByRegularUserIdWithDogs(userId).stream()
-                .filter(r -> r.getRemindAt() != null && r.getRemindAt().isAfter(now))
-                .toList();
     }
 
     private void processExpiredRemindersInternal(UUID userId) {
@@ -422,7 +425,6 @@ public class ReminderService {
         return reminderRepo.save(reminder);
     }
 
-    @Transactional(readOnly = true)
     public boolean hasActiveSystemReminder(UUID userId, String sourceType, UUID sourceId) {
         if (userId == null || sourceType == null || sourceId == null) {
             return false;

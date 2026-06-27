@@ -37,6 +37,9 @@ public interface UserRepository extends JpaRepository<UserAccount, UUID>, IUserR
      */
     List<UserAccount> findAll();
 
+    @Query("SELECT u FROM UserAccount u WHERE u.loggedIn = true")
+    List<UserAccount> findAllLoggedIn();
+
     /**
      * Reset all users on server startup:
      * - Set loggedIn to false

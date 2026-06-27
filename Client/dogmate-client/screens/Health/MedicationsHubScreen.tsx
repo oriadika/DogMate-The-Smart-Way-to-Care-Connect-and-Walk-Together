@@ -11,10 +11,11 @@ import {
   Modal,
   Pressable,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { medicationAPI, type MedicationRow } from '../../services/api';
+import { medicationAPI, type MedicationRow } from '../../services/dogmateApi';
 import { deferScreenCleanup, useScreenLifecycleGuard } from '../../utils/screenLifecycle';
 import {
   navigateBackToOwnerHealth,
@@ -31,6 +32,7 @@ import {
   markMedicationsDirty,
   setMedicationsCache,
   shouldForceMedicationsRefresh,
+  isMedicationsCacheFresh,
   type DogOption,
 } from '../../utils/healthDataCache';
 import MedicationSortModal, {
@@ -131,6 +133,10 @@ const MedicationsHubScreen = ({ navigation }: any) => {
         setLoading(true);
       }
 
+      if (!forceRefresh && isMedicationsCacheFresh(uid)) {
+        return;
+      }
+
       if (forceRefresh) {
         clearMedicationsDirty(uid);
       }
@@ -163,7 +169,6 @@ const MedicationsHubScreen = ({ navigation }: any) => {
       }
 
       setMedicationsCache(uid, { rows: nextRows, userDogs: nextDogs });
-      markHomeDataDirty(uid);
     } catch (e: any) {
       if (!isAsyncWorkCurrent(generation)) return;
       console.error('Medications hub load error:', e);
@@ -490,6 +495,10 @@ const MedicationsHubScreen = ({ navigation }: any) => {
           data={sortedGroupedRows}
           keyExtractor={(item) => item.key}
           contentContainerStyle={styles.listPad}
+          initialNumToRender={8}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
           renderItem={({ item }) => (
             <MedicationGroupCard
               group={item}

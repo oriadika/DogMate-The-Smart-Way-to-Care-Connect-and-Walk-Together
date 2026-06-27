@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
-import { userAPI } from '../services/api';
+import { userAPI } from '../services/dogmateApi';
 import { isValidIsraeliMobileInput } from '../utils/phoneValidation';
 
 /** Basic format check before sending verification email (no spaces in local/domain parts). */

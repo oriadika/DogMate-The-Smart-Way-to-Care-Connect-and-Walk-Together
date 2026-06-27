@@ -1,6 +1,9 @@
 import axios, { AxiosInstance } from 'axios';
 import { getApiBaseUrlWithPath } from './config';
 import { isAbortError } from '../utils/isAbortError';
+import { clearAuthToken as clearStoredAuthToken, getAuthToken, saveAuthToken as saveStoredAuthToken } from '../utils/appSession';
+import { installApiSystemErrorInterceptor } from './installApiSystemErrorInterceptor';
+import { notifyCaughtApiFailure } from '../utils/caughtApiFailureReporting';
 
 
 const API_BASE_URL = getApiBaseUrlWithPath('api');
@@ -28,17 +31,28 @@ apiClient.interceptors.request.use(
   }
 );
 
+installApiSystemErrorInterceptor(apiClient);
+
 // Export function to set token
 export const setAuthToken = (token: string) => {
   authToken = token;
-  // Update the default header for future requests
   apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  void saveStoredAuthToken(token);
 };
 
 // Export function to clear token
 export const clearAuthToken = () => {
   authToken = null;
   delete apiClient.defaults.headers.common['Authorization'];
+  void clearStoredAuthToken();
+};
+
+export const restoreAuthToken = async () => {
+  const token = await getAuthToken();
+  if (token) {
+    authToken = token;
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  }
 };
 
 /**
@@ -454,6 +468,7 @@ export const userAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון משתמשים מחוברים';
+      notifyCaughtApiFailure(error, { context: 'Failed to fetch logged users' });
       throw new Error(errorMessage);
     }
   },
@@ -463,19 +478,19 @@ export const userAPI = {
    */
   logout: async (userId: string, email?: string): Promise<{ success: boolean; message: string }> => {
     try {
-      // Call logout endpoint on backend
       console.log('Logging out user:', { userId, email });
-      const response = await apiClient.post('/auth/logout', { userId, email });
+      const response = await apiClient.post(
+        '/auth/logout',
+        { userId, email },
+        { skipSystemErrorReporting: true }
+      );
 
-      // Clear token on logout
       clearAuthToken();
 
       return response.data;
     } catch (error: any) {
-      // Even if logout fails on backend, we can still clear local data
-      console.warn('Logout request failed:', error.message);
+      console.warn('Logout request failed:', error?.message || error);
       clearAuthToken();
-      // Return success anyway to allow local logout
       return { success: true, message: 'ההתנתקות המקומית הושלמה' };
     }
   },
@@ -1055,7 +1070,7 @@ export const reminderAPI = {
       return response.data;
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'נכשל עיבוד תזכורות שפג תוקפן';
-      console.error('Failed to process expired reminders:', errorMessage);
+      console.warn('Failed to process expired reminders:', errorMessage);
       throw new Error(errorMessage);
     }
   },
@@ -1069,6 +1084,7 @@ export interface VaccinationRow {
   administeredDate: string;
   nextDueDate?: string | null;
   vetClinicName?: string | null;
+  description?: string | null;
   createdAt?: string | null;
   notificationEnabled?: boolean;
   remindDaysBefore?: string;
@@ -1080,6 +1096,7 @@ export type VaccinationPayload = {
   administeredDate: string;
   nextDueDate?: string | null;
   vetClinicName?: string | null;
+  description?: string | null;
   notificationEnabled?: boolean;
   remindDaysBefore?: string;
 };
@@ -1104,6 +1121,7 @@ export const vaccinationAPI = {
         administeredDate: payload.administeredDate,
         nextDueDate: payload.nextDueDate ?? null,
         vetClinicName: payload.vetClinicName?.trim() || null,
+        description: payload.description?.trim() || null,
         notificationEnabled: payload.notificationEnabled,
         remindDaysBefore: payload.remindDaysBefore,
       });
@@ -1165,6 +1183,7 @@ export interface MedicationRow {
   nextDueDate?: string | null;
   nextDueTime?: string | null;
   vetClinicName?: string | null;
+  description?: string | null;
   createdAt?: string | null;
   notificationEnabled?: boolean;
   remindBeforeValue?: number | null;
@@ -1181,6 +1200,7 @@ export type MedicationPayload = {
   nextDueDate?: string | null;
   nextDueTime?: string | null;
   vetClinicName?: string | null;
+  description?: string | null;
   notificationEnabled?: boolean;
   remindBeforeValue?: number | null;
   remindBeforeUnit?: string | null;
@@ -1208,6 +1228,7 @@ export const medicationAPI = {
         nextDueDate: payload.nextDueDate ?? null,
         nextDueTime: payload.nextDueTime ?? null,
         vetClinicName: payload.vetClinicName?.trim() || null,
+        description: payload.description?.trim() || null,
         notificationEnabled: payload.notificationEnabled,
         remindBeforeValue: payload.remindBeforeValue,
         remindBeforeUnit: payload.remindBeforeUnit,
@@ -1325,6 +1346,7 @@ export const foodStockAPI = {
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || 'לא ניתן לטעון את מלאי המזון';
       console.error("Failed to get food stocks:", errorMessage);
+      notifyCaughtApiFailure(error, { context: 'Failed to get food stocks' });
       throw new Error(errorMessage);
     }
   },

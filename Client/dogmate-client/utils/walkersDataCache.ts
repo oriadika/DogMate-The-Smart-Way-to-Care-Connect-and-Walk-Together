@@ -2,8 +2,9 @@ import {
   dogWalkerAPI,
   userAPI,
   type ProfessionalProfileResponse,
-} from '../services/api';
+} from '../services/dogmateApi';
 import { isAbortError } from './isAbortError';
+import { notifyCaughtApiFailure } from './caughtApiFailureReporting';
 import { withApiRetry } from './apiRetry';
 
 export type FormattedLoggedUser = {
@@ -21,7 +22,10 @@ type WalkersCacheEntry = {
 };
 
 const walkersCache = new Map<string, WalkersCacheEntry>();
+const walkersCacheUpdatedAt = new Map<string, number>();
 const dirtyWalkersUsers = new Set<string>();
+
+const WALKERS_CACHE_FRESH_MS = 30_000;
 
 let loggedUsersCache: FormattedLoggedUser[] | null = null;
 let loggedUsersCacheTime = 0;
@@ -40,6 +44,20 @@ export function getWalkersCache(ownerId: string): WalkersCacheEntry | undefined 
 
 export function setWalkersCache(ownerId: string, walkers: ProfessionalProfileResponse[]): void {
   walkersCache.set(ownerId, { walkers });
+  walkersCacheUpdatedAt.set(ownerId, Date.now());
+}
+
+export function isWalkersCacheFresh(
+  ownerId: string,
+  maxAgeMs = WALKERS_CACHE_FRESH_MS
+): boolean {
+  const updatedAt = walkersCacheUpdatedAt.get(ownerId);
+  return (
+    Boolean(getWalkersCache(ownerId)) &&
+    updatedAt != null &&
+    Date.now() - updatedAt < maxAgeMs &&
+    !dirtyWalkersUsers.has(ownerId)
+  );
 }
 
 export function markWalkersDirty(ownerId: string): void {
@@ -115,6 +133,11 @@ export function setLoggedUsersCache(users: FormattedLoggedUser[]): void {
   loggedUsersCacheTime = Date.now();
 }
 
+export function clearLoggedUsersCache(): void {
+  loggedUsersCache = null;
+  loggedUsersCacheTime = 0;
+}
+
 export function getInitialLoggedUsersState(excludeUserId?: string) {
   const cached = getLoggedUsersCache();
   const users =
@@ -136,16 +159,32 @@ export async function prefetchWalkersData(ownerId: string): Promise<void> {
   } catch (error) {
     if (!isAbortError(error)) {
       console.warn('Walkers prefetch failed:', error);
+      notifyCaughtApiFailure(error, {
+        context: 'Walkers prefetch',
+        retryAction: async () => {
+          await prefetchWalkersData(ownerId);
+        },
+      });
     }
   }
 }
 
 export async function fetchAndCacheLoggedUsers(excludeUserId?: string): Promise<FormattedLoggedUser[]> {
-  const data = await userAPI.getLoggedUsers();
-  if (!data.success || !data.users) {
-    return getLoggedUsersCache()?.filter((u) => u.id !== excludeUserId) ?? [];
+  try {
+    const data = await userAPI.getLoggedUsers();
+    if (!data.success || !data.users) {
+      return getLoggedUsersCache()?.filter((u) => u.id !== excludeUserId) ?? [];
+    }
+    const formatted = formatLoggedUsers(data.users, excludeUserId);
+    setLoggedUsersCache(formatted);
+    return formatted;
+  } catch (error) {
+    notifyCaughtApiFailure(error, {
+      context: 'Failed to fetch logged users',
+      retryAction: async () => {
+        await fetchAndCacheLoggedUsers(excludeUserId);
+      },
+    });
+    throw error;
   }
-  const formatted = formatLoggedUsers(data.users, excludeUserId);
-  setLoggedUsersCache(formatted);
-  return formatted;
 }

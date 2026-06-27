@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image
+  Image,
 } from 'react-native';
 
 const StartScreen: React.FC = ({ navigation }: any) => {
@@ -19,12 +19,12 @@ const StartScreen: React.FC = ({ navigation }: any) => {
   return (
     <View style={styles.container}>
       <Image
-        source={require('../assets/images/LandingPageDogMate.jpg')} 
-        style={styles.image}
+        source={require('../assets/images/LandingPageDogMate.jpg')}
+        style={styles.backgroundImage}
         resizeMode="cover"
       />
-      
-      {/* Buttons */}
+      <View style={styles.heroOverlay} />
+
       <View style={styles.buttonsContainer}>
         <TouchableOpacity
           style={styles.primaryButton}
@@ -55,14 +55,14 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   },
-  image: {
+  backgroundImage: {
+    ...StyleSheet.absoluteFillObject,
     width: '100%',
     height: '100%',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
   },
   buttonsContainer: {
     position: 'absolute',

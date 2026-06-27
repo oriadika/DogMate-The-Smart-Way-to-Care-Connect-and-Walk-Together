@@ -16,7 +16,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,18 +34,21 @@ public class DogService {
     private final IFoodStockRepository foodStockRepository;
     private final ReminderService reminderService;
     private final HealthReminderSyncService healthReminderSyncService;
+    private final FoodStockConsumptionService foodStockConsumptionService;
 
     @Autowired
     public DogService(IDogRepository dogRepository, IDogRelationshipRepository dogRelationshipRepository, 
                       IUserRepository userRepository, IFoodStockRepository foodStockRepository,
                       ReminderService reminderService,
-                      HealthReminderSyncService healthReminderSyncService) {
+                      HealthReminderSyncService healthReminderSyncService,
+                      FoodStockConsumptionService foodStockConsumptionService) {
         this.dogRepository = dogRepository;
         this.dogRelationshipRepository = dogRelationshipRepository;
         this.userRepository = userRepository;
         this.foodStockRepository = foodStockRepository;
         this.reminderService = reminderService;
         this.healthReminderSyncService = healthReminderSyncService;
+        this.foodStockConsumptionService = foodStockConsumptionService;
     }
 
     /**
@@ -246,8 +251,44 @@ public class DogService {
         // If no relationships left, remove from reminders and delete the dog
         if (!hasRelationships) {
             reminderService.removeDogFromAllReminders(dogId);
-            dogRepository.deleteById(dogId);
+            deleteDogSafely(dogId);
         }
+    }
+
+    /**
+     * Deletes a dog and ensures all dependent rows are removed first
+     * (to avoid FK constraint errors such as "update or delete on table dogs violates foreign key").
+     *
+     * The caller is expected to remove reminders (reminder_dogs + reminders) if needed.
+     */
+    private void deleteDogSafely(UUID dogId) {
+        Dog dog = dogRepository.findById(dogId)
+                .orElseThrow(() -> new IllegalArgumentException("לא נמצא כלב עם המזהה: " + dogId));
+
+        // Disconnect food stock (owning side is Dog.foodStock).
+        FoodStock foodStock = dog.getFoodStock();
+        if (foodStock != null) {
+            foodStock.removeDog(dog);
+            dog.setFoodStock(null);
+            if (foodStock.getDogs().isEmpty()) {
+                foodStockRepository.deleteById(foodStock.getId());
+            }
+        }
+
+        // Force-load children collections before clearing, so orphanRemoval can delete them.
+        dog.getDogEvents().size();
+        dog.getDogEvents().clear();
+
+        dog.getDogMoodLogs().size();
+        dog.getDogMoodLogs().clear();
+
+        dog.getDogDocuments().size();
+        dog.getDogDocuments().clear();
+
+        dog.getDogRelationships().size();
+        dog.getDogRelationships().clear();
+
+        dogRepository.deleteById(dogId);
     }
 
     /**
@@ -277,6 +318,7 @@ public class DogService {
         if (foodStock != null) {
             // disconnect (owning side)
             foodStock.removeDog(dog);
+            dog.setFoodStock(null);
             if (foodStock.getDogs().isEmpty()) {
                 foodStockRepository.deleteById(foodStock.getId());
             }
@@ -316,6 +358,7 @@ public class DogService {
         if (oldFoodStock != null) {
             // disconnect (owning side)
             oldFoodStock.removeDog(dog);
+            dog.setFoodStock(null);
             if (oldFoodStock.getDogs().isEmpty()) {
                 healthReminderSyncService.deleteFoodStockReminder(oldFoodStock.getId());
                 foodStockRepository.deleteById(oldFoodStock.getId());
@@ -361,6 +404,7 @@ public class DogService {
         FoodStock oldFoodStock = dog.getFoodStock();
         if (oldFoodStock != null) {
             oldFoodStock.removeDog(dog);
+            dog.setFoodStock(null);
             if (oldFoodStock.getDogs().isEmpty()) {
                 healthReminderSyncService.deleteFoodStockReminder(oldFoodStock.getId());
                 foodStockRepository.deleteById(oldFoodStock.getId());
@@ -404,7 +448,11 @@ public class DogService {
      */
     @Transactional(readOnly = true)
     public Optional<String> getFirstMapDogProfileImageUrl(UUID userId) {
-        List<Dog> userDogs = getDogsForUser(userId);
+        return getFirstMapDogProfileImageUrl(getDogsForUser(userId));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<String> getFirstMapDogProfileImageUrl(List<Dog> userDogs) {
         for (Dog dog : userDogs) {
             String url = dog.getProfileImageURL();
             if (url != null && !url.isBlank()) {
@@ -419,7 +467,11 @@ public class DogService {
      */
     @Transactional(readOnly = true)
     public Optional<Dog> getPrimaryDogForMap(UUID userId) {
-        List<Dog> userDogs = getDogsForUser(userId);
+        return getPrimaryDogForMap(getDogsForUser(userId));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Dog> getPrimaryDogForMap(List<Dog> userDogs) {
         if (userDogs.isEmpty()) {
             return Optional.empty();
         }
@@ -437,18 +489,49 @@ public class DogService {
      */
     @Transactional(readOnly = true)
     public void putMapDogSummaryFields(UUID userId, Map<String, Object> userInfo) {
-        getPrimaryDogForMap(userId).ifPresent(dog -> {
-            if (dog.getName() != null && !dog.getName().isBlank()) {
-                userInfo.put("mapDogName", dog.getName().trim());
+        putMapDogSummaryFields(userId, userInfo, getDogsForUser(userId));
+    }
+
+    @Transactional(readOnly = true)
+    public void putMapDogSummaryFields(UUID userId, Map<String, Object> userInfo, List<Dog> userDogs) {
+        getPrimaryDogForMap(userDogs).ifPresent(dog -> applyMapDogSummaryFields(dog, userInfo));
+        getFirstMapDogProfileImageUrl(userDogs)
+                .ifPresent(url -> userInfo.put("mapDogProfileImageUrl", url));
+    }
+
+    private void applyMapDogSummaryFields(Dog dog, Map<String, Object> userInfo) {
+        if (dog.getName() != null && !dog.getName().isBlank()) {
+            userInfo.put("mapDogName", dog.getName().trim());
+        }
+        if (dog.getBreed() != null && !dog.getBreed().isBlank()) {
+            userInfo.put("mapDogBreed", dog.getBreed().trim());
+        }
+        if (dog.getBirthdate() != null) {
+            userInfo.put("mapDogBirthdate", dog.getBirthdate().toString());
+            userInfo.put("mapDogAgeYears", Period.between(dog.getBirthdate(), LocalDate.now()).getYears());
+        }
+    }
+
+    /**
+     * Batch-load dogs for map markers — one query for all logged-in regular users.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, List<Dog>> getDogsGroupedByRegularUserIds(Collection<UUID> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, List<Dog>> grouped = new HashMap<>();
+        if (!(dogRelationshipRepository instanceof com.DogMate.Infrastructure.DogRelationshipRepository repo)) {
+            for (UUID userId : userIds) {
+                grouped.put(userId, getDogsForUser(userId));
             }
-            if (dog.getBreed() != null && !dog.getBreed().isBlank()) {
-                userInfo.put("mapDogBreed", dog.getBreed().trim());
-            }
-            if (dog.getBirthdate() != null) {
-                userInfo.put("mapDogBirthdate", dog.getBirthdate().toString());
-                userInfo.put("mapDogAgeYears", Period.between(dog.getBirthdate(), LocalDate.now()).getYears());
-            }
-        });
+            return grouped;
+        }
+        for (DogRelationship relationship : repo.findByRegularUserIdInWithDog(userIds)) {
+            UUID ownerId = relationship.getRegularUser().getId();
+            grouped.computeIfAbsent(ownerId, ignored -> new ArrayList<>()).add(relationship.getDog());
+        }
+        return grouped;
     }
 
     @Transactional(readOnly = true)
@@ -471,14 +554,15 @@ public class DogService {
         throw new IllegalStateException("מאגר הכלבים לא מוגדר כראוי");
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<FoodStock> getUserFoodStockEntities(UUID userId) {
+        foodStockConsumptionService.applyElapsedConsumptionForUser(userId);
         return foodStockRepository.findAllForRegularUserWithDogs(userId);
     }
 
-    @Transactional(readOnly = true)
-    @Cacheable(cacheNames = "foodStocksByUser", key = "#userId")
+    @Transactional
     public List<FoodStockDTO> getUserFoodStocks(UUID userId) {
+        foodStockConsumptionService.applyElapsedConsumptionForUser(userId);
         return foodStockRepository.findAllForRegularUserWithDogs(userId).stream()
                 .map(FoodStockDTO::new)
                 .toList();
@@ -574,6 +658,7 @@ public class DogService {
         FoodStock oldFoodStock = dog.getFoodStock();
         if (oldFoodStock != null && !oldFoodStock.getId().equals(foodStockId)) {
             oldFoodStock.removeDog(dog);
+            dog.setFoodStock(null);
             if (oldFoodStock.getDogs().isEmpty()) {
                 healthReminderSyncService.deleteFoodStockReminder(oldFoodStock.getId());
                 foodStockRepository.deleteById(oldFoodStock.getId());
@@ -611,6 +696,7 @@ public class DogService {
         foodStock.setDailyConsumptionInGram(foodStockDTO.getDailyConsumptionInGram());
         foodStock.setNotificationEnabled(foodStockDTO.isNotificationEnabled());
         foodStock.setLowStockThresholdDays(foodStockDTO.getLowStockThresholdDays());
+        foodStock.markLevelAdjustedToday();
 
         FoodStock updatedStock = foodStockRepository.save(foodStock);
         healthReminderSyncService.syncFoodStockReminder(updatedStock);

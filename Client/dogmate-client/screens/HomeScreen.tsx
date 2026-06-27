@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
-import { dogAPI, reminderAPI, type ReminderRow } from '../services/api';
+import { dogAPI, reminderAPI, type ReminderRow } from '../services/dogmateApi';
 import { cancelReminderNotification } from '../services/notifications';
 import { loadNotificationPreferences } from '../services/notificationPreferences';
 import { resyncAllNotifications } from '../services/notificationScheduler';
@@ -38,6 +38,7 @@ import {
   setHomeCache,
   shouldForceHomeRefresh,
   clearHomeDirty,
+  isHomeCacheFresh,
 } from '../utils/homeDataCache';
 import MedicationOverdueMarkDoneModal from '../components/health/MedicationOverdueMarkDoneModal';
 import {
@@ -52,15 +53,18 @@ import {
   consumeLoginWelcomeMessage,
   showLoginWelcomeMessage,
 } from '../utils/loginWelcomeMessage';
+import { runReminderMaintenanceInBackground } from '../utils/reminderMaintenance';
 import { isAbortError } from '../utils/isAbortError';
 import { getOwnerSession, resolveOwnerUserId } from '../utils/ownerSession';
 import {
-  ensureOwnerDataPrefetched,
   isHealthDataWarm,
   toDogOptions,
   warmHealthCountdownCache,
 } from '../utils/healthDataCache';
-import { waitForOwnerPrefetchHome } from '../utils/ownerPrefetchCoordinator';
+import {
+  ensureOwnerDataPrefetched,
+  waitForOwnerPrefetchHome,
+} from '../utils/ownerPrefetchCoordinator';
 
 const PRIMARY_COLOR = '#7FB069'; // Sage green
 const BG_COLOR = '#FAEFDD'; // Main background
@@ -77,7 +81,7 @@ function ReminderCountdownLabel({
   sourceEmoji,
 }: {
   unit: string;
-  sourceEmoji?: string;
+  sourceEmoji?: string | null;
 }) {
   return (
     <Text style={styles.reminderStatusLabel}>
@@ -148,6 +152,35 @@ const HomeScreen = ({ navigation, route }: any) => {
     return generation === loadGenerationRef.current;
   }, []);
 
+  /**
+   * Keep stable order on Home cards:
+   * existing dogs stay in place, newly added dogs appear at the end
+   * (leftmost when the horizontal list is inverted).
+   */
+  const orderDogsForHomeDisplay = useCallback((incomingDogs: any[], previousDogs: any[]): any[] => {
+    if (!Array.isArray(incomingDogs) || incomingDogs.length <= 1) return incomingDogs ?? [];
+    if (!Array.isArray(previousDogs) || previousDogs.length === 0) return incomingDogs;
+
+    const previousOrder = new Map<string, number>();
+    previousDogs.forEach((dog, index) => {
+      if (dog?.id != null) previousOrder.set(String(dog.id), index);
+    });
+
+    return incomingDogs
+      .map((dog, index) => ({ dog, index }))
+      .sort((a, b) => {
+        const aPos = previousOrder.get(String(a.dog?.id));
+        const bPos = previousOrder.get(String(b.dog?.id));
+        const aKnown = aPos != null;
+        const bKnown = bPos != null;
+        if (aKnown && bKnown) return (aPos as number) - (bPos as number);
+        if (aKnown) return -1;
+        if (bKnown) return 1;
+        return a.index - b.index;
+      })
+      .map((entry) => entry.dog);
+  }, []);
+
   const hydrateFromCache = useCallback((userIdKey: string): boolean => {
     const cached = getHomeCache(userIdKey);
     if (!cached) return false;
@@ -193,12 +226,17 @@ const HomeScreen = ({ navigation, route }: any) => {
   const loadUserAndDogs = useCallback(async (
     userIdToLoad: string,
     userNameToLoad?: string,
-    options?: { showLoader?: boolean; syncNotifications?: boolean }
+    options?: { showLoader?: boolean; syncNotifications?: boolean; skipIfFresh?: boolean }
   ) => {
     const { generation, signal } = beginHomeFetch();
 
     const shouldShowLoader = options?.showLoader ?? false;
     const shouldSyncNotifications = options?.syncNotifications ?? false;
+    const skipIfFresh = options?.skipIfFresh ?? false;
+
+    if (skipIfFresh && isHomeCacheFresh(userIdToLoad)) {
+      return;
+    }
 
     try {
       if (shouldShowLoader) {
@@ -224,7 +262,9 @@ const HomeScreen = ({ navigation, route }: any) => {
       let nextDogs: any[] = [];
       if (dogsSettled.status === 'fulfilled') {
         const dogsResponse = dogsSettled.value;
-        nextDogs = dogsResponse.success && dogsResponse.dogs ? dogsResponse.dogs : [];
+        const fetchedDogs = dogsResponse.success && dogsResponse.dogs ? dogsResponse.dogs : [];
+        const previousDogs = priorCache?.dogs ?? dogsRef.current;
+        nextDogs = orderDogsForHomeDisplay(fetchedDogs, previousDogs);
       } else {
         if (isAbortError(dogsSettled.reason)) return;
         console.error('Error loading dogs:', dogsSettled.reason);
@@ -309,7 +349,7 @@ const HomeScreen = ({ navigation, route }: any) => {
         setLoading(false);
       }
     }
-  }, [beginHomeFetch, hydrateFromCache, isHomeFetchCurrent, userLastName]);
+  }, [beginHomeFetch, hydrateFromCache, isHomeFetchCurrent, orderDogsForHomeDisplay, userLastName]);
 
   // Load data when screen is focused (including when returning from AddDog screen)
   useFocusEffect(
@@ -380,7 +420,10 @@ const HomeScreen = ({ navigation, route }: any) => {
         void loadUserAndDogs(resolvedUserId, userNameRef.current, {
           showLoader: !visible,
           syncNotifications: false,
+          skipIfFresh: !forceRefresh,
         });
+
+        runReminderMaintenanceInBackground(resolvedUserId);
       };
 
       const interactionTask = hasVisibleData

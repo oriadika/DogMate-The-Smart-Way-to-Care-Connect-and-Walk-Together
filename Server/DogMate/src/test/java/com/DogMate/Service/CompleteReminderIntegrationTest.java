@@ -61,6 +61,7 @@ class CompleteReminderIntegrationTest {
                 administered,
                 nextDue,
                 null,
+                null,
                 true,
                 "7"
         );

@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { MedicationRow } from '../../services/api';
+import type { MedicationRow } from '../../services/dogmateApi';
 import type { MedicationGroup } from '../../utils/medicationGroups';
 import { getLatestMedicationRecord } from '../../utils/medicationGroups';
 import {
@@ -9,6 +9,7 @@ import {
   getHealthHubCountdown,
 } from '../../utils/daysDisplay';
 import { formatTimeHe } from '../../utils/healthReminderSettings';
+import ExpandableDescription, { animateDescriptionToggle } from './ExpandableDescription';
 
 const PRIMARY_COLOR = '#7FB069';
 const TEXT_DARK = '#5C4033';
@@ -39,12 +40,19 @@ export default function MedicationGroupCard({
   loggingDose = false,
   formatDate,
 }: Props) {
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const latest = getLatestMedicationRecord(group.history);
   const countdown = getHealthHubCountdown(
     latest?.nextDueDate ?? null,
     latest?.nextDueTime,
     'המנה הבאה'
   );
+  const description = latest?.description?.trim() ?? '';
+
+  const toggleDescriptionExpanded = useCallback(() => {
+    animateDescriptionToggle();
+    setDescriptionExpanded((prev) => !prev);
+  }, []);
 
   return (
     <View style={styles.card}>
@@ -61,6 +69,13 @@ export default function MedicationGroupCard({
           ) : (
             <Text style={styles.nextDueMuted}>מנה הבאה: לא נקבע</Text>
           )}
+          {description ? (
+            <ExpandableDescription
+              description={description}
+              expanded={descriptionExpanded}
+              onToggle={toggleDescriptionExpanded}
+            />
+          ) : null}
           {latest && onLogDose ? (
             <TouchableOpacity
               style={[styles.logDoseBtn, loggingDose && styles.logDoseBtnDisabled]}

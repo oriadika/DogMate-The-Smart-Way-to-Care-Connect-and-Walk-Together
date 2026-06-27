@@ -5,7 +5,10 @@ import com.DogMate.DTO.CreateReminderRequest;
 import com.DogMate.DTO.ReminderResponse;
 import com.DogMate.Domain.Dog;
 import com.DogMate.Domain.Reminder;
+import com.DogMate.Service.MedicationService;
 import com.DogMate.Service.ReminderService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,10 +21,14 @@ import java.util.*;
 @RequestMapping("/api/users/{userId}/reminders")
 public class ReminderController {
 
-    private final ReminderService reminderService;
+    private static final Logger log = LoggerFactory.getLogger(ReminderController.class);
 
-    public ReminderController(ReminderService reminderService) {
+    private final ReminderService reminderService;
+    private final MedicationService medicationService;
+
+    public ReminderController(ReminderService reminderService, MedicationService medicationService) {
         this.reminderService = reminderService;
+        this.medicationService = medicationService;
     }
 
     // POST /api/users/{userId}/reminders
@@ -153,15 +160,24 @@ public class ReminderController {
     public ResponseEntity<?> processExpiredReminders(@PathVariable UUID userId) {
         try {
             reminderService.processExpiredReminders(userId);
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
         } catch (Exception e) {
+            log.error("Failed to process expired reminders for user {}", userId, e);
             return ResponseEntity.status(500)
                     .body(createErrorResponse("נכשל עיבוד תזכורות שפג תוקפן: " + e.getMessage()));
         }
+
+        try {
+            medicationService.reconcileAllMedicationRemindersForUser(userId);
+        } catch (Exception e) {
+            // Expired cleanup already committed; reconcile is best-effort repair.
+            log.warn("Medication reminder reconcile failed for user {}: {}", userId, e.getMessage());
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        return ResponseEntity.ok(response);
     }
 
     private ReminderResponse toResponse(Reminder r) {
