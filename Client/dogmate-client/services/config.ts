@@ -85,6 +85,7 @@ export function getWebSocketBaseUrl(path = 'ws-ping'): { websocketUrl: string; s
  * 4. Go to Credentials and create an API key
  * 5. (Optional) Restrict the key to only the APIs above for security
  */
-export const GOOGLE_PLACES_API_KEY = 'YOUR_ACTUAL_API_KEY_HERE'; // Replace with your actual key
+export const GOOGLE_PLACES_API_KEY = 'AIzaSyAFTY9TXMAJqhlzkqRy9BTY1fgbWHM-T-E'; // Replace with your actual key
 // YOUR_ACTUAL_API_KEY_HERE
-//AIzaSyBeGlIq9o_d5kvoIamv7n3l_VAPYxi6qv (what is my last name)
+//AIzaSyBeGlIq9o_d5kvoIamv7n3l_VAPYxi6qv (what is my last name)/
+//AIzaSyDKUgHgetDzDCnDVm2l7FbJyTmDPNZxmFU

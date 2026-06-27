@@ -74,17 +74,32 @@ export default function App() {
     const initializeApp = async () => {
       setAppInitializing(true);
       const currentVersion = Constants.expoConfig?.version ?? '1.0.11';
+      const buildNumberRaw = Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode;
+      const currentBuildNumber = Number(buildNumberRaw);
       const previousVersion = await getSavedAppVersion();
       const isDevMode = __DEV__;
 
       try {
-        try {
-          await userAPI.logoutAll();
-        } catch (error) {
-          console.warn('Startup logout-all failed:', error);
-        }
-
         const persistedSession = await getPersistedSession();
+        let sessionToRestore = persistedSession;
+
+        if (!isDevMode && shouldForceReauth(previousVersion, currentVersion)) {
+          try {
+            await userAPI.logoutOnUpdate(
+              currentVersion,
+              Number.isNaN(currentBuildNumber) ? undefined : currentBuildNumber
+            );
+          } catch (error) {
+            console.warn('Version-based logout-on-update failed:', error);
+          } finally {
+            clearApiAuthToken();
+            clearDogmateAuthToken();
+            clearOwnerSession();
+            await clearPersistedSession();
+            await clearLoggedUsersCache();
+            sessionToRestore = null;
+          }
+        }
 
         if (isDevMode) {
           try {
@@ -105,40 +120,23 @@ export default function App() {
           await userAPI.restoreAuthToken();
         }
 
-        if (!isDevMode && persistedSession?.userId) {
-          setOwnerSession(persistedSession);
+        if (!isDevMode && sessionToRestore?.userId) {
+          setOwnerSession(sessionToRestore);
         }
 
-        if (shouldForceReauth(previousVersion, currentVersion)) {
-          try {
-            const persistedSession = await getPersistedSession();
-            if (persistedSession?.userId) {
-              await userAPI.logout(persistedSession.userId, persistedSession.email);
-            }
-          } catch (error) {
-            console.warn('Version-based logout failed:', error);
-          } finally {
-            clearApiAuthToken();
-            clearDogmateAuthToken();
-            clearOwnerSession();
-            clearPersistedSession();
-            clearLoggedUsersCache();
-          }
-        }
-
-        if (!isDevMode && persistedSession?.userId && persistedSession.userRole) {
-          const routeName = persistedSession.userRole === 'walker' ? 'WalkerHome' : 'Home';
-          if (persistedSession.userRole !== 'walker') {
+        if (!isDevMode && sessionToRestore?.userId && sessionToRestore.userRole) {
+          const routeName = sessionToRestore.userRole === 'walker' ? 'WalkerHome' : 'Home';
+          if (sessionToRestore.userRole !== 'walker') {
             void runOwnerPrefetch(
-              persistedSession.userId,
-              persistedSession.userFirstName,
-              persistedSession.userLastName
+              sessionToRestore.userId,
+              sessionToRestore.userFirstName,
+              sessionToRestore.userLastName
             );
           }
           setTimeout(() => {
             rootNavigationRef.current?.reset({
               index: 0,
-              routes: [{ name: routeName, params: persistedSession }],
+              routes: [{ name: routeName, params: sessionToRestore }],
             });
           }, 0);
         }

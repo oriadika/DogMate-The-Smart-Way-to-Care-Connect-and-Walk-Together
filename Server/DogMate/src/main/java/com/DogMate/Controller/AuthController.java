@@ -105,6 +105,34 @@ public class AuthController {
     }
 
     /**
+     * Logout all users if the application version has been updated.
+     * POST /api/auth/logout-on-update
+     */
+    @PostMapping("/logout-on-update")
+    public ResponseEntity<?> logoutOnUpdate(@RequestBody AppUpdateLogoutRequest request) {
+        try {
+            if (request == null || request.getAppVersion() == null || request.getAppVersion().trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(createErrorResponse("נדרשת גרסת אפליקציה תקינה"));
+            }
+            boolean didLogout = userService.logoutAllUsersIfAppUpdated(
+                request.getAppVersion().trim(),
+                request.getBuildNumber()
+            );
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", didLogout ? "כל המשתמשים התנתקו בעקבות עדכון" : "לא נדרשה התנתקות");
+            response.put("updateDetected", didLogout);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(createErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(createErrorResponse("אירעה שגיאה בבדיקת עדכון האפליקציה. נסה שוב מאוחר יותר."));
+        }
+    }
+
+    /**
      * Logout a user
      * POST /api/auth/logout
      * Supports logout by userId or email
@@ -430,6 +458,31 @@ public class AuthController {
 
         public void setNewPassword(String newPassword) {
             this.newPassword = newPassword;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class AppUpdateLogoutRequest {
+        private String appVersion;
+        private Integer buildNumber;
+
+        public AppUpdateLogoutRequest() {
+        }
+
+        public String getAppVersion() {
+            return appVersion;
+        }
+
+        public void setAppVersion(String appVersion) {
+            this.appVersion = appVersion;
+        }
+
+        public Integer getBuildNumber() {
+            return buildNumber;
+        }
+
+        public void setBuildNumber(Integer buildNumber) {
+            this.buildNumber = buildNumber;
         }
     }
 }

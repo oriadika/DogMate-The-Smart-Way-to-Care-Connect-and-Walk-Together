@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "13",
+      "buildNumber": "15",
       "config": {
         "googleMapsApiKey": ""
       },

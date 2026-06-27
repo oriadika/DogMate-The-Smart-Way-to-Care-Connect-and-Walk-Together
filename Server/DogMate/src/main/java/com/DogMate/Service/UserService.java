@@ -413,16 +413,18 @@ public class UserService {
     @Transactional
     @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
     public void logoutAllUsers() {
-        List<UserAccount> users = userRepository.findAll();
-        for (UserAccount user : users) {
-            user.setLoggedIn(false);
-            if (user instanceof RegularUser) {
-                RegularUser regularUser = (RegularUser) user;
-                regularUser.setLatitude(null);
-                regularUser.setLongitude(null);
-            }
-            userRepository.save(user);
+        userRepository.resetAllUsersOnStartup();
+    }
+
+    @Transactional
+    @CacheEvict(cacheNames = "loggedUsers", allEntries = true)
+    public boolean logoutAllUsersIfAppUpdated(String appVersion, Integer buildNumber) {
+        if (appVersion == null || appVersion.isBlank()) {
+            throw new IllegalArgumentException("נדרשת גרסת אפליקציה תקינה");
         }
+
+        logoutAllUsers();
+        return true;
     }
 
     @Transactional

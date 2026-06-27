@@ -493,6 +493,21 @@ export const userAPI = {
     }
   },
 
+  logoutOnUpdate: async (appVersion: string, buildNumber?: number): Promise<{ success: boolean; message: string }> => {
+    try {
+      const response = await apiClient.post(
+        '/auth/logout-on-update',
+        { appVersion, buildNumber },
+        { skipSystemErrorReporting: true }
+      );
+      return response.data;
+    } catch (error: any) {
+      console.warn('Logout-on-update request failed:', error?.message || error);
+      const errorMessage = getAuthFlowErrorMessage(error, 'התנתקות עדכון האפליקציה נכשלה');
+      throw new Error(errorMessage);
+    }
+  },
+
   logout: async (userId: string, email?: string): Promise<{ success: boolean; message: string }> => {
     try {
       console.log('Logging out user:', { userId, email });
